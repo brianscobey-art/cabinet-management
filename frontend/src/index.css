@@ -88,7 +88,38 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+.shell header nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.shell header nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.shell header nav a.active,
+.shell header nav a:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.who {
+  font-size: 0.85rem;
+  opacity: 0.9;
 }
 
 .shell header h1 {
@@ -110,4 +141,189 @@ button:disabled {
 
 .muted {
   color: var(--gray);
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.page-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filters input,
+.filters select {
+  font-size: 0.9rem;
+}
+
+select {
+  padding: 0.55rem 0.6rem;
+  border: 1px solid #ccd4d8;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  margin-bottom: 1rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th {
+  background: var(--aqua);
+  color: #fff;
+  font-weight: 500;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  white-space: nowrap;
+}
+
+td {
+  padding: 0.55rem 0.75rem;
+  border-top: 1px solid #e6ebee;
+  white-space: nowrap;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover td {
+  background: #f0fafc;
+}
+
+td a {
+  color: #0d7c8c;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: #e3eef1;
+  color: #24505a;
+  text-transform: capitalize;
+}
+
+.badge-install,
+.badge-delivery {
+  background: #fdf1d6;
+  color: #8a6116;
+}
+
+.badge-quality,
+.badge-punch {
+  background: #fde3d6;
+  color: #8a3d16;
+}
+
+.badge-warranty,
+.badge-closed {
+  background: #e3f1e4;
+  color: #2c6b31;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #0d7c8c;
+}
+
+.card-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+dt {
+  color: var(--gray);
+}
+
+dd {
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.75rem;
+}
+
+.form-span {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.inline-form input {
+  font-size: 0.88rem;
+  padding: 0.5rem 0.6rem;
+  width: 9rem;
+}
+
+.inline-form button {
+  font-size: 0.88rem;
+  padding: 0.5rem 0.9rem;
+  white-space: nowrap;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #0d7c8c;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+main h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.05rem;
 }

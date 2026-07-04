@@ -1,0 +1,126 @@
+from app.models import Role
+from tests.conftest import login, make_user
+
+CONTACTS = {
+    "sales_contact_name": "Brian Scobey",
+    "sales_contact_email": "brian@example.com",
+    "field_contact_name": "Super Dave",
+    "field_contact_phone": "850-555-0100",
+}
+
+
+def setup_account(client, headers, name="DR Horton", community="Sandy Ridge"):
+    account_id = client.post("/accounts", headers=headers, json={"name": name, "type": "builder"}).json()["id"]
+    community_id = client.post(
+        "/communities", headers=headers, json={"account_id": account_id, "name": community}
+    ).json()["id"]
+    return account_id, community_id
+
+
+def make_job(client, headers, account_id, community_id=None, **overrides):
+    payload = {
+        "account_id": account_id,
+        "community_id": community_id,
+        "lot_number": "42",
+        "address": "123 Sandy Ridge Blvd",
+        "job_type": "tract",
+        **CONTACTS,
+        **overrides,
+    }
+    resp = client.post("/jobs", headers=headers, json=payload)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_create_and_get_job(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+
+    job = make_job(client, headers, account_id, community_id)
+    assert job["status"] == "quote"
+    assert job["sales_contact_name"] == "Brian Scobey"
+
+    resp = client.get(f"/jobs/{job['id']}", headers=headers)
+    assert resp.status_code == 200
+    detail = resp.json()
+    assert detail["account_name"] == "DR Horton"
+    assert detail["community_name"] == "Sandy Ridge"
+    assert detail["room_selections"] == []
+
+
+def test_job_requires_contacts(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, _ = setup_account(client, headers)
+    resp = client.post(
+        "/jobs", headers=headers,
+        json={"account_id": account_id, "address": "1 Main St", "job_type": "remodel"},
+    )
+    assert resp.status_code == 422  # both contacts are required at creation
+
+
+def test_community_must_belong_to_account(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, _ = setup_account(client, headers)
+    other_account, other_community = setup_account(client, headers, name="Century", community="Elsewhere")
+    resp = client.post(
+        "/jobs", headers=headers,
+        json={
+            "account_id": account_id, "community_id": other_community,
+            "address": "1 Main St", "job_type": "tract", **CONTACTS,
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_list_jobs_filters(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    retail_id = client.post("/accounts", headers=headers, json={"name": "Smith Remodel", "type": "retail"}).json()["id"]
+
+    make_job(client, headers, account_id, community_id)
+    make_job(client, headers, retail_id, address="9 Oak Ln", lot_number=None, job_type="remodel")
+
+    all_jobs = client.get("/jobs", headers=headers).json()
+    assert len(all_jobs) == 2
+    assert all_jobs[0]["account_name"]  # list items carry names
+
+    by_account = client.get(f"/jobs?account_id={account_id}", headers=headers).json()
+    assert len(by_account) == 1
+    assert by_account[0]["community_name"] == "Sandy Ridge"
+
+    by_search = client.get("/jobs?q=oak", headers=headers).json()
+    assert len(by_search) == 1
+    assert by_search[0]["address"] == "9 Oak Ln"
+
+
+def test_update_status_and_warranty_defaults(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    job = make_job(client, headers, account_id, community_id)
+
+    resp = client.patch(
+        f"/jobs/{job['id']}", headers=headers,
+        json={"status": "install", "install_date": "2026-08-15"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "install"
+    # warranty_start defaults to install date per spec
+    assert body["warranty_start_date"] == "2026-08-15"
+
+
+def test_field_role_cannot_write_jobs(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    sales = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, sales)
+    job = make_job(client, sales, account_id, community_id)
+
+    make_user(db, email="field@example.com", role=Role.field)
+    field = login(client, "field@example.com")
+    assert client.get(f"/jobs/{job['id']}", headers=field).status_code == 200
+    assert client.patch(f"/jobs/{job['id']}", headers=field, json={"status": "ordered"}).status_code == 403

@@ -1,10 +1,25 @@
 import { FormEvent, useEffect, useState } from "react";
 import { fetchMe, getToken, login, setToken, User } from "./api";
+import AccountsPage from "./pages/AccountsPage";
+import JobDetailPage from "./pages/JobDetailPage";
+import JobsPage from "./pages/JobsPage";
+
+function useHashRoute() {
+  const [hash, setHash] = useState(window.location.hash || "#/jobs");
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash || "#/jobs");
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return hash;
+}
+
+const WRITE_ROLES = ["sales", "admin"];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(!!getToken());
-  const [error, setError] = useState("");
+  const hash = useHashRoute();
 
   useEffect(() => {
     if (!getToken()) return;
@@ -15,46 +30,51 @@ export default function App() {
   }, []);
 
   if (loading) return <div className="center">Loading…</div>;
-  if (!user) return <Login onLogin={setUser} error={error} setError={setError} />;
+  if (!user) return <Login onLogin={setUser} />;
+
+  const canWrite = WRITE_ROLES.includes(user.role);
+  const jobMatch = hash.match(/^#\/jobs\/(\d+)$/);
+
+  let page;
+  if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
+  else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
+  else page = <JobsPage />;
 
   return (
     <div className="shell">
       <header>
         <h1>Townsend Cabinet Management</h1>
-        <button
-          onClick={() => {
-            setToken(null);
-            setUser(null);
-          }}
-        >
-          Sign out
-        </button>
+        <nav>
+          <a href="#/jobs" className={!hash.startsWith("#/accounts") ? "active" : ""}>
+            Jobs
+          </a>
+          <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
+            Accounts
+          </a>
+        </nav>
+        <div className="header-right">
+          <span className="who">
+            {user.full_name} · {user.role}
+          </span>
+          <button
+            onClick={() => {
+              setToken(null);
+              setUser(null);
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
-      <main>
-        <p>
-          Signed in as <strong>{user.full_name}</strong> ({user.email}) — role:{" "}
-          <strong>{user.role}</strong>
-        </p>
-        <p className="muted">
-          Phase 0 shell. Jobs, quoting, scheduling, and the dashboard arrive in
-          later phases.
-        </p>
-      </main>
+      <main>{page}</main>
     </div>
   );
 }
 
-function Login({
-  onLogin,
-  error,
-  setError,
-}: {
-  onLogin: (u: User) => void;
-  error: string;
-  setError: (e: string) => void;
-}) {
+function Login({ onLogin }: { onLogin: (u: User) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {

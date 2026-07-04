@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.accounts import router as accounts_router
+from app.api.jobs import router as jobs_router
+from app.api.selections import router as selections_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
 
@@ -15,6 +18,9 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(accounts_router)
+app.include_router(jobs_router)
+app.include_router(selections_router)
 
 
 @app.get("/health", tags=["system"])

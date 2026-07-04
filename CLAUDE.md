@@ -196,7 +196,10 @@ Management dashboard (PO trend, job status, install views, anomaly flags). Offic
 
 ## 9. Build status
 
-- **Phase 0 — Foundation: in progress.** Local dev note: this machine has no Docker; `docker-compose.yml` is provided for when it's available, and local dev falls back to SQLite via `DATABASE_URL` (Postgres remains the deployment target — all schema goes through Alembic and stays engine-agnostic).
+- **Phase 0 — Foundation: done** (auth + roles, CI, dockerized dev config, PWA shell).
+- **Phase 1 — Data model + Job record: done.** Accounts, communities, jobs (two contacts, workflow status), room selections (one row per room/zone), hardware selections. CRUD API with role guards (write = sales/admin), jobs list with filters/search, job detail "every room's spec" view in the frontend.
+- Next: **Phase 2 — Quoting → Order → POS/supplier files.**
+- Local dev note: this machine has no Docker; `docker-compose.yml` is provided for when it's available, and local dev falls back to SQLite via `DATABASE_URL` (Postgres remains the deployment target — all schema goes through Alembic and stays engine-agnostic).
 
 ---
 
