@@ -327,3 +327,25 @@ main h3 {
   margin: 1.25rem 0 0.5rem;
   font-size: 1.05rem;
 }
+
+.notice {
+  color: #2c6b31;
+  background: #e3f1e4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.excluded-row td {
+  color: var(--gray);
+  text-decoration: line-through;
+}
+
+.excluded-row td .badge {
+  text-decoration: none;
+  margin-left: 0.4rem;
+}
+
+tfoot td {
+  border-top: 2px solid var(--gray);
+}

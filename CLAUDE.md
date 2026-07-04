@@ -198,7 +198,9 @@ Management dashboard (PO trend, job status, install views, anomaly flags). Offic
 
 - **Phase 0 — Foundation: done** (auth + roles, CI, dockerized dev config, PWA shell).
 - **Phase 1 — Data model + Job record: done.** Accounts, communities, jobs (two contacts, workflow status), room selections (one row per room/zone), hardware selections. CRUD API with role guards (write = sales/admin), jobs list with filters/search, job detail "every room's spec" view in the frontend.
-- Next: **Phase 2 — Quoting → Order → POS/supplier files.**
+- **Phase 2 — Quoting → Order → supplier files: done** (POS half deferred). Multi-scenario quotes with 0.217 multiplier snapshot, accept flow (one accepted per job), Everluxe order .xlsx generation matching the dealer's order form (excluded appliance SKUs — RANGE1.30, REF.2D.36, DISHW24 — never reach the form), order confirmation/ship status tracking, download from the job page. All pricing rules live in `backend/app/pricing.py` only.
+- **Deferred: 2020→POS bridge export** — format not yet captured. Stub with the intended interface is in `backend/app/integrations/pos.py`; implement when Brian provides a sample import file.
+- Next: **Phase 3 — Field measure, delivery, DDMS.**
 - Local dev note: this machine has no Docker; `docker-compose.yml` is provided for when it's available, and local dev falls back to SQLite via `DATABASE_URL` (Postgres remains the deployment target — all schema goes through Alembic and stays engine-agnostic).
 
 ---

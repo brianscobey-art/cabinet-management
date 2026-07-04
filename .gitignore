@@ -17,6 +17,9 @@ htmlcov/
 *.db
 *.sqlite3
 
+# Generated order/export files
+backend/generated/
+
 # Node / frontend
 node_modules/
 frontend/dist/

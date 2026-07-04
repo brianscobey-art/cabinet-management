@@ -10,6 +10,7 @@ import {
   updateJob,
 } from "../api";
 import { statusLabel } from "./JobsPage";
+import QuotesSection from "./QuotesSection";
 
 export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -190,6 +191,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         </table>
       </div>
       {canWrite && <AddHardwareForm jobId={job.id} onAdded={refresh} />}
+
+      <QuotesSection jobId={job.id} canWrite={canWrite} />
     </div>
   );
 }

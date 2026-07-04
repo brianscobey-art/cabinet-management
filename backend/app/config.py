@@ -17,6 +17,18 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 720
     cors_origins: str = "http://localhost:5173"
 
+    # Where generated order/export files land (gitignored).
+    generated_dir: str = str(_BACKEND_DIR / "generated")
+
+    # Dealer identity + default ship-to for supplier order forms (override in .env).
+    dealer_name: str = "Townsend Dothan"
+    dealer_contact: str = "Brian Scobey"
+    dealer_phone: str = "850-890-0482"
+    dealer_email: str = "Brian.Scobey@TownsendBuildingSupply.com"
+    ship_to_name: str = "Townsend Dothan"
+    ship_to_address: str = "868 Murray Rd"
+    ship_to_city_st_zip: str = "Dothan, AL 36303"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

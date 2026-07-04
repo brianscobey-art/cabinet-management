@@ -163,6 +163,82 @@ export const createJob = (data: Record<string, unknown>) =>
 export const updateJob = (id: number, data: Record<string, unknown>) =>
   api<Job>(`/jobs/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
+export interface QuoteLine {
+  id: number;
+  quote_id: number;
+  room: string | null;
+  qty: number;
+  sku: string;
+  product_code: string | null;
+  fin_end: string | null;
+  color: string | null;
+  list_price: string;
+  notes: string | null;
+  net_each: string;
+  total: string;
+  excluded: boolean;
+}
+
+export interface Quote {
+  id: number;
+  job_id: number;
+  name: string;
+  status: "draft" | "accepted";
+  multiplier: string;
+  notes: string | null;
+  list_total: string;
+  net_total: string;
+  line_count: number;
+}
+
+export interface QuoteDetail extends Quote {
+  lines: QuoteLine[];
+}
+
+export interface Order {
+  id: number;
+  job_id: number;
+  quote_id: number;
+  supplier: string;
+  po_number: string | null;
+  confirmation_status: "pending" | "confirmed" | "rejected";
+  ship_status: "not_shipped" | "scheduled" | "shipped" | "delivered";
+  has_file: boolean;
+  skipped_skus?: string[];
+}
+
+export const listQuotes = (jobId: number) => api<Quote[]>(`/jobs/${jobId}/quotes`);
+export const getQuote = (id: number) => api<QuoteDetail>(`/quotes/${id}`);
+export const createQuote = (jobId: number, name: string) =>
+  api<Quote>(`/jobs/${jobId}/quotes`, { method: "POST", body: JSON.stringify({ name }) });
+export const acceptQuote = (id: number) => api<Quote>(`/quotes/${id}/accept`, { method: "POST" });
+export const deleteQuote = (id: number) => api<void>(`/quotes/${id}`, { method: "DELETE" });
+export const addQuoteLine = (quoteId: number, data: Record<string, unknown>) =>
+  api<QuoteLine>(`/quotes/${quoteId}/lines`, { method: "POST", body: JSON.stringify(data) });
+export const deleteQuoteLine = (id: number) => api<void>(`/quote-lines/${id}`, { method: "DELETE" });
+
+export const listOrders = (jobId: number) => api<Order[]>(`/jobs/${jobId}/orders`);
+export const createOrder = (jobId: number, data: Record<string, unknown>) =>
+  api<Order>(`/jobs/${jobId}/orders`, { method: "POST", body: JSON.stringify(data) });
+export const updateOrder = (id: number, data: Record<string, unknown>) =>
+  api<Order>(`/orders/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+
+export async function downloadOrderFile(orderId: number): Promise<void> {
+  const resp = await fetch(`/api/orders/${orderId}/file`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new Error("Download failed");
+  const disposition = resp.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/);
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = match?.[1] ?? `everluxe-order-${orderId}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const addRoom = (jobId: number, data: Record<string, unknown>) =>
   api<RoomSelection>(`/jobs/${jobId}/rooms`, { method: "POST", body: JSON.stringify(data) });
 export const deleteRoom = (id: number) => api<void>(`/rooms/${id}`, { method: "DELETE" });
