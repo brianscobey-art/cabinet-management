@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.accounts import router as accounts_router
+from app.api.documents import router as documents_router
 from app.api.jobs import router as jobs_router
 from app.api.orders import router as orders_router
 from app.api.quotes import router as quotes_router
@@ -25,6 +26,7 @@ app.include_router(jobs_router)
 app.include_router(selections_router)
 app.include_router(quotes_router)
 app.include_router(orders_router)
+app.include_router(documents_router)
 
 
 @app.get("/health", tags=["system"])

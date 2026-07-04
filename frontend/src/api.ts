@@ -207,6 +207,32 @@ export interface Order {
   skipped_skus?: string[];
 }
 
+export interface JobDocument {
+  id: number;
+  job_id: number;
+  filename: string;
+  doc_type: string;
+}
+
+export const listDocuments = (jobId: number) => api<JobDocument[]>(`/jobs/${jobId}/documents`);
+export const registerDocument = (jobId: number, data: { file_path: string; doc_type?: string }) =>
+  api<JobDocument>(`/jobs/${jobId}/documents`, { method: "POST", body: JSON.stringify(data) });
+export const removeDocument = (id: number) => api<void>(`/documents/${id}`, { method: "DELETE" });
+
+export async function openDocument(docId: number): Promise<void> {
+  const resp = await fetch(`/api/documents/${docId}/file`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null))?.detail;
+    throw new Error(detail ?? "Could not open document");
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export const listQuotes = (jobId: number) => api<Quote[]>(`/jobs/${jobId}/quotes`);
 export const getQuote = (id: number) => api<QuoteDetail>(`/quotes/${id}`);
 export const createQuote = (jobId: number, name: string) =>

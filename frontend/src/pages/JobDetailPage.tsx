@@ -9,6 +9,7 @@ import {
   getJob,
   updateJob,
 } from "../api";
+import DocumentsSection from "./DocumentsSection";
 import { statusLabel } from "./JobsPage";
 import QuotesSection from "./QuotesSection";
 
@@ -191,6 +192,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         </table>
       </div>
       {canWrite && <AddHardwareForm jobId={job.id} onAdded={refresh} />}
+
+      <DocumentsSection jobId={job.id} canWrite={canWrite} />
 
       <QuotesSection jobId={job.id} canWrite={canWrite} />
     </div>
