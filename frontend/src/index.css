@@ -1,5 +1,10 @@
 :root {
-  --aqua: #24b3c6;
+  /* Carter Lumber palette (from carterlumber.com CSS) */
+  --brand: #125952;        /* deep green — header, nav, table headers */
+  --brand-ink: #194039;    /* forest green — headings */
+  --action: #df5822;       /* Carter orange — buttons, links, CTAs */
+  --action-dark: #b4461a;  /* orange hover */
+  --teal: #568c8c;         /* secondary accent */
   --dark: #262626;
   --gray: #595959;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -38,7 +43,7 @@ body {
 .login h1 {
   font-size: 1.25rem;
   margin: 0 0 0.5rem;
-  color: var(--aqua);
+  color: var(--brand);
 }
 
 label {
@@ -57,18 +62,22 @@ input {
 }
 
 input:focus {
-  outline: 2px solid var(--aqua);
+  outline: 2px solid var(--action);
   border-color: transparent;
 }
 
 button {
-  background: var(--aqua);
+  background: var(--action);
   color: #fff;
   border: none;
   border-radius: 8px;
   padding: 0.7rem 1rem;
   font-size: 1rem;
   cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--action-dark);
 }
 
 button:disabled {
@@ -83,7 +92,7 @@ button:disabled {
 }
 
 .shell header {
-  background: var(--aqua);
+  background: var(--brand);
   color: #fff;
   display: flex;
   align-items: center;
@@ -191,7 +200,7 @@ table {
 }
 
 th {
-  background: var(--aqua);
+  background: var(--brand);
   color: #fff;
   font-weight: 500;
   text-align: left;
@@ -210,11 +219,11 @@ tr.clickable {
 }
 
 tr.clickable:hover td {
-  background: #f0fafc;
+  background: #f0f6f5;
 }
 
 td a {
-  color: #0d7c8c;
+  color: var(--action);
 }
 
 .badge {
@@ -222,8 +231,8 @@ td a {
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
   font-size: 0.78rem;
-  background: #e3eef1;
-  color: #24505a;
+  background: #e6efee;
+  color: var(--brand-ink);
   text-transform: capitalize;
 }
 
@@ -256,7 +265,7 @@ td a {
 .card h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: #0d7c8c;
+  color: var(--brand-ink);
 }
 
 .card-row {
@@ -316,16 +325,31 @@ dd {
 .link-btn {
   background: none;
   border: none;
-  color: #0d7c8c;
+  color: var(--action);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0;
   text-decoration: underline;
 }
 
+.link-btn:hover:not(:disabled) {
+  background: none;
+  color: var(--action-dark);
+}
+
+.shell header button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.35);
+}
+
 main h3 {
   margin: 1.25rem 0 0.5rem;
   font-size: 1.05rem;
+  color: var(--brand-ink);
+}
+
+.page-head h2,
+main h2 {
+  color: var(--brand-ink);
 }
 
 .notice {

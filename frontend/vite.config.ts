@@ -11,7 +11,7 @@ export default defineConfig({
         name: "Townsend Cabinet Management",
         short_name: "Cabinets",
         description: "Cabinet lifecycle management — Townsend Building Supply",
-        theme_color: "#24B3C6",
+        theme_color: "#125952",
         background_color: "#ffffff",
         display: "standalone",
         start_url: "/",
