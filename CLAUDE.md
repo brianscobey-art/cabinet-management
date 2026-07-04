@@ -1,6 +1,6 @@
 # Cabinet Management System — Project Spec (Claude Code)
 
-**Owner:** Brian, Kitchen & Bath Manager, Townsend Building Supply
+**Owner:** Brian, Kitchen & Bath Manager, Carter Lumber (formerly Townsend Building Supply — acquired 2026)
 **Purpose of this file:** This is the source of truth for what we're building. Read it fully before writing code. Build in the phases at the bottom — do **not** try to scaffold everything at once.
 
 ---
@@ -205,4 +205,4 @@ Management dashboard (PO trend, job status, install views, anomaly flags). Offic
 
 ---
 
-*Brand: all customer-facing and internal deliverables use **Townsend Building Supply**. Carter Lumber (parent) only appears when explicitly requested.*
+*Brand: **Carter Lumber** — name, logo (`frontend/public/carter-logo.png`), and colors (deep green #125952, orange #df5822) as of the 2026 buyout. Townsend Building Supply is legacy; it may linger in supplier account names (e.g. the Everluxe dealer defaults in `backend/app/config.py`) until those accounts are renamed — update `.env` when they are.*

@@ -1,7 +1,7 @@
 # Frontend — Cabinet Management System
 
 React + Vite + TypeScript, built as a PWA (installable on iOS/Android home screen).
-Phase 0 scope: login, session, app shell in Townsend aqua.
+Carter Lumber branding: logo in `public/carter-logo.png`, deep green #125952 + orange #df5822.
 
 ## Run
 
@@ -22,5 +22,5 @@ npm run build      # type-checks then bundles to dist/ with the PWA service work
 
 ## PWA icons
 
-`public/icon-192.png` and `public/icon-512.png` are placeholders — replace with
-Townsend-branded icons before anyone installs this to a home screen.
+`public/icon-192.png` and `public/icon-512.png` are the Carter Lumber wordmark on
+brand green, generated from `public/carter-logo.png`.

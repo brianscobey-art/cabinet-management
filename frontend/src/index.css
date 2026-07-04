@@ -132,8 +132,36 @@ button:disabled {
 }
 
 .shell header h1 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-weight: 500;
+}
+
+.shell header h1 .logo {
+  height: 26px;
+  display: block;
+}
+
+.shell header h1 span {
+  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  padding-left: 0.7rem;
+}
+
+.login-brand {
+  background: var(--brand);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: -0.5rem 0 0.25rem;
+}
+
+.login-brand img {
+  width: 100%;
+  max-width: 240px;
+  display: block;
+  margin: 0 auto;
 }
 
 .shell header button {

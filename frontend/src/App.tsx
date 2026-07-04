@@ -43,7 +43,10 @@ export default function App() {
   return (
     <div className="shell">
       <header>
-        <h1>Townsend Cabinet Management</h1>
+        <h1>
+          <img src="/carter-logo.png" alt="Carter Lumber" className="logo" />
+          <span>Cabinet Management</span>
+        </h1>
         <nav>
           <a href="#/jobs" className={!hash.startsWith("#/accounts") ? "active" : ""}>
             Jobs
@@ -94,7 +97,10 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
   return (
     <div className="center">
       <form className="login" onSubmit={submit}>
-        <h1>Townsend Cabinet Management</h1>
+        <div className="login-brand">
+          <img src="/carter-logo.png" alt="Carter Lumber" />
+        </div>
+        <h1>Cabinet Management</h1>
         <label>
           Email
           <input

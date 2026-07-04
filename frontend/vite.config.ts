@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "Townsend Cabinet Management",
-        short_name: "Cabinets",
-        description: "Cabinet lifecycle management — Townsend Building Supply",
+        name: "Carter Lumber Cabinet Management",
+        short_name: "Carter Cabinets",
+        description: "Cabinet lifecycle management — Carter Lumber",
         theme_color: "#125952",
         background_color: "#ffffff",
         display: "standalone",

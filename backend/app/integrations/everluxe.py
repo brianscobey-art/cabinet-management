@@ -17,13 +17,13 @@ from openpyxl.utils import get_column_letter
 from app.models import Job, Quote
 from app.pricing import is_excluded, line_total, money, net_each
 
-AQUA = "24B3C6"
+BRAND_GREEN = "125952"  # Carter Lumber deep green
 GRAY = "595959"
 
 _thin = Side(style="thin", color=GRAY)
 _border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 _header_font = Font(name="Arial", size=9, color="FFFFFF")
-_header_fill = PatternFill("solid", fgColor=AQUA)
+_header_fill = PatternFill("solid", fgColor=BRAND_GREEN)
 _label_font = Font(name="Arial", size=9, bold=True)
 _value_font = Font(name="Arial", size=9)
 _center = Alignment(horizontal="center", vertical="center", wrap_text=True)

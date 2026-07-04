@@ -1,6 +1,6 @@
 # Cabinet Management System
 
-One system for the entire cabinet lifecycle at Townsend Building Supply:
+One system for the entire cabinet lifecycle at Carter Lumber (formerly Townsend Building Supply):
 **quote → field measure → order → delivery → install → quality → punch → warranty/service**,
 plus community phase tracking and a management dashboard.
 
