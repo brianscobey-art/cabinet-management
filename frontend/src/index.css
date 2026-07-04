@@ -1,0 +1,113 @@
+:root {
+  --aqua: #24b3c6;
+  --dark: #262626;
+  --gray: #595959;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--dark);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f6f8f9;
+}
+
+.center {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.login {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login h1 {
+  font-size: 1.25rem;
+  margin: 0 0 0.5rem;
+  color: var(--aqua);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--gray);
+}
+
+input {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #ccd4d8;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+input:focus {
+  outline: 2px solid var(--aqua);
+  border-color: transparent;
+}
+
+button {
+  background: var(--aqua);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  color: #c0392b;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.shell header {
+  background: var(--aqua);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.shell header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.shell header button {
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.shell main {
+  padding: 1.25rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.muted {
+  color: var(--gray);
+}
