@@ -42,6 +42,16 @@ DOC_TYPE_PATTERNS = [
 
 KNOWN_DOOR_STYLES = ["Shaker", "Flat Panel", "Raised Panel", "Slab"]
 
+# Folder names use division abbreviations; accounts use the tracker's full names.
+DIVISION_NAMES = {
+    "DRH Montgomery": "DR Horton Montgomery",
+    "DRH Panama City East": "DR Horton Panama City East",
+    "DRH Panama City West": "DR Horton Panama City West",
+    "DRH Pensacola West": "DR Horton Pensacola West",
+    "DRH Pensecola East": "DR Horton Pensacola East",  # folder typo is real
+    "DRH Pensacola East": "DR Horton Pensacola East",
+}
+
 
 def classify(filename: str) -> str:
     for doc_type, pattern in DOC_TYPE_PATTERNS:
@@ -124,14 +134,13 @@ def import_job_folder(db, folder: Path) -> None:
     lot_match = re.search(r"-0*(\d+)$", job_code)
     lot_number = lot_match.group(1) if lot_match else None
 
-    marker = f"[{job_code}]"
-    if db.query(Job).filter(Job.notes.like(f"%{marker}%")).first():
+    if db.query(Job).filter(Job.job_code == job_code).first():
         print(f"= {job_code} already imported, skipping")
         return
 
     # Community folder: "Links Crossing 26843"; division folder: "DRH Montgomery"
     community_name = re.sub(r"\s+\d+$", "", folder.parent.name)
-    division_name = folder.parent.parent.name
+    division_name = DIVISION_NAMES.get(folder.parent.parent.name, folder.parent.parent.name)
 
     files = sorted(f for f in folder.iterdir() if f.is_file())
     summary = next((f for f in files if classify(f.name) == "summary"), None)
@@ -161,7 +170,7 @@ def import_job_folder(db, folder: Path) -> None:
         db.add(community)
         db.flush()
 
-    note_bits = [f"{marker} Plan/Elev/Swing: {facts.get('plan') or '?'}"]
+    note_bits = [f"Plan/Elev/Swing: {facts.get('plan') or '?'}"]
     if facts.get("po_number"):
         total = f" (${facts['po_total']} turnkey)" if facts.get("po_total") else ""
         note_bits.append(f"DRH PO# {facts['po_number']}{total}")
@@ -170,6 +179,7 @@ def import_job_folder(db, folder: Path) -> None:
     note_bits.append(f"Imported from {folder}")
 
     job = Job(
+        job_code=job_code,
         account_id=account.id,
         community_id=community.id,
         lot_number=lot_number,

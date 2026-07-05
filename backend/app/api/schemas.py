@@ -116,6 +116,7 @@ class HardwareSelectionOut(BaseModel):
 # --- Jobs ---
 
 class JobCreate(BaseModel):
+    job_code: str | None = Field(default=None, max_length=50)
     account_id: int
     community_id: int | None = None
     lot_number: str | None = Field(default=None, max_length=32)
@@ -132,6 +133,7 @@ class JobCreate(BaseModel):
 
 
 class JobUpdate(BaseModel):
+    job_code: str | None = Field(default=None, max_length=50)
     community_id: int | None = None
     lot_number: str | None = None
     address: str | None = Field(default=None, min_length=1, max_length=500)
@@ -152,6 +154,7 @@ class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    job_code: str | None
     account_id: int
     community_id: int | None
     lot_number: str | None
@@ -177,6 +180,7 @@ class JobListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    job_code: str | None
     account_id: int
     account_name: str
     community_name: str | None

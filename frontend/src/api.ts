@@ -73,6 +73,7 @@ export type JobType = "tract" | "custom" | "remodel";
 
 export interface JobListItem {
   id: number;
+  job_code: string | null;
   account_id: number;
   account_name: string;
   community_name: string | null;
@@ -85,6 +86,7 @@ export interface JobListItem {
 
 export interface Job {
   id: number;
+  job_code: string | null;
   account_id: number;
   community_id: number | null;
   lot_number: string | null;

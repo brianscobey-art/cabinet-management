@@ -33,6 +33,9 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Derived unique key used across the tracker, sold-job folders, and supplier POs
+    # (e.g. DRLICR-0113 for DR Horton, WEL-0318 for locals).
+    job_code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, default=None)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
     community_id: Mapped[int | None] = mapped_column(
         ForeignKey("communities.id"), index=True, default=None  # nullable for retail

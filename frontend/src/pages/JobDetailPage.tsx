@@ -33,7 +33,10 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         <a href="#/jobs">← Jobs</a>
       </p>
       <div className="page-head">
-        <h2>{job.address}</h2>
+        <h2>
+          {job.job_code ? `${job.job_code} — ` : ""}
+          {job.address}
+        </h2>
         {canWrite ? (
           <select
             value={job.status}
@@ -57,6 +60,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         <div className="card">
           <h3>Job</h3>
           <dl>
+            <dt>Job code</dt>
+            <dd>{job.job_code ?? "—"}</dd>
             <dt>Account</dt>
             <dd>{job.account_name}</dd>
             <dt>Community / Lot</dt>

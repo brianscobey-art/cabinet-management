@@ -31,9 +31,22 @@ def _check_community(db: Session, account_id: int, community_id: int | None) -> 
         )
 
 
+def _check_job_code(db: Session, job_code: str | None, exclude_id: int | None = None) -> None:
+    if not job_code:
+        return
+    clash = db.query(Job).filter(Job.job_code == job_code)
+    if exclude_id is not None:
+        clash = clash.filter(Job.id != exclude_id)
+    if clash.first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"Job code {job_code} already in use"
+        )
+
+
 def _to_list_item(job: Job) -> JobListItem:
     return JobListItem(
         id=job.id,
+        job_code=job.job_code,
         account_id=job.account_id,
         account_name=job.account.name,
         community_name=job.community.name if job.community else None,
@@ -62,7 +75,9 @@ def list_jobs(
         query = query.filter(Job.status == status_filter)
     if q:
         like = f"%{q.strip()}%"
-        query = query.filter(or_(Job.address.ilike(like), Job.lot_number.ilike(like)))
+        query = query.filter(
+            or_(Job.address.ilike(like), Job.lot_number.ilike(like), Job.job_code.ilike(like))
+        )
     jobs = query.order_by(Job.updated_at.desc()).limit(500).all()
     return [_to_list_item(j) for j in jobs]
 
@@ -75,6 +90,7 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     if db.get(Account, payload.account_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
     _check_community(db, payload.account_id, payload.community_id)
+    _check_job_code(db, payload.job_code)
     job = Job(**payload.model_dump())
     db.add(job)
     db.commit()
@@ -112,6 +128,8 @@ def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)):
     updates = payload.model_dump(exclude_unset=True)
     if "community_id" in updates:
         _check_community(db, job.account_id, updates["community_id"])
+    if "job_code" in updates:
+        _check_job_code(db, updates["job_code"], exclude_id=job.id)
     # Warranty starts at install date (spec §4) — default it when install_date is set.
     if updates.get("install_date") and not job.warranty_start_date and "warranty_start_date" not in updates:
         updates["warranty_start_date"] = updates["install_date"]

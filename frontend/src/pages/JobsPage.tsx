@@ -61,7 +61,7 @@ export default function JobsPage() {
 
       <div className="filters">
         <input
-          placeholder="Search address or lot…"
+          placeholder="Search job code, address, or lot…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -89,6 +89,7 @@ export default function JobsPage() {
         <table>
           <thead>
             <tr>
+              <th>Job code</th>
               <th>Address</th>
               <th>Account</th>
               <th>Community</th>
@@ -101,6 +102,9 @@ export default function JobsPage() {
           <tbody>
             {jobs.map((j) => (
               <tr key={j.id} className="clickable" onClick={() => (window.location.hash = `#/jobs/${j.id}`)}>
+                <td>
+                  <a href={`#/jobs/${j.id}`}>{j.job_code ?? `#${j.id}`}</a>
+                </td>
                 <td>
                   <a href={`#/jobs/${j.id}`}>{j.address}</a>
                 </td>
@@ -116,7 +120,7 @@ export default function JobsPage() {
             ))}
             {jobs.length === 0 && (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No jobs yet.
                 </td>
               </tr>
@@ -130,6 +134,7 @@ export default function JobsPage() {
 
 function NewJobForm({ accounts, onCreated }: { accounts: Account[]; onCreated: () => void }) {
   const [form, setForm] = useState<Record<string, string>>({
+    job_code: "",
     account_id: "",
     community_id: "",
     lot_number: "",
@@ -160,6 +165,7 @@ function NewJobForm({ accounts, onCreated }: { accounts: Account[]; onCreated: (
     setError("");
     try {
       await createJob({
+        job_code: form.job_code || null,
         account_id: Number(form.account_id),
         community_id: form.community_id ? Number(form.community_id) : null,
         lot_number: form.lot_number || null,
@@ -180,6 +186,10 @@ function NewJobForm({ accounts, onCreated }: { accounts: Account[]; onCreated: (
 
   return (
     <form className="card form-grid" onSubmit={submit}>
+      <label>
+        Job code
+        <input value={form.job_code} onChange={set("job_code")} placeholder="e.g. DRLICR-0113" />
+      </label>
       <label>
         Account
         <select value={form.account_id} onChange={set("account_id")} required>
