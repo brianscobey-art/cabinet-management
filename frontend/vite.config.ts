@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "Carter Lumber Cabinet Management",
-        short_name: "Carter Cabinets",
-        description: "Cabinet lifecycle management — Carter Lumber",
+        name: "Carter Kitchen and Bath",
+        short_name: "Carter K&B",
+        description: "Kitchen & Bath job management — Carter Lumber",
         theme_color: "#125952",
         background_color: "#ffffff",
         display: "standalone",

@@ -206,4 +206,4 @@ Management dashboard (PO trend, job status, install views, anomaly flags). Offic
 
 ---
 
-*Brand: **Carter Lumber** — name, logo (`frontend/public/carter-logo.png`), and colors (deep green #125952, orange #df5822) as of the 2026 buyout. Townsend Building Supply is legacy; it may linger in supplier account names (e.g. the Everluxe dealer defaults in `backend/app/config.py`) until those accounts are renamed — update `.env` when they are.*
+*Brand: **Carter Lumber**; the app is named **"Carter Kitchen and Bath"** — logo (`frontend/public/carter-logo.png`), colors (deep green #125952, orange #df5822, mint K&B accent #2bb99f) as of the 2026 buyout. Townsend Building Supply is legacy; it may linger in supplier account names (e.g. the Everluxe dealer defaults in `backend/app/config.py`) until those accounts are renamed — update `.env` when they are.*

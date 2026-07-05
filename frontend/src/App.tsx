@@ -45,7 +45,7 @@ export default function App() {
       <header>
         <h1>
           <img src="/carter-logo.png" alt="Carter Lumber" className="logo" />
-          <span>Cabinet Management</span>
+          <span>Kitchen and Bath</span>
         </h1>
         <nav>
           <a href="#/jobs" className={!hash.startsWith("#/accounts") ? "active" : ""}>
@@ -100,7 +100,7 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
         <div className="login-brand">
           <img src="/carter-logo.png" alt="Carter Lumber" />
         </div>
-        <h1>Cabinet Management</h1>
+        <h1>Kitchen and Bath</h1>
         <label>
           Email
           <input

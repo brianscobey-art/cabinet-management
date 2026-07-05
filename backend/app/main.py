@@ -10,7 +10,7 @@ from app.api.selections import router as selections_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
 
-app = FastAPI(title="Cabinet Management System", version="0.1.0")
+app = FastAPI(title="Carter Kitchen and Bath", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
