@@ -5,6 +5,7 @@
   --action: #df5822;       /* Carter orange — buttons, links, CTAs */
   --action-dark: #b4461a;  /* orange hover */
   --teal: #568c8c;         /* secondary accent */
+  --kb: #2bb99f;           /* Carter's --kb-primary — Kitchen & Bath accent */
   --dark: #262626;
   --gray: #595959;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -378,6 +379,17 @@ main h3 {
 .page-head h2,
 main h2 {
   color: var(--brand-ink);
+}
+
+/* Kitchen & Bath sections — mint accent, Carter's --kb-primary */
+h3.kb-head {
+  border-left: 4px solid var(--kb);
+  padding-left: 0.55rem;
+}
+
+.badge-kb {
+  background: #dff5f0;
+  color: #157a68;
 }
 
 .notice {

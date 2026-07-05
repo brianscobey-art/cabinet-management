@@ -95,7 +95,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         </div>
       </div>
 
-      <h3>Room selections</h3>
+      <h3 className="kb-head">Room selections</h3>
       <div className="table-wrap">
         <table>
           <thead>
@@ -114,7 +114,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             {job.room_selections.map((r) => (
               <tr key={r.id}>
                 <td>{r.room}</td>
-                <td>{r.zone ?? "—"}</td>
+                <td>{r.zone ? <span className="badge badge-kb">{r.zone}</span> : "—"}</td>
                 <td>{r.cabinet_brand ?? "—"}</td>
                 <td>{r.series ?? "—"}</td>
                 <td>{r.door_style ?? "—"}</td>
@@ -147,7 +147,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
       </div>
       {canWrite && <AddRoomForm jobId={job.id} onAdded={refresh} />}
 
-      <h3>Hardware</h3>
+      <h3 className="kb-head">Hardware</h3>
       <div className="table-wrap">
         <table>
           <thead>
