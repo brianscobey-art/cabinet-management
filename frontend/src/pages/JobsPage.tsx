@@ -56,22 +56,13 @@ export default function JobsPage() {
 
   return (
     <div>
+      <div className="page-sticky">
       <div className="page-head">
         <h2>Jobs</h2>
         <button onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? "Close" : "+ New job"}
         </button>
       </div>
-
-      {showCreate && (
-        <NewJobForm
-          accounts={accounts}
-          onCreated={() => {
-            setShowCreate(false);
-            refresh();
-          }}
-        />
-      )}
 
       <div className="filters">
         <input
@@ -106,6 +97,17 @@ export default function JobsPage() {
           ))}
         </select>
       </div>
+      </div>
+
+      {showCreate && (
+        <NewJobForm
+          accounts={accounts}
+          onCreated={() => {
+            setShowCreate(false);
+            refresh();
+          }}
+        />
+      )}
 
       {error && <p className="error">{error}</p>}
 
