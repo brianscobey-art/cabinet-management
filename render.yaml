@@ -1,0 +1,26 @@
+# Render blueprint — personal-account hosting for the pilot.
+# In Render: New + > Blueprint > point at this repo. Creates the web service + Postgres.
+services:
+  - type: web
+    name: carter-kitchen-and-bath
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: kb-files
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GENERATED_DIR
+        value: /data/generated
+      - key: DATABASE_URL
+        fromDatabase:
+          name: carter-kb-db
+          property: connectionString
+
+databases:
+  - name: carter-kb-db
+    plan: basic-256mb

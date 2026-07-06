@@ -4,14 +4,15 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.config import get_settings
-from app.database import Base
+from app.database import Base, _normalize
 import app.models  # noqa: F401  — register all models on Base.metadata
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# %% escapes ConfigParser interpolation (managed-host passwords can contain %)
+config.set_main_option("sqlalchemy.url", _normalize(get_settings().database_url).replace("%", "%%"))
 
 target_metadata = Base.metadata
 
