@@ -97,6 +97,18 @@ def test_list_jobs_filters(client, db):
     assert by_search[0]["address"] == "9 Oak Ln"
 
 
+def test_jobs_sorted_by_job_code(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    make_job(client, headers, account_id, community_id, job_code="DRZZZ-0002", address="2 Z St")
+    make_job(client, headers, account_id, community_id, job_code="DRAAA-0001", address="1 A St")
+    make_job(client, headers, account_id, community_id, address="9 No Code Ln")  # no job_code
+
+    codes = [j["job_code"] for j in client.get("/jobs", headers=headers).json()]
+    assert codes == ["DRAAA-0001", "DRZZZ-0002", None]  # alphanumeric, uncoded last
+
+
 def test_update_status_and_warranty_defaults(client, db):
     make_user(db, email="sales@example.com", role=Role.sales)
     headers = login(client, "sales@example.com")

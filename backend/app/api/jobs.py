@@ -78,7 +78,7 @@ def list_jobs(
         query = query.filter(
             or_(Job.address.ilike(like), Job.lot_number.ilike(like), Job.job_code.ilike(like))
         )
-    jobs = query.order_by(Job.updated_at.desc()).limit(500).all()
+    jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(500).all()
     return [_to_list_item(j) for j in jobs]
 
 

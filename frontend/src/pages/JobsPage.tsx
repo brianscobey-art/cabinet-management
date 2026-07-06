@@ -18,8 +18,10 @@ export function statusLabel(s: string) {
 export default function JobsPage() {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
+  const [communityFilter, setCommunityFilter] = useState("");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +30,7 @@ export default function JobsPage() {
     const params: Record<string, string> = {};
     if (statusFilter) params.status_filter = statusFilter;
     if (accountFilter) params.account_id = accountFilter;
+    if (communityFilter) params.community_id = communityFilter;
     if (search) params.q = search;
     setJobs(await listJobs(params));
   }
@@ -35,11 +38,21 @@ export default function JobsPage() {
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, search]);
+  }, [statusFilter, accountFilter, communityFilter, search]);
 
   useEffect(() => {
     listAccounts().then(setAccounts).catch(() => {});
   }, []);
+
+  // Cascading filter: picking an account loads its communities.
+  useEffect(() => {
+    setCommunityFilter("");
+    if (accountFilter) {
+      listCommunities(Number(accountFilter)).then(setFilterCommunities).catch(() => {});
+    } else {
+      setFilterCommunities([]);
+    }
+  }, [accountFilter]);
 
   return (
     <div>
@@ -74,6 +87,16 @@ export default function JobsPage() {
             </option>
           ))}
         </select>
+        {accountFilter && filterCommunities.length > 0 && (
+          <select value={communityFilter} onChange={(e) => setCommunityFilter(e.target.value)}>
+            <option value="">All communities</option>
+            {filterCommunities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All statuses</option>
           {JOB_STATUSES.map((s) => (
