@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     ship_to_address: str = "868 Murray Rd"
     ship_to_city_st_zip: str = "Dothan, AL 36303"
 
+    # Daily feed sync — OneDrive folders the scheduled cloud reports write into.
+    vendorsuite_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules"
+    )
+    century_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"\AI Shared Folder\Supply Pro - Century"
+    )
+    feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
+    feed_sync_enabled: bool = True
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

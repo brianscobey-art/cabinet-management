@@ -1,3 +1,5 @@
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,10 +13,42 @@ from app.api.ordering import router as ordering_router
 from app.api.orders import router as orders_router
 from app.api.quotes import router as quotes_router
 from app.api.selections import router as selections_router
+from app.api.sync import router as sync_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
 
-app = FastAPI(title="Carter Kitchen and Bath", version="0.1.0")
+logger = logging.getLogger("uvicorn.error")
+
+
+def _run_feed_sync() -> None:
+    from app.database import SessionLocal
+    from app.feeds import sync_all
+
+    try:
+        with SessionLocal() as db:
+            result = sync_all(db)
+        logger.info("Daily feed sync: %s", result)
+    except Exception:
+        logger.exception("Daily feed sync failed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    scheduler = None
+    if settings.feed_sync_enabled and Path(settings.vendorsuite_dir).is_dir():
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(_run_feed_sync, "cron", hour=settings.feed_sync_hour, minute=0)
+        scheduler.start()
+        logger.info("Feed sync scheduled daily at %02d:00", settings.feed_sync_hour)
+    yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Carter Kitchen and Bath", version="0.1.0", lifespan=lifespan)
 
 
 class StripApiPrefix:
@@ -53,6 +87,7 @@ app.include_router(quotes_router)
 app.include_router(orders_router)
 app.include_router(documents_router)
 app.include_router(ordering_router)
+app.include_router(sync_router)
 
 
 @app.get("/health", tags=["system"])

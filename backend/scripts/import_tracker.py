@@ -16,6 +16,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from app.database import SessionLocal
+from app.feeds import _find_job
 from app.models import (
     Account,
     AccountType,
@@ -145,6 +146,17 @@ def import_row(db, row: dict, caches: dict) -> str:
         job_type = JobType.custom
 
     lot = clean(row.get("Lot #"))
+
+    # A feed sync may have created this job before the tracker knew its code —
+    # match by community + lot and adopt the code instead of duplicating.
+    if community is not None and lot is not None:
+        existing = _find_job(db, community, lot)
+        if existing is not None:
+            if existing.job_code is None:
+                existing.job_code = job_code
+                return "linked"
+            return "skipped"
+
     address = clean(row.get("Address"))
     if not address:
         address = f"{community_name or account.name}" + (f" Lot {lot}" if lot else "")
@@ -286,7 +298,7 @@ def main() -> None:
         if "--selections-only" in flags:
             counts = backfill_selections(db, rows)
         else:
-            counts = {"imported": 0, "skipped": 0, "failed": 0}
+            counts = {"imported": 0, "linked": 0, "skipped": 0, "failed": 0}
             caches = {"accounts": {}, "communities": {}}
             for row in rows:
                 try:
