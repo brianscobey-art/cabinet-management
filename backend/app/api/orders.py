@@ -127,7 +127,7 @@ def create_order(job_id: int, payload: OrderCreate, db: Session = Depends(get_db
         door_style=payload.door_style or (first_room.door_style if first_room else "") or "",
         door_color=payload.door_color or (first_room.finish if first_room else "") or "",
         freight=payload.freight,
-        order_date=date.today().isoformat(),
+        order_date=f"{date.today().month}/{date.today().day}/{date.today():%y}",  # m/d/yy per Brian
     )
 
     order = Order(job_id=job_id, quote_id=quote.id, supplier=Supplier.everluxe, po_number=payload.customer_po or None)

@@ -10,6 +10,7 @@ import {
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
+import { fmtDate } from "../format";
 import { statusLabel } from "./JobsPage";
 import QuotesSection from "./QuotesSection";
 
@@ -71,9 +72,9 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dt>Type</dt>
             <dd>{job.job_type}</dd>
             <dt>Install date</dt>
-            <dd>{job.install_date ?? "—"}</dd>
+            <dd>{fmtDate(job.install_date)}</dd>
             <dt>Warranty start</dt>
-            <dd>{job.warranty_start_date ?? "—"}</dd>
+            <dd>{fmtDate(job.warranty_start_date)}</dd>
           </dl>
         </div>
         <div className="card">

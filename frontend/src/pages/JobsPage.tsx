@@ -9,6 +9,7 @@ import {
   listCommunities,
   listJobs,
 } from "../api";
+import { fmtDate } from "../format";
 
 export function statusLabel(s: string) {
   return s.replace(/_/g, " ");
@@ -115,7 +116,7 @@ export default function JobsPage() {
                 <td>
                   <span className={`badge badge-${j.status}`}>{statusLabel(j.status)}</span>
                 </td>
-                <td>{j.install_date ?? "—"}</td>
+                <td>{fmtDate(j.install_date)}</td>
               </tr>
             ))}
             {jobs.length === 0 && (
