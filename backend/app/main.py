@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.accounts import router as accounts_router
 from app.api.documents import router as documents_router
 from app.api.jobs import router as jobs_router
+from app.api.ordering import router as ordering_router
 from app.api.orders import router as orders_router
 from app.api.quotes import router as quotes_router
 from app.api.selections import router as selections_router
@@ -51,6 +52,7 @@ app.include_router(selections_router)
 app.include_router(quotes_router)
 app.include_router(orders_router)
 app.include_router(documents_router)
+app.include_router(ordering_router)
 
 
 @app.get("/health", tags=["system"])

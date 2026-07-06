@@ -12,6 +12,7 @@ import {
 import DocumentsSection from "./DocumentsSection";
 import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
+import OrderingCard from "./OrderingCard";
 import QuotesSection from "./QuotesSection";
 
 export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
@@ -100,6 +101,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
           </dl>
         </div>
       </div>
+
+      {job.job_type === "tract" && <OrderingCard jobId={job.id} canWrite={canWrite} />}
 
       <h3 className="kb-head">Room selections</h3>
       <div className="table-wrap">

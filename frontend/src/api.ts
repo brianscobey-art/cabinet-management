@@ -236,6 +236,39 @@ export async function openDocument(docId: number): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+export interface OrderingChecklist {
+  job_id: number;
+  stage1_done: boolean;
+  stage2_done: boolean;
+  stage3_done: boolean;
+  stage4_done: boolean;
+  stage1_date: string | null;
+  stage2_date: string | null;
+  stage3_date: string | null;
+  stage4_date: string | null;
+  notes: string | null;
+}
+
+export interface OrderingBoardRow {
+  job_id: number;
+  job_code: string | null;
+  address: string;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  status: JobStatus;
+  checklist: OrderingChecklist;
+}
+
+export const getOrderingChecklist = (jobId: number) =>
+  api<OrderingChecklist>(`/jobs/${jobId}/ordering`);
+export const updateOrderingChecklist = (jobId: number, data: Record<string, unknown>) =>
+  api<OrderingChecklist>(`/jobs/${jobId}/ordering`, { method: "PATCH", body: JSON.stringify(data) });
+export const getOrderingBoard = (params: Record<string, string> = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return api<OrderingBoardRow[]>(`/ordering${qs ? `?${qs}` : ""}`);
+};
+
 export const listQuotes = (jobId: number) => api<Quote[]>(`/jobs/${jobId}/quotes`);
 export const getQuote = (id: number) => api<QuoteDetail>(`/quotes/${id}`);
 export const createQuote = (jobId: number, name: string) =>
