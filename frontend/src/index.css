@@ -318,6 +318,8 @@ dt {
 
 dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere; /* long emails wrap instead of spilling out of the card */
 }
 
 .form-grid {

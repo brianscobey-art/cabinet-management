@@ -10,7 +10,7 @@ import {
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
-import { fmtDate } from "../format";
+import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
 import QuotesSection from "./QuotesSection";
 
@@ -83,7 +83,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dt>Name</dt>
             <dd>{job.sales_contact_name}</dd>
             <dt>Phone</dt>
-            <dd>{job.sales_contact_phone ?? "—"}</dd>
+            <dd>{fmtPhone(job.sales_contact_phone)}</dd>
             <dt>Email</dt>
             <dd>{job.sales_contact_email ?? "—"}</dd>
           </dl>
@@ -94,7 +94,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dt>Name</dt>
             <dd>{job.field_contact_name}</dd>
             <dt>Phone</dt>
-            <dd>{job.field_contact_phone ?? "—"}</dd>
+            <dd>{fmtPhone(job.field_contact_phone)}</dd>
             <dt>Email</dt>
             <dd>{job.field_contact_email ?? "—"}</dd>
           </dl>
