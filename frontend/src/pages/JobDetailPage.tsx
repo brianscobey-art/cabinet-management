@@ -159,6 +159,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
           <thead>
             <tr>
               <th>Room</th>
+              <th>Type</th>
               <th>Vendor</th>
               <th>Item</th>
               <th>Qty</th>
@@ -169,6 +170,13 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             {job.hardware_selections.map((h) => (
               <tr key={h.id}>
                 <td>{h.room ?? "—"}</td>
+                <td>
+                  {h.hardware_type ? (
+                    <span className="badge badge-kb">{h.hardware_type} hardware</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>{h.vendor ?? "—"}</td>
                 <td>{h.item}</td>
                 <td>{h.qty}</td>
@@ -189,7 +197,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             ))}
             {job.hardware_selections.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   No hardware yet.
                 </td>
               </tr>
@@ -257,7 +265,7 @@ function AddRoomForm({ jobId, onAdded }: { jobId: number; onAdded: () => void })
 }
 
 function AddHardwareForm({ jobId, onAdded }: { jobId: number; onAdded: () => void }) {
-  const empty = { room: "", vendor: "", item: "", qty: "1" };
+  const empty = { room: "", hardware_type: "", vendor: "", item: "", qty: "1" };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState("");
   const set = (k: keyof typeof empty) => (e: { target: { value: string } }) =>
@@ -269,6 +277,7 @@ function AddHardwareForm({ jobId, onAdded }: { jobId: number; onAdded: () => voi
     try {
       await addHardware(jobId, {
         room: form.room || null,
+        hardware_type: form.hardware_type || null,
         vendor: form.vendor || null,
         item: form.item,
         qty: Number(form.qty) || 1,
@@ -283,6 +292,11 @@ function AddHardwareForm({ jobId, onAdded }: { jobId: number; onAdded: () => voi
   return (
     <form className="inline-form" onSubmit={submit}>
       <input placeholder="Room" value={form.room} onChange={set("room")} />
+      <select value={form.hardware_type} onChange={set("hardware_type")}>
+        <option value="">Other hardware</option>
+        <option value="door">Door hardware</option>
+        <option value="drawer">Drawer hardware</option>
+      </select>
       <input placeholder="Vendor" value={form.vendor} onChange={set("vendor")} />
       <input placeholder="Item *" value={form.item} onChange={set("item")} required />
       <input placeholder="Qty" type="number" min="1" value={form.qty} onChange={set("qty")} style={{ width: "4.5rem" }} />

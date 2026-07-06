@@ -16,11 +16,20 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from app.database import SessionLocal
-from app.models import Account, AccountType, Community, Job, JobStatus, JobType, RoomSelection
+from app.models import (
+    Account,
+    AccountType,
+    Community,
+    HardwareSelection,
+    Job,
+    JobStatus,
+    JobType,
+    RoomSelection,
+)
 
 SHEET = "Command Center"
 TABLE_NAME = "DATA"
-BLANKS = {None, 0, "0", "", "#N/A", "N/A", "NA", "TBD", "?"}
+BLANKS = {None, 0, "0", "", "#N/A", "N/A", "NA", "TBD", "?", "NONE", "None", "none"}
 
 DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@TownsendBuildingSupply.com")
 
@@ -187,39 +196,104 @@ def import_row(db, row: dict, caches: dict) -> str:
     db.add(job)
     db.flush()
 
-    brand = clean(row.get("Cabinet Brand"))
-    if brand:
-        db.add(
-            RoomSelection(
-                job_id=job.id,
-                room="Whole House",
-                cabinet_brand=str(brand),
-                notes="From tracker",
-            )
-        )
+    _apply_selections(db, job, row, create_room=True)
     return "imported"
 
 
+# The selections block uses double-spaced headers in the tracker.
+SEL_BRAND = "Cabinet  Brand"
+SEL_SERIES = "Cabinet  Series"
+SEL_DOOR_STYLE = "Door  Style"
+SEL_DOOR_HW = "Door  Hrdwe"
+SEL_DRW_HW = "Drw  Hrdwe"
+
+
+def _apply_selections(db, job: Job, row: dict, create_room: bool) -> bool:
+    """Fill the Whole House room selection + door/drawer hardware from tracker columns.
+
+    Only fills blanks — never clobbers values that came from richer sources
+    (e.g. the sold-job-file import). Returns True if anything changed.
+    """
+    changed = False
+    brand = clean(row.get(SEL_BRAND)) or clean(row.get("Cabinet Brand"))
+    series = clean(row.get(SEL_SERIES))
+    door_style = clean(row.get(SEL_DOOR_STYLE))
+
+    room = (
+        db.query(RoomSelection)
+        .filter(RoomSelection.job_id == job.id, RoomSelection.room == "Whole House")
+        .first()
+    )
+    if room is None and (brand or series or door_style) and create_room:
+        room = RoomSelection(job_id=job.id, room="Whole House", notes="From tracker")
+        db.add(room)
+        db.flush()
+        changed = True
+    if room is not None:
+        for attr, value in (("cabinet_brand", brand), ("series", series), ("door_style", door_style)):
+            if value and not getattr(room, attr):
+                setattr(room, attr, str(value))
+                changed = True
+
+    for hw_type, key in (("door", SEL_DOOR_HW), ("drawer", SEL_DRW_HW)):
+        code = clean(row.get(key))
+        if not code:
+            continue
+        exists = (
+            db.query(HardwareSelection)
+            .filter(HardwareSelection.job_id == job.id, HardwareSelection.hardware_type == hw_type)
+            .first()
+        )
+        if exists is None:
+            db.add(
+                HardwareSelection(
+                    job_id=job.id, room="Whole House", hardware_type=hw_type, item=str(code)
+                )
+            )
+            changed = True
+    return changed
+
+
+def backfill_selections(db, rows: list[dict]) -> dict:
+    """Apply tracker selections to already-imported jobs (matched by job code)."""
+    counts = {"updated": 0, "unchanged": 0, "no_job": 0}
+    for row in rows:
+        job_code = str(clean(row["Job Code"])).strip()
+        job = db.query(Job).filter(Job.job_code == job_code).first()
+        if job is None:
+            counts["no_job"] += 1
+            continue
+        if _apply_selections(db, job, row, create_room=True):
+            counts["updated"] += 1
+        else:
+            counts["unchanged"] += 1
+    return counts
+
+
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a != "--dry-run"]
-    dry_run = "--dry-run" in sys.argv
+    flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    dry_run = "--dry-run" in flags
     if not args:
-        print('Usage: python -m scripts.import_tracker "<path to .xlsm>" [--dry-run]')
+        print('Usage: python -m scripts.import_tracker "<path to .xlsm>" [--dry-run] [--selections-only]')
         sys.exit(1)
 
     path = Path(args[0])
     rows = load_rows(path)
     print(f"{len(rows)} rows with job codes in {path.name}")
 
-    counts = {"imported": 0, "skipped": 0, "failed": 0}
-    caches = {"accounts": {}, "communities": {}}
     with SessionLocal() as db:
-        for row in rows:
-            try:
-                counts[import_row(db, row, caches)] += 1
-            except Exception as exc:
-                counts["failed"] += 1
-                print(f"! {clean(row.get('Job Code'))}: {exc}")
+        if "--selections-only" in flags:
+            counts = backfill_selections(db, rows)
+        else:
+            counts = {"imported": 0, "skipped": 0, "failed": 0}
+            caches = {"accounts": {}, "communities": {}}
+            for row in rows:
+                try:
+                    counts[import_row(db, row, caches)] += 1
+                except Exception as exc:
+                    counts["failed"] += 1
+                    print(f"! {clean(row.get('Job Code'))}: {exc}")
         if dry_run:
             db.rollback()
             print("(dry run — rolled back)")

@@ -35,6 +35,8 @@ class HardwareSelection(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
     room: Mapped[str | None] = mapped_column(String(100), default=None)
+    # door = cabinet door pulls/knobs, drawer = drawer pulls; None = other hardware
+    hardware_type: Mapped[str | None] = mapped_column(String(16), default=None)
     vendor: Mapped[str | None] = mapped_column(String(100), default=None)
     item: Mapped[str] = mapped_column(String(255))
     qty: Mapped[int] = mapped_column(Integer, default=1)

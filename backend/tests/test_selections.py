@@ -59,11 +59,35 @@ def test_hardware_crud(client, db):
     assert resp.status_code == 201
     hw = resp.json()
     assert hw["qty"] == 18
+    assert hw["hardware_type"] is None
 
     resp = client.patch(f"/hardware/{hw['id']}", headers=headers, json={"qty": 22})
     assert resp.json()["qty"] == 22
 
     assert client.delete(f"/hardware/{hw['id']}", headers=headers).status_code == 204
+
+
+def test_door_and_drawer_hardware_types(client, db):
+    headers, job = setup_job(client, db)
+    door = client.post(
+        f"/jobs/{job['id']}/hardware", headers=headers,
+        json={"hardware_type": "door", "item": "3910PC"},
+    )
+    assert door.status_code == 201, door.text
+    assert door.json()["hardware_type"] == "door"
+
+    drawer = client.post(
+        f"/jobs/{job['id']}/hardware", headers=headers,
+        json={"hardware_type": "drawer", "item": "156MB"},
+    )
+    assert drawer.json()["hardware_type"] == "drawer"
+
+    # invalid type rejected
+    bad = client.post(
+        f"/jobs/{job['id']}/hardware", headers=headers,
+        json={"hardware_type": "hinge", "item": "X"},
+    )
+    assert bad.status_code == 422
 
 
 def test_selections_404_on_missing_job(client, db):

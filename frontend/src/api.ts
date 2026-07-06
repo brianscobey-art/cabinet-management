@@ -52,6 +52,7 @@ export interface HardwareSelection {
   id: number;
   job_id: number;
   room: string | null;
+  hardware_type: "door" | "drawer" | null;
   vendor: string | null;
   item: string;
   qty: number;

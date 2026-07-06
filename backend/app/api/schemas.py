@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import AccountType, JobStatus, JobType
 
@@ -88,18 +88,37 @@ class RoomSelectionOut(BaseModel):
     notes: str | None
 
 
+HARDWARE_TYPES = {"door", "drawer"}
+
+
 class HardwareSelectionCreate(BaseModel):
     room: str | None = Field(default=None, max_length=100)
+    hardware_type: str | None = Field(default=None, max_length=16)  # door | drawer | None (other)
     vendor: str | None = Field(default=None, max_length=100)
     item: str = Field(min_length=1, max_length=255)
     qty: int = Field(default=1, ge=1)
 
+    @field_validator("hardware_type")
+    @classmethod
+    def _valid_type(cls, v):
+        if v is not None and v not in HARDWARE_TYPES:
+            raise ValueError(f"hardware_type must be one of {sorted(HARDWARE_TYPES)} or null")
+        return v
+
 
 class HardwareSelectionUpdate(BaseModel):
     room: str | None = None
+    hardware_type: str | None = None
     vendor: str | None = None
     item: str | None = Field(default=None, min_length=1, max_length=255)
     qty: int | None = Field(default=None, ge=1)
+
+    @field_validator("hardware_type")
+    @classmethod
+    def _valid_type(cls, v):
+        if v is not None and v not in HARDWARE_TYPES:
+            raise ValueError(f"hardware_type must be one of {sorted(HARDWARE_TYPES)} or null")
+        return v
 
 
 class HardwareSelectionOut(BaseModel):
@@ -108,6 +127,7 @@ class HardwareSelectionOut(BaseModel):
     id: int
     job_id: int
     room: str | None
+    hardware_type: str | None
     vendor: str | None
     item: str
     qty: int
