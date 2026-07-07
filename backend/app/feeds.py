@@ -187,11 +187,8 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
             counts["created"] += 1
         else:
             changed = False
-            if install and job.install_date != install:
-                job.install_date = install
-                if not job.warranty_start_date:
-                    job.warranty_start_date = install
-                changed = True
+            # Scheduling is app-managed: feeds never touch install_date on existing
+            # jobs (the VS: note still carries the builder's schedule for reference).
             if row.get("PO Number") and str(row.get("PO Status")).strip().lower() == "open":
                 changed = _bump_to_ordered(job) or changed
             before = job.notes

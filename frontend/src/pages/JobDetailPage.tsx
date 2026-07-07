@@ -73,7 +73,21 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dt>Type</dt>
             <dd>{job.job_type}</dd>
             <dt>Install date</dt>
-            <dd>{fmtDate(job.install_date)}</dd>
+            <dd>
+              {canWrite ? (
+                <input
+                  type="date"
+                  className="date-input"
+                  value={job.install_date ?? ""}
+                  onChange={async (e) => {
+                    await updateJob(job.id, { install_date: e.target.value || null });
+                    refresh();
+                  }}
+                />
+              ) : (
+                fmtDate(job.install_date)
+              )}
+            </dd>
             <dt>Warranty start</dt>
             <dd>{fmtDate(job.warranty_start_date)}</dd>
           </dl>
