@@ -11,6 +11,7 @@ import {
   setJobPhase,
 } from "../api";
 import { fmtDate } from "../format";
+import { STAGES } from "./OrderingPage";
 
 export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   const [phases, setPhases] = useState<PhaseDef[]>([]);
@@ -108,6 +109,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 <th>Address</th>
                 <th>Current phase</th>
                 <th>Plan</th>
+                <th>Ordering</th>
                 <th>Updated</th>
               </tr>
             </thead>
@@ -140,12 +142,21 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                     )}
                   </td>
                   <td>{row.plan ?? "—"}</td>
+                  <td>
+                    <span className="mini-stages" title={STAGES.map((s, i) => `${s.label}: ${row.ordering_stages[i] ? "done" : "open"}`).join("\n")}>
+                      {row.ordering_stages.map((done, i) => (
+                        <span key={i} className={`mini-stage ${done ? "done" : ""}`}>
+                          {done ? "✓" : i + 1}
+                        </span>
+                      ))}
+                    </span>
+                  </td>
                   <td>{row.phase_date ? fmtDate(row.phase_date) : "—"}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={7} className="muted">
                     No active houses in this community.
                   </td>
                 </tr>

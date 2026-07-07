@@ -280,6 +280,7 @@ export interface PhaseBoardRow {
   phase: string | null;
   phase_label: string | null;
   phase_date: string | null;
+  ordering_stages: boolean[];
 }
 
 export const getPhaseDefs = () => api<PhaseDef[]>("/phases");

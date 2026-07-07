@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import read_access
 from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import Job, JobStatus, PhaseUpdate, Role, User
+from app.models import Job, JobStatus, OrderingChecklist, PhaseUpdate, Role, User
 from app.phases import PHASE_CODES, PHASE_LABELS, PHASES
 
 router = APIRouter(tags=["phases"])
@@ -47,6 +47,7 @@ class PhaseBoardRow(BaseModel):
     phase: str | None
     phase_label: str | None
     phase_date: datetime | None
+    ordering_stages: list[bool]  # the 4-step ordering pipeline, in order
 
 
 @router.get("/phases", response_model=list[PhaseDef], dependencies=[Depends(read_access)])
@@ -63,6 +64,7 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
     jobs = query.all()
 
     latest: dict[int, PhaseUpdate] = {}
+    checklists: dict[int, OrderingChecklist] = {}
     if jobs:
         job_ids = [j.id for j in jobs]
         sub = (
@@ -73,6 +75,8 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
         )
         for row in db.query(PhaseUpdate).join(sub, PhaseUpdate.id == sub.c.max_id).all():
             latest[row.job_id] = row
+        for cl in db.query(OrderingChecklist).filter(OrderingChecklist.job_id.in_(job_ids)).all():
+            checklists[cl.job_id] = cl
 
     def lot_key(job: Job):
         lot = (job.lot_number or "").strip()
@@ -81,6 +85,7 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
     rows = []
     for job in sorted(jobs, key=lot_key):
         current = latest.get(job.id)
+        cl = checklists.get(job.id)
         rows.append(
             PhaseBoardRow(
                 job_id=job.id,
@@ -92,6 +97,9 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
                 phase=current.phase if current else None,
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,
                 phase_date=current.noted_at if current else None,
+                ordering_stages=[
+                    bool(cl and getattr(cl, f"stage{i}_done")) for i in (1, 2, 3, 4)
+                ],
             )
         )
     return rows
