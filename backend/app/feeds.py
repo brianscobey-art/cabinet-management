@@ -284,6 +284,76 @@ def sync_century(db: Session, path: Path) -> dict:
     return counts
 
 
+def sync_new_orders(db: Session, path: Path) -> dict:
+    """Brian's New Orders Status workbook -> the 4-stage ordering checklists.
+
+    Fill-forward only: a dated stage in the file checks the stage with that
+    date; nothing already checked in the app is ever touched or un-checked.
+    """
+    from app.models import OrderingChecklist
+
+    wb, cleanup = _load_wb(path)
+    if "New Orders" not in wb.sheetnames:
+        wb.close()
+        cleanup()
+        raise ValueError(f"No 'New Orders' tab in {path.name}")
+    rows = wb["New Orders"].iter_rows(min_row=2, values_only=True)
+    headers = [str(h).replace("\n", " ").strip() if h else "" for h in next(rows)]
+    idx = {h: i for i, h in enumerate(headers)}
+
+    def col(prefix: str) -> str | None:
+        return next((h for h in headers if h.startswith(prefix)), None)
+
+    stage_cols = {
+        "stage1": col("1."),
+        "stage2": col("2."),
+        "stage3": col("3."),
+        "stage4": col("4."),
+    }
+    counts = {"updated": 0, "unchanged": 0, "no_job": 0}
+    for values in rows:
+        row = {h: values[i] for h, i in idx.items() if i < len(values)}
+        code = row.get("Job Code")
+        if not code or str(code).startswith("#"):
+            continue
+        job = db.query(Job).filter(Job.job_code == str(code).strip()).first()
+        if job is None:
+            counts["no_job"] += 1
+            continue
+
+        checklist = db.query(OrderingChecklist).filter(OrderingChecklist.job_id == job.id).first()
+        if checklist is None:
+            checklist = OrderingChecklist(job_id=job.id)
+            db.add(checklist)
+            db.flush()
+
+        changed = False
+        for stage, header in stage_cols.items():
+            done_date = _as_date(row.get(header)) if header else None
+            if done_date and not getattr(checklist, f"{stage}_done"):
+                setattr(checklist, f"{stage}_done", True)
+                setattr(checklist, f"{stage}_date", done_date)
+                changed = True
+
+        bits = []
+        if row.get(col("Carter PO")):
+            bits.append(f"Carter PO# {row[col('Carter PO')]}")
+        if row.get(col("Carter SO")):
+            bits.append(f"Carter SO# {row[col('Carter SO')]}")
+        if _as_date(row.get(col("5.0"))):
+            bits.append(f"moved to sold folder {_fmt(_as_date(row[col('5.0')]))}")
+        note = " | ".join(str(b) for b in bits)
+        if note and note not in (checklist.notes or ""):
+            checklist.notes = note
+            changed = True
+
+        counts["updated" if changed else "unchanged"] += 1
+    wb.close()
+    cleanup()
+    db.commit()
+    return counts
+
+
 def _sync_newest_readable(db: Session, directory: Path, pattern: str, sync_fn) -> dict:
     """Try files newest-first — a workbook open in Excel is unreadable, so fall
     back to the next-most-recent copy rather than failing the whole sync."""
@@ -304,9 +374,9 @@ def _sync_newest_readable(db: Session, directory: Path, pattern: str, sync_fn) -
 
 
 def sync_all(db: Session) -> dict:
-    """Run both feeds against the newest readable file in each OneDrive folder."""
+    """Run all feeds against the newest readable file in each OneDrive location."""
     settings = get_settings()
-    return {
+    result = {
         "vendorsuite": _sync_newest_readable(
             db, Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx", sync_vendorsuite
         ),
@@ -314,3 +384,12 @@ def sync_all(db: Session) -> dict:
             db, Path(settings.century_dir), "Century Production Report*.xlsx", sync_century
         ),
     }
+    new_orders = Path(settings.new_orders_file)
+    if new_orders.is_file():
+        try:
+            result["new_orders"] = {"file": new_orders.name, **sync_new_orders(db, new_orders)}
+        except PermissionError:
+            result["new_orders"] = {"error": "file locked (open in Excel)"}
+    else:
+        result["new_orders"] = {"error": "file not found"}
+    return result
