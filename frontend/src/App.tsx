@@ -4,6 +4,7 @@ import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
+import PhasesPage from "./pages/PhasesPage";
 import SchedulePage from "./pages/SchedulePage";
 
 function useHashRoute() {
@@ -35,6 +36,8 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const canWrite = WRITE_ROLES.includes(user.role);
+  // field crews log phases from the community, so they get write access there
+  const canWritePhases = [...WRITE_ROLES, "field", "installer_coordinator"].includes(user.role);
   const jobMatch = hash.match(/^#\/jobs\/(\d+)$/);
 
   let page;
@@ -42,6 +45,7 @@ export default function App() {
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
+  else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
   else page = <JobsPage />;
 
   return (
@@ -55,7 +59,10 @@ export default function App() {
           <a
             href="#/jobs"
             className={
-              !hash.startsWith("#/accounts") && !hash.startsWith("#/ordering") && !hash.startsWith("#/schedule")
+              !hash.startsWith("#/accounts") &&
+              !hash.startsWith("#/ordering") &&
+              !hash.startsWith("#/schedule") &&
+              !hash.startsWith("#/phases")
                 ? "active"
                 : ""
             }
@@ -67,6 +74,9 @@ export default function App() {
           </a>
           <a href="#/schedule" className={hash.startsWith("#/schedule") ? "active" : ""}>
             Schedule
+          </a>
+          <a href="#/phases" className={hash.startsWith("#/phases") ? "active" : ""}>
+            Phases
           </a>
           <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
             Accounts

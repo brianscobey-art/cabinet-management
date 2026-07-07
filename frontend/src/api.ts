@@ -264,6 +264,31 @@ export const getOrderingChecklist = (jobId: number) =>
   api<OrderingChecklist>(`/jobs/${jobId}/ordering`);
 export const updateOrderingChecklist = (jobId: number, data: Record<string, unknown>) =>
   api<OrderingChecklist>(`/jobs/${jobId}/ordering`, { method: "PATCH", body: JSON.stringify(data) });
+export interface PhaseDef {
+  code: string;
+  label: string;
+}
+
+export interface PhaseBoardRow {
+  job_id: number;
+  job_code: string | null;
+  lot_number: string | null;
+  address: string;
+  status: JobStatus;
+  phase: string | null;
+  phase_label: string | null;
+  phase_date: string | null;
+}
+
+export const getPhaseDefs = () => api<PhaseDef[]>("/phases");
+export const getPhaseBoard = (communityId: number) =>
+  api<PhaseBoardRow[]>(`/phase-board?community_id=${communityId}`);
+export const setJobPhase = (jobId: number, phase: string) =>
+  api<{ phase: string; noted_at: string }>(`/jobs/${jobId}/phase`, {
+    method: "POST",
+    body: JSON.stringify({ phase }),
+  });
+
 export interface InstallItem {
   job_id: number;
   job_code: string | null;
