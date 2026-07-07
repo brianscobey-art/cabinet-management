@@ -420,6 +420,162 @@ h3.kb-head {
   font-size: 0.9rem;
 }
 
+/* Install schedule calendar */
+.cal-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  background: #fff;
+  color: var(--brand);
+  border: none;
+  border-radius: 0;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+
+.view-toggle button.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.view-toggle button:hover:not(.active) {
+  background: #e6efee;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.cal-nav button {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.cal-title {
+  font-weight: 600;
+  color: var(--brand-ink);
+  font-size: 1.05rem;
+  margin-left: 0.5rem;
+}
+
+.cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  padding: 0.6rem;
+}
+
+.cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  padding: 0.6rem;
+}
+
+.cal-dow {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray);
+  padding: 0.25rem 0;
+}
+
+.cal-cell {
+  min-height: 92px;
+  border: 1px solid #e6ebee;
+  border-radius: 6px;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.cal-cell.week {
+  min-height: 220px;
+}
+
+.cal-cell.other {
+  background: #f6f8f9;
+  opacity: 0.65;
+}
+
+.cal-cell.today {
+  border: 2px solid var(--action);
+}
+
+.cal-daynum {
+  background: none;
+  border: none;
+  color: var(--brand-ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0 0 2px;
+  cursor: pointer;
+}
+
+.cal-daynum:hover:not(:disabled) {
+  background: none;
+  color: var(--action);
+}
+
+.cal-chip {
+  display: block;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-chip:hover {
+  background: var(--action);
+}
+
+.cal-more {
+  background: none;
+  border: none;
+  color: var(--action);
+  font-size: 0.72rem;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.cal-more:hover:not(:disabled) {
+  background: none;
+  color: var(--action-dark);
+}
+
+.cal-empty {
+  font-size: 0.8rem;
+}
+
 /* National builder ordering pipeline */
 .stage-toggle {
   width: 1.7rem;

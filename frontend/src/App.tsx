@@ -4,6 +4,7 @@ import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
+import SchedulePage from "./pages/SchedulePage";
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/jobs");
@@ -40,6 +41,7 @@ export default function App() {
   if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
+  else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else page = <JobsPage />;
 
   return (
@@ -52,12 +54,19 @@ export default function App() {
         <nav>
           <a
             href="#/jobs"
-            className={!hash.startsWith("#/accounts") && !hash.startsWith("#/ordering") ? "active" : ""}
+            className={
+              !hash.startsWith("#/accounts") && !hash.startsWith("#/ordering") && !hash.startsWith("#/schedule")
+                ? "active"
+                : ""
+            }
           >
             Jobs
           </a>
           <a href="#/ordering" className={hash.startsWith("#/ordering") ? "active" : ""}>
             Ordering
+          </a>
+          <a href="#/schedule" className={hash.startsWith("#/schedule") ? "active" : ""}>
+            Schedule
           </a>
           <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
             Accounts

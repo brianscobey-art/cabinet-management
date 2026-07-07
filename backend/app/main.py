@@ -12,6 +12,7 @@ from app.api.jobs import router as jobs_router
 from app.api.ordering import router as ordering_router
 from app.api.orders import router as orders_router
 from app.api.quotes import router as quotes_router
+from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
 from app.api.sync import router as sync_router
 from app.auth.router import router as auth_router
@@ -88,6 +89,7 @@ app.include_router(orders_router)
 app.include_router(documents_router)
 app.include_router(ordering_router)
 app.include_router(sync_router)
+app.include_router(schedule_router)
 
 
 @app.get("/health", tags=["system"])

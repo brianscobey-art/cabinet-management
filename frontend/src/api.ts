@@ -264,6 +264,22 @@ export const getOrderingChecklist = (jobId: number) =>
   api<OrderingChecklist>(`/jobs/${jobId}/ordering`);
 export const updateOrderingChecklist = (jobId: number, data: Record<string, unknown>) =>
   api<OrderingChecklist>(`/jobs/${jobId}/ordering`, { method: "PATCH", body: JSON.stringify(data) });
+export interface InstallItem {
+  job_id: number;
+  job_code: string | null;
+  address: string;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  status: JobStatus;
+  install_date: string;
+}
+
+export const getInstalls = (params: Record<string, string>) => {
+  const qs = new URLSearchParams(params).toString();
+  return api<InstallItem[]>(`/schedule/installs?${qs}`);
+};
+
 export const getOrderingBoard = (params: Record<string, string> = {}) => {
   const qs = new URLSearchParams(params).toString();
   return api<OrderingBoardRow[]>(`/ordering${qs ? `?${qs}` : ""}`);
