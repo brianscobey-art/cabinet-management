@@ -698,6 +698,29 @@ th.stage-col {
   max-height: none;
 }
 
+.report-group.collapsed .report-table {
+  display: none;
+}
+
+.expand-arrow {
+  background: none;
+  border: none;
+  color: var(--action);
+  font-size: 1.05rem;
+  padding: 0 0.2rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.expand-arrow:hover:not(:disabled) {
+  background: none;
+  color: var(--action-dark);
+}
+
+.clickable-head {
+  cursor: pointer;
+}
+
 .print-only {
   display: none;
 }
@@ -737,6 +760,11 @@ th.stage-col {
 
   .report-group {
     break-inside: avoid;
+  }
+
+  /* print always includes the tables of selected communities, collapsed or not */
+  .report-group.collapsed .report-table {
+    display: block;
   }
 
   th {

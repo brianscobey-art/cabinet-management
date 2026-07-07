@@ -12,6 +12,7 @@ interface CommunityGroup {
 export default function ReportsPage() {
   const [rows, setRows] = useState<PhaseReportRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set()); // collapsed by default
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,6 +52,15 @@ export default function ReportsPage() {
     });
   }
 
+  function toggleExpand(key: string) {
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   const selectedCount = groups.filter((g) => selected.has(g.key)).length;
 
   return (
@@ -69,6 +79,12 @@ export default function ReportsPage() {
           <button className="link-btn" onClick={() => setSelected(new Set())}>
             select none
           </button>
+          <button className="link-btn" onClick={() => setExpanded(new Set(groups.map((g) => g.key)))}>
+            expand all
+          </button>
+          <button className="link-btn" onClick={() => setExpanded(new Set())}>
+            collapse all
+          </button>
           <span className="muted" style={{ alignSelf: "center" }}>
             {selectedCount} of {groups.length} communities selected for print
           </span>
@@ -83,12 +99,24 @@ export default function ReportsPage() {
       </div>
 
       {groups.map((g) => (
-        <section key={g.key} className={`report-group ${selected.has(g.key) ? "" : "print-skip"}`}>
+        <section
+          key={g.key}
+          className={`report-group ${selected.has(g.key) ? "" : "print-skip"} ${
+            expanded.has(g.key) ? "" : "collapsed"
+          }`}
+        >
           <div className="report-group-head">
             <label className="check-inline no-print">
               <input type="checkbox" checked={selected.has(g.key)} onChange={() => toggle(g.key)} />
             </label>
-            <h3>
+            <button
+              className="expand-arrow no-print"
+              onClick={() => toggleExpand(g.key)}
+              title={expanded.has(g.key) ? "Collapse" : "Expand"}
+            >
+              {expanded.has(g.key) ? "▾" : "▸"}
+            </button>
+            <h3 className="clickable-head" onClick={() => toggleExpand(g.key)}>
               {g.builder} — {g.community}
               <span className="muted"> ({g.rows.length} house{g.rows.length === 1 ? "" : "s"})</span>
             </h3>
