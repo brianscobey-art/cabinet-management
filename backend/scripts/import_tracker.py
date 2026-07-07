@@ -54,16 +54,27 @@ def money_str(value) -> str | None:
 
 
 def derive_status(row: dict) -> JobStatus:
-    """Current workflow stage from the tracker's milestone dates."""
-    if as_date(row.get("Full Punch Date")):
+    """Current workflow stage from the tracker's milestone dates.
+
+    Tracker milestone columns hold SCHEDULED dates too — a punch date in
+    September doesn't mean the job is done in July. Only dates that have
+    already passed count as reached milestones.
+    """
+    today = date.today()
+
+    def past(key: str) -> bool:
+        d = as_date(row.get(key))
+        return d is not None and d <= today
+
+    if past("Full Punch Date"):
         return JobStatus.closed
-    if as_date(row.get("Actual Install Date")):
+    if past("Actual Install Date"):
         return JobStatus.quality
-    if as_date(row.get("Cabinet Receipt Date")):
+    if past("Cabinet Receipt Date"):
         return JobStatus.install
-    if as_date(row.get("Cabinet Order Date")) or clean(row.get("Cabinet PO#")):
+    if past("Cabinet Order Date") or clean(row.get("Cabinet PO#")):
         return JobStatus.ordered
-    if as_date(row.get("Actual Measure Date")) or as_date(row.get("Req Measure Date")):
+    if past("Actual Measure Date") or past("Req Measure Date"):
         return JobStatus.field_measure
     return JobStatus.quote
 
