@@ -13,6 +13,7 @@ from app.api.ordering import router as ordering_router
 from app.api.orders import router as orders_router
 from app.api.phases import router as phases_router
 from app.api.quotes import router as quotes_router
+from app.api.reports import router as reports_router
 from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
 from app.api.sync import router as sync_router
@@ -92,6 +93,7 @@ app.include_router(ordering_router)
 app.include_router(sync_router)
 app.include_router(schedule_router)
 app.include_router(phases_router)
+app.include_router(reports_router)
 
 
 @app.get("/health", tags=["system"])

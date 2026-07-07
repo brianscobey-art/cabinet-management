@@ -5,6 +5,7 @@ import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
+import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
 
 function useHashRoute() {
@@ -46,6 +47,7 @@ export default function App() {
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
+  else if (hash.startsWith("#/reports")) page = <ReportsPage />;
   else page = <JobsPage />;
 
   return (
@@ -62,7 +64,8 @@ export default function App() {
               !hash.startsWith("#/accounts") &&
               !hash.startsWith("#/ordering") &&
               !hash.startsWith("#/schedule") &&
-              !hash.startsWith("#/phases")
+              !hash.startsWith("#/phases") &&
+              !hash.startsWith("#/reports")
                 ? "active"
                 : ""
             }
@@ -80,6 +83,9 @@ export default function App() {
           </a>
           <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
             Accounts
+          </a>
+          <a href="#/reports" className={hash.startsWith("#/reports") ? "active" : ""}>
+            Reports
           </a>
         </nav>
         <div className="header-right">

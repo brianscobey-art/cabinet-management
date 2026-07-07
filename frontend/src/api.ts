@@ -289,6 +289,20 @@ export const setJobPhase = (jobId: number, phase: string) =>
     body: JSON.stringify({ phase }),
   });
 
+export interface PhaseReportRow {
+  account_name: string;
+  community_name: string | null;
+  job_id: number;
+  job_code: string | null;
+  lot_number: string | null;
+  address: string;
+  phase: string | null;
+  phase_label: string | null;
+  phase_date: string | null;
+}
+
+export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");
+
 export interface InstallItem {
   job_id: number;
   job_code: string | null;
