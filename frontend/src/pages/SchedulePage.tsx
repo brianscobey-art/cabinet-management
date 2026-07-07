@@ -98,6 +98,10 @@ export default function SchedulePage() {
           <button onClick={() => step(1)}>→</button>
           <span className="cal-title">{title}</span>
           <span className="muted">{items.length} install{items.length === 1 ? "" : "s"}</span>
+          <span className="cal-legend">
+            <span className="cal-chip legend-chip">ordered</span>
+            <span className="cal-chip not-ordered legend-chip">not ordered</span>
+          </span>
         </div>
       </div>
 
@@ -110,12 +114,18 @@ export default function SchedulePage() {
   );
 }
 
+// Cabinets are "ordered" once the job has reached the ordered stage or beyond.
+const isOrdered = (item: InstallItem) => item.status !== "quote" && item.status !== "field_measure";
+
 function Chip({ item }: { item: InstallItem }) {
+  const ordered = isOrdered(item);
   return (
     <a
-      className="cal-chip"
+      className={`cal-chip ${ordered ? "" : "not-ordered"}`}
       href={`#/jobs/${item.job_id}`}
-      title={`${item.address} — ${item.account_name}${item.community_name ? ` / ${item.community_name}` : ""}`}
+      title={`${item.address} — ${item.account_name}${item.community_name ? ` / ${item.community_name}` : ""} — ${
+        ordered ? "ordered" : "NOT ordered"
+      }`}
     >
       {item.job_code ?? item.address}
     </a>

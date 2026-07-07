@@ -574,8 +574,24 @@ h3.kb-head {
   text-overflow: ellipsis;
 }
 
+.cal-chip.not-ordered {
+  background: #b4461a; /* burnt orange — cabinets not yet ordered */
+}
+
 .cal-chip:hover {
-  background: var(--action);
+  filter: brightness(1.25);
+}
+
+.cal-legend {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+  align-items: center;
+}
+
+.legend-chip {
+  cursor: default;
+  padding: 1px 8px;
 }
 
 .cal-more {
