@@ -13,7 +13,10 @@ new jobs, with job codes derived from coded siblings in the same community
 (e.g. Links Crossing siblings DRLICR-#### -> DRLICR-0135).
 """
 
+import os
 import re
+import shutil
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
@@ -54,6 +57,21 @@ def _fmt(d: date | None) -> str:
 def latest_file(directory: Path, pattern: str) -> Path | None:
     files = [f for f in directory.glob(pattern) if not f.name.startswith("~")]
     return max(files, key=lambda f: f.stat().st_mtime) if files else None
+
+
+def _load_wb(path: Path):
+    """Open a workbook read-only; if Excel/OneDrive holds a lock, read a shadow copy.
+
+    Returns (workbook, cleanup) — call cleanup() after wb.close().
+    """
+    try:
+        return load_workbook(path, read_only=True, data_only=True), (lambda: None)
+    except PermissionError:
+        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        tmp.close()
+        shutil.copyfile(path, tmp.name)
+        wb = load_workbook(tmp.name, read_only=True, data_only=True)
+        return wb, (lambda: os.unlink(tmp.name))
 
 
 def _get_or_create_account(db: Session, name: str) -> Account:
@@ -125,10 +143,11 @@ def _bump_to_ordered(job: Job) -> bool:
 
 
 def sync_vendorsuite(db: Session, path: Path) -> dict:
-    wb = load_workbook(path, read_only=True, data_only=True)
+    wb, cleanup = _load_wb(path)
     tab = next((n for n in wb.sheetnames if n.startswith("DRH Cabinets Combined")), None)
     if tab is None:
         wb.close()
+        cleanup()
         raise ValueError(f"No 'DRH Cabinets Combined' tab in {path.name}")
     rows = wb[tab].iter_rows(min_row=2, values_only=True)
     headers = [str(h).strip() if h is not None else "" for h in next(rows)]
@@ -195,14 +214,16 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
             _set_feed_note(job, "VS:", feed_text)
             counts["updated" if (changed or job.notes != before) else "skipped"] += 1
     wb.close()
+    cleanup()
     db.commit()
     return counts
 
 
 def sync_century(db: Session, path: Path) -> dict:
-    wb = load_workbook(path, read_only=True, data_only=True)
+    wb, cleanup = _load_wb(path)
     if "All Cabinet Tasks" not in wb.sheetnames:
         wb.close()
+        cleanup()
         raise ValueError(f"No 'All Cabinet Tasks' tab in {path.name}")
     rows = wb["All Cabinet Tasks"].iter_rows(min_row=2, values_only=True)
     headers = [str(h).strip() if h is not None else "" for h in next(rows)]
@@ -256,24 +277,38 @@ def sync_century(db: Session, path: Path) -> dict:
             _set_feed_note(job, "SP:", feed_text)
             counts["updated" if job.notes != before else "skipped"] += 1
     wb.close()
+    cleanup()
     db.commit()
     return counts
 
 
+def _sync_newest_readable(db: Session, directory: Path, pattern: str, sync_fn) -> dict:
+    """Try files newest-first — a workbook open in Excel is unreadable, so fall
+    back to the next-most-recent copy rather than failing the whole sync."""
+    files = sorted(
+        (f for f in directory.glob(pattern) if not f.name.startswith("~")),
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    if not files:
+        return {"error": "no file found"}
+    skipped = []
+    for f in files[:5]:
+        try:
+            return {"file": f.name, "skipped_locked": skipped, **sync_fn(db, f)}
+        except PermissionError:
+            skipped.append(f.name)
+    return {"error": "all recent files locked", "skipped_locked": skipped}
+
+
 def sync_all(db: Session) -> dict:
-    """Run both feeds against the newest file in each OneDrive folder."""
+    """Run both feeds against the newest readable file in each OneDrive folder."""
     settings = get_settings()
-    result: dict = {}
-
-    vs_file = latest_file(Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx")
-    if vs_file:
-        result["vendorsuite"] = {"file": vs_file.name, **sync_vendorsuite(db, vs_file)}
-    else:
-        result["vendorsuite"] = {"error": "no combined file found"}
-
-    century_file = latest_file(Path(settings.century_dir), "Century Production Report*.xlsx")
-    if century_file:
-        result["century"] = {"file": century_file.name, **sync_century(db, century_file)}
-    else:
-        result["century"] = {"error": "no production report found"}
-    return result
+    return {
+        "vendorsuite": _sync_newest_readable(
+            db, Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx", sync_vendorsuite
+        ),
+        "century": _sync_newest_readable(
+            db, Path(settings.century_dir), "Century Production Report*.xlsx", sync_century
+        ),
+    }
