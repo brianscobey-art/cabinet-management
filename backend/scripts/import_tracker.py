@@ -206,6 +206,7 @@ def import_row(db, row: dict, caches: dict) -> str:
         lot_number=str(lot) if lot is not None else None,
         address=str(address)[:500],
         job_type=job_type,
+        plan=str(clean(row.get("House Plan")) or "")[:100] or None,
         status=derive_status(row),
         install_date=install,
         warranty_start_date=install,

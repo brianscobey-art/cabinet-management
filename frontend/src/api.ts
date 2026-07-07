@@ -93,6 +93,7 @@ export interface Job {
   lot_number: string | null;
   address: string;
   job_type: JobType;
+  plan: string | null;
   status: JobStatus;
   install_date: string | null;
   warranty_start_date: string | null;
@@ -274,6 +275,7 @@ export interface PhaseBoardRow {
   job_code: string | null;
   lot_number: string | null;
   address: string;
+  plan: string | null;
   status: JobStatus;
   phase: string | null;
   phase_label: string | null;

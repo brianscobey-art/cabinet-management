@@ -42,6 +42,7 @@ class PhaseBoardRow(BaseModel):
     job_code: str | None
     lot_number: str | None
     address: str
+    plan: str | None
     status: JobStatus
     phase: str | None
     phase_label: str | None
@@ -86,6 +87,7 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
                 job_code=job.job_code,
                 lot_number=job.lot_number,
                 address=job.address,
+                plan=job.plan,
                 status=job.status,
                 phase=current.phase if current else None,
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,

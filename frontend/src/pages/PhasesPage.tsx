@@ -107,6 +107,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 <th>Job code</th>
                 <th>Address</th>
                 <th>Current phase</th>
+                <th>Plan</th>
                 <th>Updated</th>
               </tr>
             </thead>
@@ -138,12 +139,13 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                       row.phase_label ?? "—"
                     )}
                   </td>
+                  <td>{row.plan ?? "—"}</td>
                   <td>{row.phase_date ? fmtDate(row.phase_date) : "—"}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     No active houses in this community.
                   </td>
                 </tr>

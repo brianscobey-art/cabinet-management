@@ -72,6 +72,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             </dd>
             <dt>Type</dt>
             <dd>{job.job_type}</dd>
+            <dt>Plan</dt>
+            <dd>{job.plan ?? "—"}</dd>
             <dt>Install date</dt>
             <dd>
               {canWrite ? (

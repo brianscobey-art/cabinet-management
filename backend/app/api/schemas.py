@@ -142,6 +142,7 @@ class JobCreate(BaseModel):
     lot_number: str | None = Field(default=None, max_length=32)
     address: str = Field(min_length=1, max_length=500)
     job_type: JobType
+    plan: str | None = Field(default=None, max_length=100)
     install_date: date | None = None
     sales_contact_name: str = Field(min_length=1, max_length=255)
     sales_contact_phone: str | None = Field(default=None, max_length=50)
@@ -158,6 +159,7 @@ class JobUpdate(BaseModel):
     lot_number: str | None = None
     address: str | None = Field(default=None, min_length=1, max_length=500)
     job_type: JobType | None = None
+    plan: str | None = Field(default=None, max_length=100)
     status: JobStatus | None = None
     install_date: date | None = None
     warranty_start_date: date | None = None
@@ -180,6 +182,7 @@ class JobOut(BaseModel):
     lot_number: str | None
     address: str
     job_type: JobType
+    plan: str | None
     status: JobStatus
     install_date: date | None
     warranty_start_date: date | None

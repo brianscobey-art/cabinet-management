@@ -43,6 +43,7 @@ class Job(Base):
     lot_number: Mapped[str | None] = mapped_column(String(32), default=None)
     address: Mapped[str] = mapped_column(String(500))
     job_type: Mapped[JobType] = mapped_column(Enum(JobType, native_enum=False, length=16))
+    plan: Mapped[str | None] = mapped_column(String(100), default=None)  # house plan, e.g. "DRH1 Madison STD"
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, native_enum=False, length=32), default=JobStatus.quote, index=True
     )
