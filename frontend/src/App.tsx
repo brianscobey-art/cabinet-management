@@ -73,6 +73,9 @@ export default function App() {
           </a>
         </nav>
         <div className="header-right">
+          <a className="cal-btn" href="#/schedule" title="Open the install calendar">
+            📅 Install Calendar
+          </a>
           <span className="who">
             {user.full_name} · {user.role}
           </span>
