@@ -21,7 +21,9 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: EmailStr
+    # plain str: responses must never 500 on an address already in the DB
+    # (EmailStr rejects things like .local); strictness belongs on input only
+    email: str
     full_name: str
     role: Role
     is_active: bool
