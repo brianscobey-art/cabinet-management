@@ -121,7 +121,8 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
     setBusy(true);
     setError("");
     try {
-      await login(email, password);
+      // pasted addresses often carry Outlook's mailto: prefix or whitespace
+      await login(email.trim().replace(/^mailto:/i, ""), password.trim());
       onLogin(await fetchMe());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -142,7 +143,7 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.replace(/^mailto:/i, "").trim())}
             autoComplete="username"
             required
           />
