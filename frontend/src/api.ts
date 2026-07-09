@@ -299,6 +299,7 @@ export interface PhaseReportRow {
   job_code: string | null;
   lot_number: string | null;
   address: string;
+  plan: string | null;
   phase: string | null;
   phase_label: string | null;
   phase_date: string | null;

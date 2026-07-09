@@ -1,6 +1,77 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PhaseReportRow, getPhaseReport } from "../api";
 import { fmtDate } from "../format";
+
+const REPORT_LIST = [
+  {
+    key: "phases",
+    name: "Phase Report",
+    desc: "All active houses by builder, community, and lot with current construction phase.",
+    available: true,
+  },
+  {
+    key: "ordering",
+    name: "Ordering Status Report",
+    desc: "The 4-stage ordering pipeline across builder jobs — what's waiting on POs, layouts, or SO comparison.",
+    available: false,
+  },
+  {
+    key: "open-po",
+    name: "Open PO Report",
+    desc: "Open builder POs with amounts and totals by division and community.",
+    available: false,
+  },
+  {
+    key: "install-week",
+    name: "Install Week Report",
+    desc: "Scheduled installs grouped by week, community, and installer.",
+    available: false,
+  },
+  {
+    key: "delivery",
+    name: "Delivery Report",
+    desc: "Upcoming cabinet deliveries and confirmation status — the day-before check.",
+    available: false,
+  },
+  {
+    key: "warranty",
+    name: "Warranty & Service Report",
+    desc: "Open claims, installer callback rates, and service cost.",
+    available: false,
+  },
+];
+
+export default function ReportsPage({ hash }: { hash: string }) {
+  if (hash.startsWith("#/reports/phases")) return <PhaseReport />;
+  return <ReportsIndex />;
+}
+
+function ReportsIndex() {
+  return (
+    <div>
+      <div className="page-head">
+        <h2>Reports</h2>
+      </div>
+      <div className="report-list">
+        {REPORT_LIST.map((r) => (
+          <div key={r.key} className={`card report-card ${r.available ? "" : "planned"}`}>
+            <div>
+              <h3>{r.name}</h3>
+              <p className="muted">{r.desc}</p>
+            </div>
+            {r.available ? (
+              <a className="report-open" href={`#/reports/${r.key}`}>
+                Open →
+              </a>
+            ) : (
+              <span className="badge">coming soon</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface CommunityGroup {
   key: string;
@@ -9,19 +80,19 @@ interface CommunityGroup {
   rows: PhaseReportRow[];
 }
 
-export default function ReportsPage() {
+function PhaseReport() {
   const [rows, setRows] = useState<PhaseReportRow[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<Set<string>>(new Set()); // collapsed by default
-  const [loaded, setLoaded] = useState(false);
+  const [builders, setBuilders] = useState<string[]>([]);
+  const [selectedBuilders, setSelectedBuilders] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // community group keys
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
 
   useEffect(() => {
     getPhaseReport()
       .then((r) => {
         setRows(r);
-        setSelected(new Set(r.map((row) => groupKey(row)))); // everything selected by default
-        setLoaded(true);
+        setBuilders([...new Set(r.map((row) => row.account_name))].sort());
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -43,7 +114,28 @@ export default function ReportsPage() {
     return [...map.values()];
   }, [rows]);
 
-  function toggle(key: string) {
+  const visibleGroups = groups.filter((g) => selectedBuilders.has(g.builder));
+
+  function toggleBuilder(name: string) {
+    setSelectedBuilders((s) => {
+      const next = new Set(s);
+      const theirGroups = groups.filter((g) => g.builder === name).map((g) => g.key);
+      if (next.has(name)) {
+        next.delete(name);
+        setSelected((sel) => {
+          const ns = new Set(sel);
+          theirGroups.forEach((k) => ns.delete(k));
+          return ns;
+        });
+      } else {
+        next.add(name);
+        setSelected((sel) => new Set([...sel, ...theirGroups])); // new builder's communities start selected
+      }
+      return next;
+    });
+  }
+
+  function toggleCommunity(key: string) {
     setSelected((s) => {
       const next = new Set(s);
       if (next.has(key)) next.delete(key);
@@ -61,44 +153,63 @@ export default function ReportsPage() {
     });
   }
 
-  const selectedCount = groups.filter((g) => selected.has(g.key)).length;
+  const selectedCount = visibleGroups.filter((g) => selected.has(g.key)).length;
 
   return (
     <div>
       <div className="page-sticky no-print">
         <div className="page-head">
-          <h2>Reports — Phase Report</h2>
+          <h2>
+            <a href="#/reports" className="crumb">
+              Reports
+            </a>{" "}
+            / Phase Report
+          </h2>
           <button onClick={() => window.print()} disabled={selectedCount === 0}>
-            🖨 Print {selectedCount === groups.length ? "all" : `${selectedCount} selected`}
+            🖨 Print {selectedCount} communit{selectedCount === 1 ? "y" : "ies"}
           </button>
         </div>
         <div className="filters">
-          <button className="link-btn" onClick={() => setSelected(new Set(groups.map((g) => g.key)))}>
-            select all
-          </button>
-          <button className="link-btn" onClick={() => setSelected(new Set())}>
-            select none
-          </button>
-          <button className="link-btn" onClick={() => setExpanded(new Set(groups.map((g) => g.key)))}>
-            expand all
-          </button>
-          <button className="link-btn" onClick={() => setExpanded(new Set())}>
-            collapse all
-          </button>
-          <span className="muted" style={{ alignSelf: "center" }}>
-            {selectedCount} of {groups.length} communities selected for print
-          </span>
+          <MultiSelect
+            label="Builders"
+            options={builders}
+            selected={selectedBuilders}
+            onToggle={toggleBuilder}
+            onAll={() => builders.forEach((b) => !selectedBuilders.has(b) && toggleBuilder(b))}
+            onNone={() => builders.forEach((b) => selectedBuilders.has(b) && toggleBuilder(b))}
+          />
+          {visibleGroups.length > 0 && (
+            <>
+              <button className="link-btn" onClick={() => setSelected(new Set([...selected, ...visibleGroups.map((g) => g.key)]))}>
+                select all communities
+              </button>
+              <button className="link-btn" onClick={() => setSelected(new Set())}>
+                select none
+              </button>
+              <button className="link-btn" onClick={() => setExpanded(new Set(visibleGroups.map((g) => g.key)))}>
+                expand all
+              </button>
+              <button className="link-btn" onClick={() => setExpanded(new Set())}>
+                collapse all
+              </button>
+              <span className="muted" style={{ alignSelf: "center" }}>
+                {selectedCount} of {visibleGroups.length} communities selected for print
+              </span>
+            </>
+          )}
         </div>
       </div>
 
       {error && <p className="error">{error}</p>}
-      {loaded && groups.length === 0 && <p className="muted">No active builder houses.</p>}
+      {selectedBuilders.size === 0 && (
+        <p className="muted">Pick one or more builders to see their communities.</p>
+      )}
 
       <div className="print-title print-only">
         Carter Kitchen and Bath — Phase Report — {fmtDate(new Date().toISOString())}
       </div>
 
-      {groups.map((g) => (
+      {visibleGroups.map((g) => (
         <section
           key={g.key}
           className={`report-group ${selected.has(g.key) ? "" : "print-skip"} ${
@@ -107,7 +218,7 @@ export default function ReportsPage() {
         >
           <div className="report-group-head">
             <label className="check-inline no-print">
-              <input type="checkbox" checked={selected.has(g.key)} onChange={() => toggle(g.key)} />
+              <input type="checkbox" checked={selected.has(g.key)} onChange={() => toggleCommunity(g.key)} />
             </label>
             <button
               className="expand-arrow no-print"
@@ -128,6 +239,7 @@ export default function ReportsPage() {
                   <th>Lot</th>
                   <th>Job code</th>
                   <th>Address</th>
+                  <th>Plan</th>
                   <th>Current phase</th>
                   <th>Updated</th>
                 </tr>
@@ -140,6 +252,7 @@ export default function ReportsPage() {
                       <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
                     </td>
                     <td>{r.address}</td>
+                    <td>{r.plan ?? "—"}</td>
                     <td>{r.phase_label ?? "—"}</td>
                     <td>{r.phase_date ? fmtDate(r.phase_date) : "—"}</td>
                   </tr>
@@ -149,6 +262,60 @@ export default function ReportsPage() {
           </div>
         </section>
       ))}
+    </div>
+  );
+}
+
+function MultiSelect({
+  label,
+  options,
+  selected,
+  onToggle,
+  onAll,
+  onNone,
+}: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onToggle: (name: string) => void;
+  onAll: () => void;
+  onNone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div className="multiselect" ref={ref}>
+      <button className="multiselect-btn" onClick={() => setOpen((v) => !v)}>
+        {label}
+        {selected.size > 0 ? ` (${selected.size})` : ""} ▾
+      </button>
+      {open && (
+        <div className="multiselect-panel">
+          <div className="multiselect-actions">
+            <button className="link-btn" onClick={onAll}>
+              all
+            </button>
+            <button className="link-btn" onClick={onNone}>
+              none
+            </button>
+          </div>
+          {options.map((o) => (
+            <label key={o} className="multiselect-option">
+              <input type="checkbox" checked={selected.has(o)} onChange={() => onToggle(o)} />
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

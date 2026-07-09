@@ -47,7 +47,7 @@ export default function App() {
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
-  else if (hash.startsWith("#/reports")) page = <ReportsPage />;
+  else if (hash.startsWith("#/reports")) page = <ReportsPage hash={hash} />;
   else page = <JobsPage />;
 
   return (

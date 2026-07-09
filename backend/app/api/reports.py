@@ -20,6 +20,7 @@ class PhaseReportRow(BaseModel):
     job_code: str | None
     lot_number: str | None
     address: str
+    plan: str | None
     phase: str | None
     phase_label: str | None
     phase_date: datetime | None
@@ -66,6 +67,7 @@ def phase_report(db: Session = Depends(get_db)):
                 job_code=job.job_code,
                 lot_number=job.lot_number,
                 address=job.address,
+                plan=job.plan,
                 phase=current.phase if current else None,
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,
                 phase_date=current.noted_at if current else None,
