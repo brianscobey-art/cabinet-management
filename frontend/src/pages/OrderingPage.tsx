@@ -40,7 +40,15 @@ export default function OrderingPage({ canWrite }: { canWrite: boolean }) {
   }, [accountFilter, communityFilter, includeClosed]);
 
   useEffect(() => {
-    listAccounts().then((all) => setAccounts(all.filter((a) => a.type === "builder"))).catch(() => {});
+    listAccounts()
+      .then((all) =>
+        setAccounts(
+          all.filter(
+            (a) => a.type === "builder" && (a.name.startsWith("DR Horton") || a.name.startsWith("Century"))
+          )
+        )
+      )
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

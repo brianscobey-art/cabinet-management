@@ -9,6 +9,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import read_access, write_access
@@ -18,6 +19,9 @@ from app.models import Account, AccountType, Job, JobDocument, JobStatus, Orderi
 router = APIRouter(tags=["ordering"])
 
 STAGES = ("stage1", "stage2", "stage3", "stage4")
+
+# The ordering board is for national builders only (Brian's 4-step process).
+NATIONAL_BUILDER_PREFIXES = ("DR Horton", "Century")
 
 STAGE_LABELS = {
     "stage1": "1. PO's and Selection File Creation",
@@ -126,7 +130,10 @@ def ordering_board(
         db.query(Job)
         .join(Account, Job.account_id == Account.id)
         .options(joinedload(Job.account), joinedload(Job.community))
-        .filter(Account.type == AccountType.builder)
+        .filter(
+            Account.type == AccountType.builder,
+            or_(*[Account.name.like(f"{p}%") for p in NATIONAL_BUILDER_PREFIXES]),
+        )
     )
     if account_id is not None:
         query = query.filter(Job.account_id == account_id)

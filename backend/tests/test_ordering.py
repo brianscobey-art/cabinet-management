@@ -36,14 +36,17 @@ def test_checklist_starts_empty_and_toggles(client, db):
 
 def test_board_lists_builder_jobs(client, db):
     headers, account_id, job = setup(client, db)
-    # retail job should NOT appear on the national builder board
+    # retail and local builders should NOT appear on the national builder board
     retail_id = client.post("/accounts", headers=headers, json={"name": "Jane Smith", "type": "retail"}).json()["id"]
     make_job(client, headers, retail_id, job_code="SMITH-01", address="9 Oak Ln", lot_number=None)
+    local_id = client.post("/accounts", headers=headers, json={"name": "Jubilee Builders", "type": "builder"}).json()["id"]
+    make_job(client, headers, local_id, job_code="JB-01", address="7 Local Ln", lot_number=None)
 
     board = client.get("/ordering", headers=headers).json()
     codes = [r["job_code"] for r in board]
-    assert "DRTEST-0001" in codes
+    assert "DRTEST-0001" in codes  # DR Horton = national
     assert "SMITH-01" not in codes
+    assert "JB-01" not in codes  # local builder stays off the national board
     row = next(r for r in board if r["job_code"] == "DRTEST-0001")
     assert row["checklist"]["stage1_done"] is False
 
