@@ -28,7 +28,12 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
     query = (
         db.query(Job)
         .options(joinedload(Job.account), joinedload(Job.community))
-        .filter(Job.install_date.isnot(None), Job.install_date >= start, Job.install_date <= end)
+        .filter(
+            Job.install_date.isnot(None),
+            Job.install_date >= start,
+            Job.install_date <= end,
+            Job.status != JobStatus.closed,  # archived jobs stay off the calendar
+        )
     )
     if account_id is not None:
         query = query.filter(Job.account_id == account_id)

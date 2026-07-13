@@ -48,6 +48,7 @@ export default function App() {
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
   else if (hash.startsWith("#/reports")) page = <ReportsPage hash={hash} />;
+  else if (hash.startsWith("#/archive")) page = <JobsPage archived />;
   else page = <JobsPage />;
 
   return (
@@ -65,7 +66,8 @@ export default function App() {
               !hash.startsWith("#/ordering") &&
               !hash.startsWith("#/schedule") &&
               !hash.startsWith("#/phases") &&
-              !hash.startsWith("#/reports")
+              !hash.startsWith("#/reports") &&
+              !hash.startsWith("#/archive")
                 ? "active"
                 : ""
             }
@@ -86,6 +88,9 @@ export default function App() {
           </a>
           <a href="#/reports" className={hash.startsWith("#/reports") ? "active" : ""}>
             Reports
+          </a>
+          <a href="#/archive" className={hash.startsWith("#/archive") ? "active" : ""}>
+            Archive
           </a>
         </nav>
         <div className="header-right">

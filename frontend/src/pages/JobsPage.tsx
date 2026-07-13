@@ -15,7 +15,7 @@ export function statusLabel(s: string) {
   return s.replace(/_/g, " ");
 }
 
-export default function JobsPage() {
+export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
@@ -28,7 +28,8 @@ export default function JobsPage() {
 
   async function refresh() {
     const params: Record<string, string> = {};
-    if (statusFilter) params.status_filter = statusFilter;
+    if (archived) params.archived = "true";
+    else if (statusFilter) params.status_filter = statusFilter;
     if (accountFilter) params.account_id = accountFilter;
     if (communityFilter) params.community_id = communityFilter;
     if (search) params.q = search;
@@ -38,7 +39,7 @@ export default function JobsPage() {
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, communityFilter, search]);
+  }, [statusFilter, accountFilter, communityFilter, search, archived]);
 
   useEffect(() => {
     listAccounts().then(setAccounts).catch(() => {});
@@ -58,10 +59,12 @@ export default function JobsPage() {
     <div>
       <div className="page-sticky">
       <div className="page-head">
-        <h2>Jobs</h2>
-        <button onClick={() => setShowCreate((v) => !v)}>
-          {showCreate ? "Close" : "+ New job"}
-        </button>
+        <h2>{archived ? "Archive — closed jobs" : "Jobs"}</h2>
+        {!archived && (
+          <button onClick={() => setShowCreate((v) => !v)}>
+            {showCreate ? "Close" : "+ New job"}
+          </button>
+        )}
       </div>
 
       <div className="filters">
@@ -88,18 +91,20 @@ export default function JobsPage() {
             ))}
           </select>
         )}
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          {JOB_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusLabel(s)}
-            </option>
-          ))}
-        </select>
+        {!archived && (
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            {JOB_STATUSES.filter((s) => s !== "closed").map((s) => (
+              <option key={s} value={s}>
+                {statusLabel(s)}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       </div>
 
-      {showCreate && (
+      {!archived && showCreate && (
         <NewJobForm
           accounts={accounts}
           onCreated={() => {

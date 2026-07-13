@@ -63,6 +63,7 @@ def list_jobs(
     account_id: int | None = None,
     community_id: int | None = None,
     status_filter: JobStatus | None = None,
+    archived: bool = False,
     q: str | None = None,
     db: Session = Depends(get_db),
 ):
@@ -71,14 +72,19 @@ def list_jobs(
         query = query.filter(Job.account_id == account_id)
     if community_id is not None:
         query = query.filter(Job.community_id == community_id)
-    if status_filter is not None:
+    # Closed jobs live on the Archive tab; active views never show them.
+    if archived:
+        query = query.filter(Job.status == JobStatus.closed)
+    elif status_filter is not None:
         query = query.filter(Job.status == status_filter)
+    else:
+        query = query.filter(Job.status != JobStatus.closed)
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(
             or_(Job.address.ilike(like), Job.lot_number.ilike(like), Job.job_code.ilike(like))
         )
-    jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(500).all()
+    jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(2000).all()
     return [_to_list_item(j) for j in jobs]
 
 

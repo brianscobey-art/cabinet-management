@@ -97,6 +97,25 @@ def test_list_jobs_filters(client, db):
     assert by_search[0]["address"] == "9 Oak Ln"
 
 
+def test_closed_jobs_only_on_archive(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    make_job(client, headers, account_id, community_id, job_code="OPEN-1")
+    done = make_job(client, headers, account_id, community_id, job_code="DONE-1", address="2 Done St", lot_number="2")
+    client.patch(f"/jobs/{done['id']}", headers=headers, json={"status": "closed"})
+
+    default = [j["job_code"] for j in client.get("/jobs", headers=headers).json()]
+    assert default == ["OPEN-1"]  # closed hidden by default
+
+    archive = [j["job_code"] for j in client.get("/jobs?archived=true", headers=headers).json()]
+    assert archive == ["DONE-1"]  # archive shows only closed
+
+    # explicit status filter can still reach closed if asked
+    explicit = [j["job_code"] for j in client.get("/jobs?status_filter=closed", headers=headers).json()]
+    assert explicit == ["DONE-1"]
+
+
 def test_jobs_sorted_by_job_code(client, db):
     make_user(db, email="sales@example.com", role=Role.sales)
     headers = login(client, "sales@example.com")
