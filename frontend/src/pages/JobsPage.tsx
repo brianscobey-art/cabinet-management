@@ -138,21 +138,36 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
 
       <div className="filters">
         {!archived && (
-          <div className="view-toggle">
-            {(["dr_horton", "century", "national_other", "local"] as const).map((c) => (
-              <button
-                key={c}
-                className={category === c ? "active" : ""}
-                onClick={() => {
-                  setCategory(c);
-                  setAccountFilter("");
-                  setCommunityFilter("");
-                }}
-              >
-                {CATEGORY_LABELS[c]}
-              </button>
-            ))}
-          </div>
+          <>
+            {category !== "local" && (
+              <div className="view-toggle">
+                {(["dr_horton", "century", "national_other"] as const).map((c) => (
+                  <button
+                    key={c}
+                    className={category === c ? "active" : ""}
+                    onClick={() => {
+                      setCategory(c);
+                      setAccountFilter("");
+                      setCommunityFilter("");
+                    }}
+                  >
+                    {CATEGORY_LABELS[c]}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              className="link-btn"
+              onClick={() => {
+                setCategory("");
+                setNationalStep(false);
+                setAccountFilter("");
+                setCommunityFilter("");
+              }}
+            >
+              switch account type
+            </button>
+          </>
         )}
         <input
           placeholder="Search job code, address, or lot…"
