@@ -35,8 +35,8 @@ class Settings(BaseSettings):
         r"\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules"
     )
     century_dir: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
-        r"\AI Shared Folder\Supply Pro - Century"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
+        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
     )
     feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
     feed_sync_enabled: bool = True

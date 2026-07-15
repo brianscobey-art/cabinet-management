@@ -225,66 +225,136 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
     return counts
 
 
+CENTURY_PLACEHOLDER_CONTACTS = {"TBD", "Century Superintendent"}
+_FAKE_PHONES = {"555-555-5555", "5555555555"}
+
+
+def century_candidates(directory: Path) -> list[Path]:
+    """SupplyPro Century files, newest first by the MMDDYY in the filename
+    (revision R.N breaks ties). Files without a date code are ignored."""
+    dated = []
+    for f in directory.glob("Century Cabinet Jobs - SupplyPro*.xlsx"):
+        if f.name.startswith("~"):
+            continue
+        m = re.search(r"(\d{2})(\d{2})(\d{2})(?:\s+R\.?(\d+))?", f.name)
+        if not m:
+            continue
+        mm, dd, yy, rev = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4) or 0)
+        try:
+            dated.append(((date(2000 + yy, mm, dd), rev), f))
+        except ValueError:
+            continue
+    return [f for _, f in sorted(dated, key=lambda t: t[0], reverse=True)]
+
+
 def sync_century(db: Session, path: Path) -> dict:
+    """SupplyPro 'Century Cabinet Jobs' workbook -> Century jobs.
+
+    'Cabinet Jobs' tab: subdivision/lot/address, builder contact, and the
+    measure/order/deliver dates. 'Cabinet POs' tab adds plan and PO number.
+    """
     wb, cleanup = _load_wb(path)
-    if "All Cabinet Tasks" not in wb.sheetnames:
+    if "Cabinet Jobs" not in wb.sheetnames:
         wb.close()
         cleanup()
-        raise ValueError(f"No 'All Cabinet Tasks' tab in {path.name}")
-    rows = wb["All Cabinet Tasks"].iter_rows(min_row=2, values_only=True)
-    headers = [str(h).strip() if h is not None else "" for h in next(rows)]
-    idx = {h: i for i, h in enumerate(headers)}
+        raise ValueError(f"No 'Cabinet Jobs' tab in {path.name}")
+
+    def read_tab(name: str) -> list[dict]:
+        rows = wb[name].iter_rows(min_row=2, values_only=True)
+        headers = [str(h).strip() if h is not None else "" for h in next(rows)]
+        idx = {h: i for i, h in enumerate(headers)}
+        return [
+            {h: values[i] for h, i in idx.items() if i < len(values)}
+            for values in rows
+        ]
+
+    records: dict[tuple[str, str], dict] = {}
+    for row in read_tab("Cabinet Jobs"):
+        sub, lot = row.get("Subdivision"), row.get("Lot")
+        if not sub or lot is None:
+            continue
+        records[(str(sub).strip(), _canon_lot(lot))] = {"jobs": row}
+    if "Cabinet POs" in wb.sheetnames:
+        for row in read_tab("Cabinet POs"):
+            sub, lot = row.get("Subdivision"), row.get("Lot")
+            if not sub or lot is None:
+                continue
+            records.setdefault((str(sub).strip(), _canon_lot(lot)), {})["pos"] = row
+    wb.close()
+    cleanup()
 
     account = _get_or_create_account(db, CENTURY_ACCOUNT)
     counts = {"created": 0, "updated": 0, "skipped": 0}
-    for values in rows:
-        row = {h: values[i] for h, i in idx.items() if i < len(values)}
-        subdivision = row.get("Subdivision")
-        lot = row.get("Lot")
-        if not subdivision or lot is None:
-            counts["skipped"] += 1
-            continue
-        community = _get_or_create_community(db, account, str(subdivision).strip())
+    for (sub, _), rec in records.items():
+        jobs_row = rec.get("jobs", {})
+        pos_row = rec.get("pos", {})
+        lot = jobs_row.get("Lot") or pos_row.get("Lot")
+        community = _get_or_create_community(db, account, sub)
 
-        sp_status = str(row.get("Job Status") or "").strip()
-        start = _as_date(row.get("Projected Start Date"))
-        delivery = _as_date(row.get("Cabinet Delivery Date"))
+        measure = _as_date(jobs_row.get("Measure Cabinets")) or _as_date(pos_row.get("Measure Date"))
+        ordered = _as_date(jobs_row.get("Order Cabinets"))
+        deliver = _as_date(jobs_row.get("Deliver Cabinets")) or _as_date(pos_row.get("Deliver / Install Date"))
+        po_number = pos_row.get("PO Number")
+        plan = " ".join(
+            str(pos_row.get(k) or "") for k in ("Plan", "Elevation", "Swing") if pos_row.get(k)
+        ).replace("See Start", "").strip()
+
         bits = [b for b in (
-            sp_status.lower() or None,
-            f"start {_fmt(start)}" if start else None,
-            f"cab delivery {_fmt(delivery)}" if delivery else None,
+            f"PO {po_number}" if po_number else None,
+            f"measure {_fmt(measure)}" if measure else None,
+            f"order {_fmt(ordered)}" if ordered else None,
+            f"deliver {_fmt(deliver)}" if deliver else None,
         ) if b]
         feed_text = ", ".join(bits) or "on report"
 
+        contact = str(jobs_row.get("Builder Contact") or "").strip()
+        phone = str(jobs_row.get("Contact Phone") or "").strip()
+        if phone.replace("-", "") in {p.replace("-", "") for p in _FAKE_PHONES}:
+            phone = ""
+
         job = _find_job(db, community, lot)
         if job is None:
-            plan = " ".join(str(row.get(k) or "") for k in ("Plan Name", "Elevation", "Swing")).strip()
-            builder_code = row.get("Builder Job Code")
+            address = str(jobs_row.get("Address") or f"{sub} Lot {lot}").title()
+            city, state = jobs_row.get("City"), jobs_row.get("State")
+            if city:
+                address = f"{address}, {city}, {state or ''}".strip(", ")
             job = Job(
-                job_code=str(builder_code).strip() if builder_code else None,
                 account_id=account.id,
                 community_id=community.id,
                 lot_number=str(lot).strip(),
-                address=str(row.get("Address") or f"{subdivision} Lot {lot}").title(),
+                address=address,
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
-                status=JobStatus.closed if sp_status == "Complete" else JobStatus.quote,
+                status=JobStatus.ordered if ordered and ordered <= date.today() else JobStatus.quote,
+                measure_date=measure,
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
                 sales_contact_email=DEFAULT_SALES_CONTACT[2],
-                field_contact_name="Century Superintendent",
-                notes=f"Plan: {plan}" if plan else None,
+                field_contact_name=contact.title() if contact else "Century Superintendent",
+                field_contact_phone=phone or None,
             )
             db.add(job)
             db.flush()
             _set_feed_note(job, "SP:", feed_text)
             counts["created"] += 1
         else:
+            changed = False
+            if measure and job.measure_date is None:
+                job.measure_date = measure
+                changed = True
+            if plan and not job.plan:
+                job.plan = plan[:100]
+                changed = True
+            if contact and job.field_contact_name in CENTURY_PLACEHOLDER_CONTACTS:
+                job.field_contact_name = contact.title()
+                if phone:
+                    job.field_contact_phone = phone
+                changed = True
+            if ordered and ordered <= date.today():
+                changed = _bump_to_ordered(job) or changed
             before = job.notes
             _set_feed_note(job, "SP:", feed_text)
-            counts["updated" if job.notes != before else "skipped"] += 1
-    wb.close()
-    cleanup()
+            counts["updated" if (changed or job.notes != before) else "skipped"] += 1
     db.commit()
     return counts
 
@@ -359,14 +429,9 @@ def sync_new_orders(db: Session, path: Path) -> dict:
     return counts
 
 
-def _sync_newest_readable(db: Session, directory: Path, pattern: str, sync_fn) -> dict:
+def _sync_newest_readable(db: Session, files: list[Path], sync_fn) -> dict:
     """Try files newest-first — a workbook open in Excel is unreadable, so fall
     back to the next-most-recent copy rather than failing the whole sync."""
-    files = sorted(
-        (f for f in directory.glob(pattern) if not f.name.startswith("~")),
-        key=lambda f: f.stat().st_mtime,
-        reverse=True,
-    )
     if not files:
         return {"error": "no file found"}
     skipped = []
@@ -378,15 +443,23 @@ def _sync_newest_readable(db: Session, directory: Path, pattern: str, sync_fn) -
     return {"error": "all recent files locked", "skipped_locked": skipped}
 
 
+def _by_mtime(directory: Path, pattern: str) -> list[Path]:
+    return sorted(
+        (f for f in directory.glob(pattern) if not f.name.startswith("~")),
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+
+
 def sync_all(db: Session) -> dict:
     """Run all feeds against the newest readable file in each OneDrive location."""
     settings = get_settings()
     result = {
         "vendorsuite": _sync_newest_readable(
-            db, Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx", sync_vendorsuite
+            db, _by_mtime(Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx"), sync_vendorsuite
         ),
         "century": _sync_newest_readable(
-            db, Path(settings.century_dir), "Century Production Report*.xlsx", sync_century
+            db, century_candidates(Path(settings.century_dir)), sync_century
         ),
     }
     new_orders = Path(settings.new_orders_file)
