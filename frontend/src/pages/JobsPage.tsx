@@ -6,6 +6,7 @@ import {
   JobListItem,
   createJob,
   listAccounts,
+  listAllCommunities,
   listCommunities,
   listJobs,
 } from "../api";
@@ -39,6 +40,8 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [category, setCategory] = useState<Category>("");
   const [nationalStep, setNationalStep] = useState(false);
+  const [communityChosen, setCommunityChosen] = useState(false);
+  const [allCommunities, setAllCommunities] = useState<Community[]>([]);
   const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
@@ -60,21 +63,33 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
 
   useEffect(() => {
     if (!archived && !category) return; // waiting on the National/Local choice
+    if (!archived && category !== "local" && !communityChosen) return; // waiting on community choice
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, communityFilter, search, archived, category]);
+  }, [statusFilter, accountFilter, communityFilter, search, archived, category, communityChosen]);
+
+  useEffect(() => {
+    if (!archived) listAllCommunities().then(setAllCommunities).catch(() => {});
+  }, [archived]);
 
   useEffect(() => {
     listAccounts().then(setAccounts).catch(() => {});
   }, []);
 
-  // Cascading filter: picking an account loads its communities.
+  // Cascading filter: picking an account loads its communities. Keep the
+  // selected community when it belongs to the new account (community chooser
+  // sets both at once).
   useEffect(() => {
-    setCommunityFilter("");
     if (accountFilter) {
-      listCommunities(Number(accountFilter)).then(setFilterCommunities).catch(() => {});
+      listCommunities(Number(accountFilter))
+        .then((cs) => {
+          setFilterCommunities(cs);
+          setCommunityFilter((cur) => (cur && cs.some((c) => String(c.id) === cur) ? cur : ""));
+        })
+        .catch(() => {});
     } else {
       setFilterCommunities([]);
+      setCommunityFilter("");
     }
   }, [accountFilter]);
 
@@ -90,7 +105,13 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 <span className="category-title">National Accounts</span>
                 <span className="muted">DR Horton, Century &amp; more</span>
               </button>
-              <button className="category-card" onClick={() => setCategory("local")}>
+              <button
+                className="category-card"
+                onClick={() => {
+                  setCategory("local");
+                  setCommunityChosen(true);
+                }}
+              >
                 <span className="category-title">Local Accounts</span>
                 <span className="muted">Local builders &amp; retail customers</span>
               </button>
@@ -124,6 +145,58 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
 
   const categoryAccounts = accounts.filter((a) => accountInCategory(a, category));
 
+  // National flow: after the builder, pick a community (or all of them).
+  if (!archived && category && category !== "local" && !communityChosen) {
+    const accountById = new Map(categoryAccounts.map((a) => [a.id, a]));
+    const communities = allCommunities
+      .filter((c) => accountById.has(c.account_id))
+      .sort((a, b) =>
+        (accountById.get(a.account_id)!.name + a.name).localeCompare(accountById.get(b.account_id)!.name + b.name)
+      );
+    return (
+      <div className="center-page">
+        <h2>{CATEGORY_LABELS[category]} — which community?</h2>
+        <div className="category-choice community-grid">
+          <button
+            className="category-card"
+            onClick={() => {
+              setAccountFilter("");
+              setCommunityFilter("");
+              setCommunityChosen(true);
+            }}
+          >
+            <span className="category-title">All Communities</span>
+            <span className="muted">everything for {CATEGORY_LABELS[category]}</span>
+          </button>
+          {communities.map((c) => (
+            <button
+              key={c.id}
+              className="category-card"
+              onClick={() => {
+                setAccountFilter(String(c.account_id));
+                setCommunityFilter(String(c.id));
+                setCommunityChosen(true);
+              }}
+            >
+              <span className="category-title">{c.name}</span>
+              <span className="muted">{accountById.get(c.account_id)!.name}</span>
+            </button>
+          ))}
+        </div>
+        {communities.length === 0 && <p className="muted">No communities in this group yet.</p>}
+        <button
+          className="link-btn"
+          onClick={() => {
+            setCategory("");
+            setNationalStep(true);
+          }}
+        >
+          ← back
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="page-sticky">
@@ -149,6 +222,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                       setCategory(c);
                       setAccountFilter("");
                       setCommunityFilter("");
+                      setCommunityChosen(false); // re-offer the community choice
                     }}
                   >
                     {CATEGORY_LABELS[c]}
@@ -161,6 +235,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
               onClick={() => {
                 setCategory("");
                 setNationalStep(false);
+                setCommunityChosen(false);
                 setAccountFilter("");
                 setCommunityFilter("");
               }}

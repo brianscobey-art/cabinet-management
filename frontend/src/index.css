@@ -782,6 +782,22 @@ th.stage-col {
   color: var(--brand-ink);
 }
 
+.community-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  max-width: 68rem;
+  width: 100%;
+}
+
+.community-grid .category-card {
+  min-width: 0;
+  padding: 1rem 1.25rem;
+}
+
+.community-grid .category-title {
+  font-size: 1rem;
+}
+
 /* Reports */
 .report-list {
   display: grid;

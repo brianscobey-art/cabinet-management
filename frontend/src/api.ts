@@ -171,6 +171,7 @@ export const createCommunity = (data: { account_id: number; name: string; market
   api<Community>("/communities", { method: "POST", body: JSON.stringify(data) });
 export const listCommunities = (accountId: number) =>
   api<Community[]>(`/communities?account_id=${accountId}`);
+export const listAllCommunities = () => api<Community[]>("/communities");
 
 export const listJobs = (params: Record<string, string> = {}) => {
   const qs = new URLSearchParams(params).toString();
