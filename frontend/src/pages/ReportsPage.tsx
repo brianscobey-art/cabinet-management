@@ -1,75 +1,286 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PhaseReportRow, getPhaseReport, openDocument } from "../api";
+import {
+  InstallWeekRow,
+  NeedsOrderRow,
+  OpenPOReport,
+  PhaseReportRow,
+  ReportInfo,
+  RevenueGroup,
+  StatusSummaryRow,
+  getInstallWeek,
+  getNeedsOrdering,
+  getOpenPO,
+  getPhaseReport,
+  getPoStatus,
+  getReportsList,
+  getRevenueBuilder,
+  getRevenueSalesperson,
+  openDocument,
+} from "../api";
 import { fmtDate } from "../format";
 
-const REPORT_LIST = [
-  {
-    key: "phases",
-    name: "Phase Report",
-    desc: "All active houses by builder, community, and lot with current construction phase.",
-    available: true,
-  },
-  {
-    key: "ordering",
-    name: "Ordering Status Report",
-    desc: "The 4-stage ordering pipeline across builder jobs — what's waiting on POs, layouts, or SO comparison.",
-    available: false,
-  },
-  {
-    key: "open-po",
-    name: "Open PO Report",
-    desc: "Open builder POs with amounts and totals by division and community.",
-    available: false,
-  },
-  {
-    key: "install-week",
-    name: "Install Week Report",
-    desc: "Scheduled installs grouped by week, community, and installer.",
-    available: false,
-  },
-  {
-    key: "delivery",
-    name: "Delivery Report",
-    desc: "Upcoming cabinet deliveries and confirmation status — the day-before check.",
-    available: false,
-  },
-  {
-    key: "warranty",
-    name: "Warranty & Service Report",
-    desc: "Open claims, installer callback rates, and service cost.",
-    available: false,
-  },
-];
+const money = (v: number) =>
+  `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ReportsPage({ hash }: { hash: string }) {
-  if (hash.startsWith("#/reports/phases")) return <PhaseReport />;
-  return <ReportsIndex />;
-}
+  const [reports, setReports] = useState<ReportInfo[]>([]);
+  const key = hash.replace(/^#\/reports\/?/, "") || "phases";
 
-function ReportsIndex() {
+  useEffect(() => {
+    getReportsList().then(setReports).catch(() => {});
+  }, []);
+
+  const current = reports.find((r) => r.key === key);
+
   return (
     <div>
-      <div className="page-head">
-        <h2>Reports</h2>
+      <div className="page-sticky no-print">
+        <div className="page-head">
+          <h2>Reports</h2>
+          <select
+            className="report-picker"
+            value={key}
+            onChange={(e) => {
+              window.location.hash = `#/reports/${e.target.value}`;
+            }}
+          >
+            {reports.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {current && <p className="muted report-desc">{current.description}</p>}
       </div>
-      <div className="report-list">
-        {REPORT_LIST.map((r) => (
-          <div key={r.key} className={`card report-card ${r.available ? "" : "planned"}`}>
-            <div>
-              <h3>{r.name}</h3>
-              <p className="muted">{r.desc}</p>
-            </div>
-            {r.available ? (
-              <a className="report-open" href={`#/reports/${r.key}`}>
-                Open →
-              </a>
-            ) : (
-              <span className="badge">coming soon</span>
-            )}
-          </div>
-        ))}
-      </div>
+
+      {key === "phases" && <PhaseReport />}
+      {key === "open-po" && <OpenPOReportView />}
+      {key === "po-status" && <PoStatusView />}
+      {key === "revenue-builder" && <RevenueBuilderView />}
+      {key === "revenue-salesperson" && <RevenueSalespersonView />}
+      {key === "install-week" && <InstallWeekView />}
+      {key === "unordered" && <NeedsOrderingView />}
     </div>
+  );
+}
+
+function useReport<T>(loader: () => Promise<T>): [T | null, string] {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    loader().then(setData).catch((e) => setError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return [data, error];
+}
+
+function OpenPOReportView() {
+  const [data, error] = useReport<OpenPOReport>(getOpenPO);
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+  return (
+    <>
+      <p className="report-total">
+        {data.count} open PO{data.count === 1 ? "" : "s"} · {money(data.total_amount)}
+      </p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job code</th>
+              <th>Builder</th>
+              <th>Community</th>
+              <th>Lot</th>
+              <th>Address</th>
+              <th>PO #</th>
+              <th className="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r) => (
+              <tr key={r.job_id}>
+                <td>
+                  <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                </td>
+                <td>{r.account_name}</td>
+                <td>{r.community_name ?? "—"}</td>
+                <td>{r.lot_number ?? "—"}</td>
+                <td>{r.address}</td>
+                <td>{r.builder_po ?? "—"}</td>
+                <td className="num">{money(r.po_amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={6}>
+                <strong>Total</strong>
+              </td>
+              <td className="num">
+                <strong>{money(data.total_amount)}</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function PoStatusView() {
+  const [rows, error] = useReport<StatusSummaryRow[]>(getPoStatus);
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+  const total = rows.reduce((s, r) => s + r.total_amount, 0);
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>PO status</th>
+            <th className="num">Jobs</th>
+            <th className="num">Total amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.po_status}>
+              <td>{r.po_status}</td>
+              <td className="num">{r.count}</td>
+              <td className="num">{money(r.total_amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>
+              <strong>All</strong>
+            </td>
+            <td className="num">
+              <strong>{rows.reduce((s, r) => s + r.count, 0)}</strong>
+            </td>
+            <td className="num">
+              <strong>{money(total)}</strong>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function RevenueGroupView({ loader }: { loader: () => Promise<RevenueGroup[]> }) {
+  const [rows, error] = useReport<RevenueGroup[]>(loader);
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+  const total = rows.reduce((s, r) => s + r.total_amount, 0);
+  const hasSub = rows.some((r) => r.sublabel);
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{hasSub ? "Builder" : "Salesperson"}</th>
+            {hasSub && <th>Community</th>}
+            <th className="num">Jobs</th>
+            <th className="num">Revenue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.label}</td>
+              {hasSub && <td>{r.sublabel ?? "—"}</td>}
+              <td className="num">{r.count}</td>
+              <td className="num">{money(r.total_amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={hasSub ? 3 : 2}>
+              <strong>Total</strong>
+            </td>
+            <td className="num">
+              <strong>{money(total)}</strong>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+const RevenueBuilderView = () => <RevenueGroupView loader={getRevenueBuilder} />;
+const RevenueSalespersonView = () => <RevenueGroupView loader={getRevenueSalesperson} />;
+
+function InstallWeekView() {
+  const [rows, error] = useReport<InstallWeekRow[]>(getInstallWeek);
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Week of</th>
+            <th className="num">Installs</th>
+            <th className="num">PO value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.week_start}>
+              <td>{fmtDate(r.week_start)}</td>
+              <td className="num">{r.count}</td>
+              <td className="num">{money(r.total_amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function NeedsOrderingView() {
+  const [rows, error] = useReport<NeedsOrderRow[]>(getNeedsOrdering);
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+  return (
+    <>
+      <p className="report-total">{rows.length} job{rows.length === 1 ? "" : "s"} scheduled without a cabinet PO</p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Install</th>
+              <th>Job code</th>
+              <th>Builder</th>
+              <th>Community</th>
+              <th>Lot</th>
+              <th>Address</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.job_id}>
+                <td>{fmtDate(r.install_date)}</td>
+                <td>
+                  <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                </td>
+                <td>{r.account_name}</td>
+                <td>{r.community_name ?? "—"}</td>
+                <td>{r.lot_number ?? "—"}</td>
+                <td>{r.address}</td>
+                <td>{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -157,14 +368,8 @@ function PhaseReport() {
 
   return (
     <div>
-      <div className="page-sticky no-print">
-        <div className="page-head">
-          <h2>
-            <a href="#/reports" className="crumb">
-              Reports
-            </a>{" "}
-            / Phase Report
-          </h2>
+      <div className="no-print">
+        <div className="page-head" style={{ justifyContent: "flex-end" }}>
           <button onClick={() => window.print()} disabled={selectedCount === 0}>
             🖨 Print {selectedCount} communit{selectedCount === 1 ? "y" : "ies"}
           </button>

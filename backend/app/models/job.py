@@ -1,7 +1,8 @@
 import enum
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -67,6 +68,15 @@ class Job(Base):
     field_contact_name: Mapped[str] = mapped_column(String(255))
     field_contact_phone: Mapped[str | None] = mapped_column(String(50), default=None)
     field_contact_email: Mapped[str | None] = mapped_column(String(255), default=None)
+
+    # PO & pricing (imported from the tracker / builder reports)
+    builder_po: Mapped[str | None] = mapped_column(String(50), default=None)  # builder's PO to us
+    po_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)  # revenue
+    cabinet_po: Mapped[str | None] = mapped_column(String(50), default=None)  # our PO to the supplier
+    materials_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    margin_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    margin_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), default=None)
+    po_status: Mapped[str | None] = mapped_column(String(32), default=None)
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(

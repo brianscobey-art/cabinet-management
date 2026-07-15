@@ -54,6 +54,27 @@ def _fmt(d: date | None) -> str:
     return f"{d.month}/{d.day}/{d:%y}" if d else ""
 
 
+def _money(value):
+    from decimal import Decimal, InvalidOperation
+
+    if value is None or isinstance(value, str):
+        return None
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    return d if d != 0 else None
+
+
+def _po_str(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    s = str(value).strip()
+    return s or None
+
+
 def latest_file(directory: Path, pattern: str) -> Path | None:
     files = [f for f in directory.glob(pattern) if not f.name.startswith("~")]
     return max(files, key=lambda f: f.stat().st_mtime) if files else None
@@ -181,6 +202,11 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 po_bits.append(f"{label} {_fmt(d)}")
         feed_text = ", ".join(po_bits) or "on report, no PO detail"
 
+        # builder-side PO facts, straight from the authoritative VS report
+        po_number = _po_str(row.get("PO Number"))
+        po_amount = _money(row.get("PO Amount"))
+        po_status = str(row.get("PO Status")).strip() if row.get("PO Status") else None
+
         job = _find_job(db, community, lot4)
         if job is None:
             plan = " ".join(str(row.get(k) or "") for k in ("Plan", "Elevation", "Swing")).strip()
@@ -196,6 +222,9 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 measure_date=measure,
                 install_date=install,
                 warranty_start_date=install,
+                builder_po=po_number,
+                po_amount=po_amount,
+                po_status=po_status,
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
                 sales_contact_email=DEFAULT_SALES_CONTACT[2],
@@ -214,6 +243,11 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
             if measure and job.measure_date is None:
                 job.measure_date = measure
                 changed = True
+            # PO facts are builder-authoritative — refresh from the daily VS report
+            for attr, value in (("builder_po", po_number), ("po_amount", po_amount), ("po_status", po_status)):
+                if value is not None and getattr(job, attr) != value:
+                    setattr(job, attr, value)
+                    changed = True
             if row.get("PO Number") and str(row.get("PO Status")).strip().lower() == "open":
                 changed = _bump_to_ordered(job) or changed
             before = job.notes
@@ -334,6 +368,7 @@ def sync_century(db: Session, path: Path) -> dict:
                 plan=plan[:100] or None,
                 status=JobStatus.ord if ordered and ordered <= date.today() else JobStatus.track,
                 measure_date=measure,
+                builder_po=_po_str(po_number),
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
                 sales_contact_email=DEFAULT_SALES_CONTACT[2],
@@ -348,6 +383,9 @@ def sync_century(db: Session, path: Path) -> dict:
             changed = False
             if measure and job.measure_date is None:
                 job.measure_date = measure
+                changed = True
+            if po_number and job.builder_po != _po_str(po_number):
+                job.builder_po = _po_str(po_number)
                 changed = True
             if plan and not job.plan:
                 job.plan = plan[:100]

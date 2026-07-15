@@ -856,6 +856,28 @@ th.stage-col {
 }
 
 /* Reports */
+.report-picker {
+  min-width: 16rem;
+  font-size: 0.95rem;
+}
+
+.report-desc {
+  margin: 0 0 0.5rem;
+}
+
+.report-total {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--brand-ink);
+  margin: 0.25rem 0 0.75rem;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .report-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

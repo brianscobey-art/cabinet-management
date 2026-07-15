@@ -349,6 +349,62 @@ export interface PhaseReportRow {
 
 export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");
 
+export interface ReportInfo {
+  key: string;
+  name: string;
+  description: string;
+}
+export interface OpenPORow {
+  job_id: number;
+  job_code: string | null;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  address: string;
+  builder_po: string | null;
+  po_amount: number;
+  po_status: string | null;
+}
+export interface OpenPOReport {
+  rows: OpenPORow[];
+  total_amount: number;
+  count: number;
+}
+export interface StatusSummaryRow {
+  po_status: string;
+  count: number;
+  total_amount: number;
+}
+export interface RevenueGroup {
+  label: string;
+  sublabel: string | null;
+  count: number;
+  total_amount: number;
+}
+export interface InstallWeekRow {
+  week_start: string;
+  count: number;
+  total_amount: number;
+}
+export interface NeedsOrderRow {
+  job_id: number;
+  job_code: string | null;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  address: string;
+  install_date: string;
+  status: string;
+}
+
+export const getReportsList = () => api<ReportInfo[]>("/reports");
+export const getOpenPO = () => api<OpenPOReport>("/reports/open-po");
+export const getPoStatus = () => api<StatusSummaryRow[]>("/reports/po-status");
+export const getRevenueBuilder = () => api<RevenueGroup[]>("/reports/revenue-builder");
+export const getRevenueSalesperson = () => api<RevenueGroup[]>("/reports/revenue-salesperson");
+export const getInstallWeek = () => api<InstallWeekRow[]>("/reports/install-week");
+export const getNeedsOrdering = () => api<NeedsOrderRow[]>("/reports/unordered");
+
 export interface InstallItem {
   job_id: number;
   job_code: string | null;
