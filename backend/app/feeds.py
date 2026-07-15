@@ -193,6 +193,7 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
                 status=JobStatus.ordered if row.get("PO Number") else JobStatus.quote,
+                measure_date=measure,
                 install_date=install,
                 warranty_start_date=install,
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
@@ -209,6 +210,10 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
             changed = False
             # Scheduling is app-managed: feeds never touch install_date on existing
             # jobs (the VS: note still carries the builder's schedule for reference).
+            # Measure date fills in only when the app has none yet.
+            if measure and job.measure_date is None:
+                job.measure_date = measure
+                changed = True
             if row.get("PO Number") and str(row.get("PO Status")).strip().lower() == "open":
                 changed = _bump_to_ordered(job) or changed
             before = job.notes

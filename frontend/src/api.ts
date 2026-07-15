@@ -281,6 +281,8 @@ export interface PhaseBoardRow {
   phase: string | null;
   phase_label: string | null;
   phase_date: string | null;
+  measure_date: string | null;
+  layout_doc_id: number | null;
   ordering_stages: boolean[];
 }
 
@@ -304,6 +306,8 @@ export interface PhaseReportRow {
   phase: string | null;
   phase_label: string | null;
   phase_date: string | null;
+  measure_date: string | null;
+  layout_doc_id: number | null;
 }
 
 export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");

@@ -48,6 +48,7 @@ class Job(Base):
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, native_enum=False, length=32), default=JobStatus.quote, index=True
     )
+    measure_date: Mapped[date | None] = mapped_column(Date, default=None)  # field measure
     install_date: Mapped[date | None] = mapped_column(Date, default=None)
     warranty_start_date: Mapped[date | None] = mapped_column(Date, default=None)
 

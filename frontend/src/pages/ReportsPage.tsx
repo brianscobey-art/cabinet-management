@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PhaseReportRow, getPhaseReport } from "../api";
+import { PhaseReportRow, getPhaseReport, openDocument } from "../api";
 import { fmtDate } from "../format";
 
 const REPORT_LIST = [
@@ -240,6 +240,7 @@ function PhaseReport() {
                   <th>Job code</th>
                   <th>Address</th>
                   <th>Plan</th>
+                  <th>Field Measure</th>
                   <th>Current phase</th>
                   <th>Updated</th>
                 </tr>
@@ -253,6 +254,20 @@ function PhaseReport() {
                     </td>
                     <td>{r.address}</td>
                     <td>{r.plan ?? "—"}</td>
+                    <td>
+                      {r.measure_date ? fmtDate(r.measure_date) : "—"}
+                      {r.layout_doc_id && (
+                        <>
+                          {" "}
+                          <button
+                            className="link-btn no-print"
+                            onClick={() => openDocument(r.layout_doc_id!)}
+                          >
+                            layout
+                          </button>
+                        </>
+                      )}
+                    </td>
                     <td>{r.phase_label ?? "—"}</td>
                     <td>{r.phase_date ? fmtDate(r.phase_date) : "—"}</td>
                   </tr>

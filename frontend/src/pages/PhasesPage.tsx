@@ -8,6 +8,7 @@ import {
   getPhaseDefs,
   listAccounts,
   listCommunities,
+  openDocument,
   setJobPhase,
 } from "../api";
 import { fmtDate } from "../format";
@@ -108,6 +109,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 <th>Job code</th>
                 <th>Address</th>
                 <th>Current phase</th>
+                <th>Field Measure</th>
                 <th>Plan</th>
                 <th>Ordering</th>
                 <th>Updated</th>
@@ -141,6 +143,20 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                       row.phase_label ?? "—"
                     )}
                   </td>
+                  <td>
+                    {row.measure_date ? fmtDate(row.measure_date) : "—"}
+                    {row.layout_doc_id && (
+                      <>
+                        {" "}
+                        <button
+                          className="link-btn"
+                          onClick={() => openDocument(row.layout_doc_id!).catch((e) => setError(e.message))}
+                        >
+                          layout
+                        </button>
+                      </>
+                    )}
+                  </td>
                   <td>{row.plan ?? "—"}</td>
                   <td>
                     <span className="mini-stages" title={STAGES.map((s, i) => `${s.label}: ${row.ordering_stages[i] ? "done" : "open"}`).join("\n")}>
@@ -156,7 +172,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted">
+                  <td colSpan={8} className="muted">
                     No active houses in this community.
                   </td>
                 </tr>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import read_access
 from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import Job, JobStatus, OrderingChecklist, PhaseUpdate, Role, User
+from app.models import Job, JobDocument, JobStatus, OrderingChecklist, PhaseUpdate, Role, User
 from app.phases import PHASE_CODES, PHASE_LABELS, PHASES
 
 router = APIRouter(tags=["phases"])
@@ -47,6 +47,8 @@ class PhaseBoardRow(BaseModel):
     phase: str | None
     phase_label: str | None
     phase_date: datetime | None
+    measure_date: date | None
+    layout_doc_id: int | None  # the job's field layout PDF, if attached
     ordering_stages: list[bool]  # the 4-step ordering pipeline, in order
 
 
@@ -78,6 +80,16 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
         for cl in db.query(OrderingChecklist).filter(OrderingChecklist.job_id.in_(job_ids)).all():
             checklists[cl.job_id] = cl
 
+    layouts: dict[int, int] = {}
+    if jobs:
+        for doc in (
+            db.query(JobDocument)
+            .filter(JobDocument.job_id.in_([j.id for j in jobs]), JobDocument.doc_type == "layout")
+            .order_by(JobDocument.id.desc())
+            .all()
+        ):
+            layouts[doc.job_id] = doc.id  # newest layout wins
+
     def lot_key(job: Job):
         lot = (job.lot_number or "").strip()
         return (0, int(lot)) if lot.isdigit() else (1, lot)
@@ -97,6 +109,8 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
                 phase=current.phase if current else None,
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,
                 phase_date=current.noted_at if current else None,
+                measure_date=job.measure_date,
+                layout_doc_id=layouts.get(job.id),
                 ordering_stages=[
                     bool(cl and getattr(cl, f"stage{i}_done")) for i in (1, 2, 3, 4)
                 ],
