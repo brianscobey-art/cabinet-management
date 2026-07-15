@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Account, AccountType, Community, Job, JobStatus, JobType
+from app.sales import resolve_salesperson
 
 DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@TownsendBuildingSupply.com")
 
@@ -225,6 +226,7 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 builder_po=po_number,
                 po_amount=po_amount,
                 po_status=po_status,
+                salesperson=resolve_salesperson(account_name),
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
                 sales_contact_email=DEFAULT_SALES_CONTACT[2],
@@ -369,6 +371,7 @@ def sync_century(db: Session, path: Path) -> dict:
                 status=JobStatus.ord if ordered and ordered <= date.today() else JobStatus.track,
                 measure_date=measure,
                 builder_po=_po_str(po_number),
+                salesperson=resolve_salesperson(CENTURY_ACCOUNT),
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
                 sales_contact_email=DEFAULT_SALES_CONTACT[2],

@@ -220,14 +220,14 @@ def revenue_by_builder(db: Session = Depends(get_db)):
 @router.get("/reports/revenue-salesperson", response_model=list[RevenueGroup], dependencies=[Depends(read_access)])
 def revenue_by_salesperson(db: Session = Depends(get_db)):
     rows = (
-        db.query(Job.sales_contact_name, func.count(Job.id), func.sum(Job.po_amount))
+        db.query(Job.salesperson, func.count(Job.id), func.sum(Job.po_amount))
         .filter(Job.po_amount.isnot(None))
-        .group_by(Job.sales_contact_name)
+        .group_by(Job.salesperson)
         .order_by(func.sum(Job.po_amount).desc())
         .all()
     )
     return [
-        RevenueGroup(label=name or "—", sublabel=None, count=c, total_amount=_d(amt))
+        RevenueGroup(label=name or "Unassigned", sublabel=None, count=c, total_amount=_d(amt))
         for name, c, amt in rows
     ]
 

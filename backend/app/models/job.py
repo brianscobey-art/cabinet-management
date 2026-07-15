@@ -69,6 +69,8 @@ class Job(Base):
     field_contact_phone: Mapped[str | None] = mapped_column(String(50), default=None)
     field_contact_email: Mapped[str | None] = mapped_column(String(255), default=None)
 
+    salesperson: Mapped[str | None] = mapped_column(String(120), default=None)  # rep (Brian = mgr, excluded)
+
     # PO & pricing (imported from the tracker / builder reports)
     builder_po: Mapped[str | None] = mapped_column(String(50), default=None)  # builder's PO to us
     po_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)  # revenue

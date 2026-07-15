@@ -17,6 +17,7 @@ from openpyxl import load_workbook
 
 from app.database import SessionLocal
 from app.feeds import _find_job
+from app.sales import resolve_salesperson
 from app.models import (
     Account,
     AccountType,
@@ -211,9 +212,10 @@ def import_row(db, row: dict, caches: dict) -> str:
         status=derive_status(row),
         install_date=install,
         warranty_start_date=install,
-        sales_contact_name=str(salesperson) if salesperson else DEFAULT_SALES_CONTACT[0],
-        sales_contact_phone=None if salesperson else DEFAULT_SALES_CONTACT[1],
-        sales_contact_email=None if salesperson else DEFAULT_SALES_CONTACT[2],
+        salesperson=resolve_salesperson(account.name, str(salesperson) if salesperson else None),
+        sales_contact_name=DEFAULT_SALES_CONTACT[0],
+        sales_contact_phone=DEFAULT_SALES_CONTACT[1],
+        sales_contact_email=DEFAULT_SALES_CONTACT[2],
         field_contact_name=str(super_name) if super_name else "TBD",
         field_contact_phone=str(clean(row.get("Super Phone")) or "") or None,
         notes=" | ".join(note_bits),

@@ -49,9 +49,7 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
             lot_number=j.lot_number,
             status=j.status,
             install_date=j.install_date,
-            salesperson=(j.sales_contact_name or "").strip().split()[0] or None
-            if j.sales_contact_name
-            else None,
+            salesperson=(j.salesperson or "").strip().split()[0] or None if j.salesperson else None,
         )
         for j in jobs
     ]
