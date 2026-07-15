@@ -69,6 +69,100 @@ export default function ReportsPage({ hash }: { hash: string }) {
   );
 }
 
+function JobPLPrintSummary({ data }: { data: JobPLReport }) {
+  const byBuilder = useMemo(() => {
+    const m = new Map<string, { count: number; revenue: number; cost: number; margin: number }>();
+    for (const r of data.rows) {
+      const g = m.get(r.account_name) || { count: 0, revenue: 0, cost: 0, margin: 0 };
+      g.count += 1;
+      g.revenue += r.revenue;
+      g.cost += r.product_cost + r.labor_cost;
+      g.margin += r.margin;
+      m.set(r.account_name, g);
+    }
+    return [...m.entries()]
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [data]);
+
+  return (
+    <div className="print-only pl-summary">
+      <div className="print-title">
+        Carter Kitchen and Bath — Job Cost P&amp;L Summary — {fmtDate(new Date().toISOString())}
+      </div>
+      <div className="pl-topline">
+        <div>
+          <span className="pl-big">{money(data.total_revenue)}</span>
+          <span>Revenue</span>
+        </div>
+        <div>
+          <span className="pl-big">{money(data.total_cost)}</span>
+          <span>Cost</span>
+        </div>
+        <div>
+          <span className="pl-big">{money(data.total_margin)}</span>
+          <span>Gross margin{data.margin_pct != null ? ` (${data.margin_pct}%)` : ""}</span>
+        </div>
+        <div>
+          <span className="pl-big">{data.count}</span>
+          <span>Houses</span>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Builder</th>
+            <th className="num">Houses</th>
+            <th className="num">Revenue</th>
+            <th className="num">Cost</th>
+            <th className="num">Gross margin</th>
+            <th className="num">GM %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {byBuilder.map((b) => (
+            <tr key={b.name}>
+              <td>{b.name}</td>
+              <td className="num">{b.count}</td>
+              <td className="num">{money(b.revenue)}</td>
+              <td className="num">{money(b.cost)}</td>
+              <td className="num">{money(b.margin)}</td>
+              <td className="num">{b.revenue ? `${((b.margin / b.revenue) * 100).toFixed(1)}%` : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>
+              <strong>Total</strong>
+            </td>
+            <td className="num">
+              <strong>{data.count}</strong>
+            </td>
+            <td className="num">
+              <strong>{money(data.total_revenue)}</strong>
+            </td>
+            <td className="num">
+              <strong>{money(data.total_cost)}</strong>
+            </td>
+            <td className="num">
+              <strong>{money(data.total_margin)}</strong>
+            </td>
+            <td className="num">
+              <strong>{data.margin_pct != null ? `${data.margin_pct}%` : ""}</strong>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      <p className="pl-note">
+        Margin is cabinet product plus C9009 install labor. {data.with_other_labor} of {data.count} houses
+        also carry labor billed to codes other than C9009; that labor is excluded from the margin above and
+        is listed per house in the detail view.
+      </p>
+    </div>
+  );
+}
+
 function JobPLView() {
   const [data, setData] = useState<JobPLReport | null>(null);
   const [error, setError] = useState("");
@@ -113,9 +207,14 @@ function JobPLView() {
             </span>
           )}
         </div>
-        <button onClick={update} disabled={busy}>
-          {busy ? "⟳ Updating…" : "⟳ Update from Domo"}
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          {data && data.count > 0 && (
+            <button onClick={() => window.print()}>🖨 Print Summary</button>
+          )}
+          <button onClick={update} disabled={busy}>
+            {busy ? "⟳ Updating…" : "⟳ Update from Domo"}
+          </button>
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
@@ -124,8 +223,11 @@ function JobPLView() {
           No Domo cost data yet. Log into Domo, run the pull, then click “Update from Domo”.
         </p>
       )}
+
+      {data && data.count > 0 && <JobPLPrintSummary data={data} />}
+
       {data && data.count > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap no-print">
           <table>
             <thead>
               <tr>

@@ -882,6 +882,61 @@ th.num {
   background: #fdf3e6;
 }
 
+/* Job Cost P&L management print summary */
+.pl-summary .pl-topline {
+  display: flex;
+  gap: 2.5rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.pl-summary .pl-topline div {
+  display: flex;
+  flex-direction: column;
+}
+
+.pl-summary .pl-big {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--brand-ink);
+}
+
+.pl-summary .pl-topline span:last-child {
+  font-size: 0.8rem;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pl-summary table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.pl-summary th {
+  background: #125952;
+  color: #fff;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.pl-summary td {
+  padding: 0.35rem 0.6rem;
+  border-top: 1px solid #dfe6e8;
+}
+
+.pl-summary tfoot td {
+  border-top: 2px solid #595959;
+}
+
+.pl-note {
+  margin-top: 0.9rem;
+  font-size: 0.82rem;
+  color: #595959;
+}
+
 .report-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
