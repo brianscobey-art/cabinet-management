@@ -1,5 +1,11 @@
 @echo off
 rem Carter Kitchen and Bath — pilot server (API + frontend on port 8000)
+rem If a server is already running, exit quietly instead of fighting for the port.
+powershell -NoProfile -Command "exit @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue).Count"
+if errorlevel 1 (
+  echo Server already running on port 8000 - nothing to do.
+  goto :eof
+)
 rem On every start: back up the database to OneDrive, keep 30 days of copies.
 set "BK=C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Kitchen and Bath\DB Backups"
 if exist "%~dp0backend\dev.db" (
