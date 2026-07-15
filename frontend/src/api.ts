@@ -149,6 +149,20 @@ export async function login(email: string, password: string): Promise<void> {
 
 export const fetchMe = () => api<User>("/auth/me");
 
+export interface FeedResult {
+  file?: string;
+  created?: number;
+  updated?: number;
+  skipped?: number;
+  no_job?: number;
+  unchanged?: number;
+  error?: string;
+  skipped_locked?: string[];
+}
+
+export const runFeedSync = () =>
+  api<Record<string, FeedResult>>("/sync/feeds", { method: "POST" });
+
 export const listAccounts = () => api<Account[]>("/accounts");
 export const getAccount = (id: number) => api<AccountDetail>(`/accounts/${id}`);
 export const createAccount = (data: { name: string; type: string }) =>

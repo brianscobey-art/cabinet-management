@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { fetchMe, getToken, login, setToken, User } from "./api";
+import { fetchMe, getToken, login, runFeedSync, setToken, User } from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import FormsPage from "./pages/FormsPage";
@@ -21,10 +21,52 @@ function useHashRoute() {
 
 const WRITE_ROLES = ["sales", "admin"];
 
+const FEED_LABELS: Record<string, string> = {
+  vendorsuite: "VS Combined PO & Schedule",
+  century: "Century SupplyPro",
+  new_orders: "New Orders Status",
+};
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(!!getToken());
+  const [syncing, setSyncing] = useState(false);
+  const [toast, setToast] = useState("");
   const hash = useHashRoute();
+
+  // show the sync summary saved just before the post-update reload
+  useEffect(() => {
+    const saved = sessionStorage.getItem("syncResult");
+    if (saved) {
+      sessionStorage.removeItem("syncResult");
+      setToast(saved);
+      const t = setTimeout(() => setToast(""), 10000);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  async function handleUpdate() {
+    setSyncing(true);
+    try {
+      const result = await runFeedSync();
+      const lines = Object.entries(result).map(([key, r]) => {
+        const name = FEED_LABELS[key] ?? key;
+        if (r.error) return `${name}: ${r.error}`;
+        const bits = [
+          r.created ? `${r.created} new` : "",
+          r.updated ? `${r.updated} updated` : "",
+          !r.created && !r.updated ? "no changes" : "",
+        ].filter(Boolean);
+        return `${name} (${r.file ?? ""}): ${bits.join(", ")}`;
+      });
+      sessionStorage.setItem("syncResult", `Updated from stored reports\n${lines.join("\n")}`);
+      window.location.reload();
+    } catch (err) {
+      setToast(`Update failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      setSyncing(false);
+      setTimeout(() => setToast(""), 10000);
+    }
+  }
 
   useEffect(() => {
     if (!getToken()) return;
@@ -60,6 +102,16 @@ export default function App() {
           <img src="/carter-logo.png" alt="Carter Lumber" className="logo" />
           <span>Carter Kitchen and Bath</span>
         </h1>
+        {canWrite && (
+          <button
+            className="update-btn"
+            onClick={handleUpdate}
+            disabled={syncing}
+            title="Pull the latest stored reports (VS Combined, Century, New Orders) into the app"
+          >
+            {syncing ? "⟳ Updating…" : "⟳ Update"}
+          </button>
+        )}
         <nav>
           <a
             href="#/jobs"
@@ -116,6 +168,7 @@ export default function App() {
           </button>
         </div>
       </header>
+      {toast && <div className="toast">{toast}</div>}
       <main>{page}</main>
     </div>
   );
