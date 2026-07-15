@@ -36,20 +36,41 @@ function accountInCategory(a: Account, category: Category): boolean {
   return !isNational(a); // local
 }
 
+// Remember where the user was in the Jobs chooser so the browser Back button
+// (from a job detail page) returns to the same community view, not the top.
+const NAV_KEY = "jobsNav";
+function savedNav(): Partial<Record<string, string | boolean>> {
+  try {
+    return JSON.parse(sessionStorage.getItem(NAV_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
+  const nav = archived ? {} : savedNav();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [category, setCategory] = useState<Category>("");
-  const [nationalStep, setNationalStep] = useState(false);
-  const [communityChosen, setCommunityChosen] = useState(false);
+  const [category, setCategory] = useState<Category>((nav.category as Category) || "");
+  const [nationalStep, setNationalStep] = useState(Boolean(nav.nationalStep));
+  const [communityChosen, setCommunityChosen] = useState(Boolean(nav.communityChosen));
   const [allCommunities, setAllCommunities] = useState<Community[]>([]);
   const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [accountFilter, setAccountFilter] = useState("");
-  const [communityFilter, setCommunityFilter] = useState("");
-  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState((nav.statusFilter as string) || "");
+  const [accountFilter, setAccountFilter] = useState((nav.accountFilter as string) || "");
+  const [communityFilter, setCommunityFilter] = useState((nav.communityFilter as string) || "");
+  const [search, setSearch] = useState((nav.search as string) || "");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
+
+  // Persist the chooser/filter state on every change (active Jobs view only).
+  useEffect(() => {
+    if (archived) return;
+    sessionStorage.setItem(
+      NAV_KEY,
+      JSON.stringify({ category, nationalStep, communityChosen, statusFilter, accountFilter, communityFilter, search })
+    );
+  }, [archived, category, nationalStep, communityChosen, statusFilter, accountFilter, communityFilter, search]);
 
   async function refresh() {
     const params: Record<string, string> = {};
