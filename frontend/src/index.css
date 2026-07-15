@@ -878,6 +878,10 @@ th.num {
   white-space: nowrap;
 }
 
+.flag-row td {
+  background: #fdf3e6;
+}
+
 .report-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

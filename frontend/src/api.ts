@@ -397,6 +397,36 @@ export interface NeedsOrderRow {
   status: string;
 }
 
+export interface JobPLRow {
+  job_id: number;
+  job_code: string | null;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  g_code: string | null;
+  i_code: string | null;
+  revenue: number;
+  product_cost: number;
+  labor_revenue: number;
+  labor_cost: number;
+  margin: number;
+  margin_pct: number | null;
+  other_labor_codes: string | null;
+}
+export interface JobPLReport {
+  rows: JobPLRow[];
+  total_revenue: number;
+  total_cost: number;
+  total_margin: number;
+  margin_pct: number | null;
+  count: number;
+  with_other_labor: number;
+  updated_at: string | null;
+}
+export const getJobPL = () => api<JobPLReport>("/reports/job-pl");
+export const refreshJobPL = () =>
+  api<Record<string, unknown>>("/reports/job-pl/refresh", { method: "POST" });
+
 export const getReportsList = () => api<ReportInfo[]>("/reports");
 export const getOpenPO = () => api<OpenPOReport>("/reports/open-po");
 export const getPoStatus = () => api<StatusSummaryRow[]>("/reports/po-status");

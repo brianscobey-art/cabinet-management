@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   InstallWeekRow,
+  JobPLReport,
   NeedsOrderRow,
   OpenPOReport,
   PhaseReportRow,
@@ -8,6 +9,7 @@ import {
   RevenueGroup,
   StatusSummaryRow,
   getInstallWeek,
+  getJobPL,
   getNeedsOrdering,
   getOpenPO,
   getPhaseReport,
@@ -16,6 +18,7 @@ import {
   getRevenueBuilder,
   getRevenueSalesperson,
   openDocument,
+  refreshJobPL,
 } from "../api";
 import { fmtDate } from "../format";
 
@@ -61,7 +64,125 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "revenue-salesperson" && <RevenueSalespersonView />}
       {key === "install-week" && <InstallWeekView />}
       {key === "unordered" && <NeedsOrderingView />}
+      {key === "job-pl" && <JobPLView />}
     </div>
+  );
+}
+
+function JobPLView() {
+  const [data, setData] = useState<JobPLReport | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  const load = () => getJobPL().then(setData).catch((e) => setError(e.message));
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function update() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await refreshJobPL();
+      if (res.error) setError(String(res.error));
+      else setNotice(`Updated from ${res.file ?? "Domo export"}: ${res.matched ?? 0} jobs matched`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="page-head no-print" style={{ justifyContent: "space-between" }}>
+        <div>
+          {data && data.count > 0 && (
+            <span className="report-total">
+              {data.count} houses · Revenue {money(data.total_revenue)} · Margin {money(data.total_margin)}
+              {data.margin_pct != null ? ` (${data.margin_pct}%)` : ""}
+              {data.with_other_labor > 0 ? ` · ${data.with_other_labor} with non-C9009 labor` : ""}
+            </span>
+          )}
+          {data && (
+            <span className="muted" style={{ marginLeft: "0.5rem" }}>
+              {data.updated_at ? `updated ${fmtDate(data.updated_at)}` : "no data pulled yet"}
+            </span>
+          )}
+        </div>
+        <button onClick={update} disabled={busy}>
+          {busy ? "⟳ Updating…" : "⟳ Update from Domo"}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
+      {data && data.count === 0 && (
+        <p className="muted">
+          No Domo cost data yet. Log into Domo, run the pull, then click “Update from Domo”.
+        </p>
+      )}
+      {data && data.count > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job code</th>
+                <th>Builder</th>
+                <th>Community</th>
+                <th>Lot</th>
+                <th>G / I code</th>
+                <th className="num">Revenue</th>
+                <th className="num">Product cost</th>
+                <th className="num">Labor cost</th>
+                <th className="num">Margin</th>
+                <th className="num">GM %</th>
+                <th>Non-C9009 labor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((r) => (
+                <tr key={r.job_id} className={r.other_labor_codes ? "flag-row" : ""}>
+                  <td>
+                    <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                  </td>
+                  <td>{r.account_name}</td>
+                  <td>{r.community_name ?? "—"}</td>
+                  <td>{r.lot_number ?? "—"}</td>
+                  <td>{[r.g_code, r.i_code].filter(Boolean).join(" / ") || "—"}</td>
+                  <td className="num">{money(r.revenue)}</td>
+                  <td className="num">{money(r.product_cost)}</td>
+                  <td className="num">{money(r.labor_cost)}</td>
+                  <td className="num">{money(r.margin)}</td>
+                  <td className="num">{r.margin_pct != null ? `${r.margin_pct}%` : "—"}</td>
+                  <td>{r.other_labor_codes ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={5}>
+                  <strong>Total</strong>
+                </td>
+                <td className="num">
+                  <strong>{money(data.total_revenue)}</strong>
+                </td>
+                <td colSpan={2} className="num" />
+                <td className="num">
+                  <strong>{money(data.total_margin)}</strong>
+                </td>
+                <td className="num">
+                  <strong>{data.margin_pct != null ? `${data.margin_pct}%` : ""}</strong>
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 

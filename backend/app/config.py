@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     )
     feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
     feed_sync_enabled: bool = True
+    domo_export_dir: str = r"C:\Users\Brian SE6\Downloads\domo-kb-tool"  # Domo cost JSON exports land here
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

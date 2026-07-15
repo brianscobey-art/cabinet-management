@@ -5,9 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import read_access
+from app.api.deps import read_access, write_access
 from app.database import get_db
-from app.models import Account, AccountType, Community, Job, JobDocument, JobStatus, PhaseUpdate
+from app.jobcosts import refresh_from_file
+from app.models import Account, AccountType, Community, Job, JobCost, JobDocument, JobStatus, PhaseUpdate
 from app.phases import PHASE_LABELS
 
 router = APIRouter(tags=["reports"])
@@ -121,6 +122,8 @@ REPORTS = [
                description="Scheduled installs grouped by install week with PO value."),
     ReportInfo(key="unordered", name="Needs Ordering",
                description="Active jobs with an install date but no cabinet PO yet — the risk list."),
+    ReportInfo(key="job-pl", name="Job Cost P&L (Domo)",
+               description="Per-house P&L from Domo actual costs by G/I code, flagging labor billed on codes other than C9009. Click Update to re-pull."),
 ]
 
 
@@ -292,3 +295,80 @@ def _lotkey(lot):
     return (0, int(s)) if s.isdigit() else (1, s)
 
 
+
+
+# --- Job Cost P&L (Domo actuals) -----------------------------------------
+
+
+class JobPLRow(BaseModel):
+    job_id: int
+    job_code: str | None
+    account_name: str
+    community_name: str | None
+    lot_number: str | None
+    g_code: str | None
+    i_code: str | None
+    revenue: float
+    product_cost: float
+    labor_revenue: float
+    labor_cost: float
+    margin: float
+    margin_pct: float | None
+    other_labor_codes: str | None
+
+
+class JobPLReport(BaseModel):
+    rows: list[JobPLRow]
+    total_revenue: float
+    total_cost: float
+    total_margin: float
+    margin_pct: float | None
+    count: int
+    with_other_labor: int
+    updated_at: datetime | None
+
+
+@router.get("/reports/job-pl", response_model=JobPLReport, dependencies=[Depends(read_access)])
+def job_pl_report(db: Session = Depends(get_db)):
+    q = (
+        db.query(Job, JobCost)
+        .join(JobCost, JobCost.job_id == Job.id)
+        .options(joinedload(Job.account), joinedload(Job.community))
+        .all()
+    )
+    rows: list[JobPLRow] = []
+    latest: datetime | None = None
+    for job, cost in q:
+        rev = _d(cost.revenue) + _d(cost.labor_revenue)
+        cst = _d(cost.product_cost) + _d(cost.labor_cost)
+        margin = _d(cost.margin) if cost.margin is not None else rev - cst
+        rows.append(JobPLRow(
+            job_id=job.id, job_code=job.job_code, account_name=job.account.name,
+            community_name=job.community.name if job.community else None,
+            lot_number=job.lot_number, g_code=job.g_code, i_code=job.i_code,
+            revenue=round(rev, 2), product_cost=_d(cost.product_cost),
+            labor_revenue=_d(cost.labor_revenue), labor_cost=_d(cost.labor_cost),
+            margin=round(margin, 2), margin_pct=round(margin / rev * 100, 1) if rev else None,
+            other_labor_codes=cost.other_labor_codes,
+        ))
+        if cost.updated_at and (latest is None or cost.updated_at > latest):
+            latest = cost.updated_at
+    rows.sort(key=lambda r: (r.account_name.lower(), (r.community_name or "~").lower(), _lotkey(r.lot_number)))
+    total_rev = round(sum(r.revenue for r in rows), 2)
+    total_margin = round(sum(r.margin for r in rows), 2)
+    return JobPLReport(
+        rows=rows,
+        total_revenue=total_rev,
+        total_cost=round(sum(r.product_cost + r.labor_cost for r in rows), 2),
+        total_margin=total_margin,
+        margin_pct=round(total_margin / total_rev * 100, 1) if total_rev else None,
+        count=len(rows),
+        with_other_labor=sum(1 for r in rows if r.other_labor_codes),
+        updated_at=latest,
+    )
+
+
+@router.post("/reports/job-pl/refresh", dependencies=[Depends(write_access)])
+def job_pl_refresh(db: Session = Depends(get_db)):
+    """Re-import the newest Domo cost export (the report's Update button)."""
+    return refresh_from_file(db)

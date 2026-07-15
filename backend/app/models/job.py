@@ -70,6 +70,8 @@ class Job(Base):
     field_contact_email: Mapped[str | None] = mapped_column(String(255), default=None)
 
     salesperson: Mapped[str | None] = mapped_column(String(120), default=None)  # rep (Brian = mgr, excluded)
+    g_code: Mapped[str | None] = mapped_column(String(40), default=None)  # Domo goods/product job code
+    i_code: Mapped[str | None] = mapped_column(String(40), default=None)  # Domo install/labor job code
 
     # PO & pricing (imported from the tracker / builder reports)
     builder_po: Mapped[str | None] = mapped_column(String(50), default=None)  # builder's PO to us
