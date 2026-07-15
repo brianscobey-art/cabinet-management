@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.deps import read_access, write_access
+from app.api.deps import NATIONAL_BUILDER_PREFIXES, read_access, write_access
 from app.api.schemas import JobCreate, JobDetail, JobListItem, JobOut, JobUpdate
 from app.database import get_db
 from app.models import Account, Community, Job, JobStatus
@@ -64,10 +64,16 @@ def list_jobs(
     community_id: int | None = None,
     status_filter: JobStatus | None = None,
     archived: bool = False,
+    category: str | None = None,  # national | local
     q: str | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Job).options(joinedload(Job.account), joinedload(Job.community))
+    if category in ("national", "local"):
+        national = or_(*[Account.name.like(f"{p}%") for p in NATIONAL_BUILDER_PREFIXES])
+        query = query.join(Account, Job.account_id == Account.id).filter(
+            national if category == "national" else ~national
+        )
     if account_id is not None:
         query = query.filter(Job.account_id == account_id)
     if community_id is not None:

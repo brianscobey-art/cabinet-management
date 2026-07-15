@@ -15,9 +15,13 @@ export function statusLabel(s: string) {
   return s.replace(/_/g, " ");
 }
 
+const isNational = (a: Account) =>
+  a.type === "builder" && (a.name.startsWith("DR Horton") || a.name.startsWith("Century"));
+
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [category, setCategory] = useState<"" | "national" | "local">(archived ? "national" : "");
   const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
@@ -30,6 +34,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     const params: Record<string, string> = {};
     if (archived) params.archived = "true";
     else if (statusFilter) params.status_filter = statusFilter;
+    if (!archived && category) params.category = category;
     if (accountFilter) params.account_id = accountFilter;
     if (communityFilter) params.community_id = communityFilter;
     if (search) params.q = search;
@@ -37,9 +42,10 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   }
 
   useEffect(() => {
+    if (!archived && !category) return; // waiting on the National/Local choice
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, communityFilter, search, archived]);
+  }, [statusFilter, accountFilter, communityFilter, search, archived, category]);
 
   useEffect(() => {
     listAccounts().then(setAccounts).catch(() => {});
@@ -55,11 +61,32 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     }
   }, [accountFilter]);
 
+  // Jobs opens with a National/Local choice before showing anything.
+  if (!archived && !category) {
+    return (
+      <div className="center-page">
+        <h2>Which jobs?</h2>
+        <div className="category-choice">
+          <button className="category-card" onClick={() => setCategory("national")}>
+            <span className="category-title">National Accounts</span>
+            <span className="muted">DR Horton &amp; Century</span>
+          </button>
+          <button className="category-card" onClick={() => setCategory("local")}>
+            <span className="category-title">Local Accounts</span>
+            <span className="muted">Local builders &amp; retail customers</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const categoryAccounts = accounts.filter((a) => (category === "national" ? isNational(a) : !isNational(a)));
+
   return (
     <div>
       <div className="page-sticky">
       <div className="page-head">
-        <h2>{archived ? "Archive — closed jobs" : "Jobs"}</h2>
+        <h2>{archived ? "Archive — closed jobs" : `Jobs — ${category === "national" ? "National" : "Local"}`}</h2>
         {!archived && (
           <button onClick={() => setShowCreate((v) => !v)}>
             {showCreate ? "Close" : "+ New job"}
@@ -68,6 +95,23 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
       </div>
 
       <div className="filters">
+        {!archived && (
+          <div className="view-toggle">
+            {(["national", "local"] as const).map((c) => (
+              <button
+                key={c}
+                className={category === c ? "active" : ""}
+                onClick={() => {
+                  setCategory(c);
+                  setAccountFilter("");
+                  setCommunityFilter("");
+                }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           placeholder="Search job code, address, or lot…"
           value={search}
@@ -75,7 +119,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
         />
         <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
           <option value="">All accounts</option>
-          {accounts.map((a) => (
+          {(archived ? accounts : categoryAccounts).map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
             </option>

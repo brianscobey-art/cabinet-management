@@ -116,6 +116,23 @@ def test_closed_jobs_only_on_archive(client, db):
     assert explicit == ["DONE-1"]
 
 
+def test_category_filter_national_vs_local(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    drh_id, drh_comm = setup_account(client, headers, name="DR Horton Montgomery", community="Halls Creek")
+    local_id = client.post("/accounts", headers=headers, json={"name": "Jubilee Builders", "type": "builder"}).json()["id"]
+    retail_id = client.post("/accounts", headers=headers, json={"name": "Jane Smith", "type": "retail"}).json()["id"]
+
+    make_job(client, headers, drh_id, drh_comm, job_code="DR-1")
+    make_job(client, headers, local_id, None, job_code="JB-1", address="2 Local Ln", lot_number=None)
+    make_job(client, headers, retail_id, None, job_code="RET-1", address="3 Retail Rd", lot_number=None)
+
+    national = [j["job_code"] for j in client.get("/jobs?category=national", headers=headers).json()]
+    assert national == ["DR-1"]
+    local = [j["job_code"] for j in client.get("/jobs?category=local", headers=headers).json()]
+    assert sorted(local) == ["JB-1", "RET-1"]  # local builders AND retail
+
+
 def test_jobs_sorted_by_job_code(client, db):
     make_user(db, email="sales@example.com", role=Role.sales)
     headers = login(client, "sales@example.com")

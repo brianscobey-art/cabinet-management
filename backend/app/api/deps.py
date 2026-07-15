@@ -5,3 +5,6 @@ from app.models import Role
 
 read_access = get_current_user
 write_access = require_roles(Role.sales, Role.admin)
+
+# National builders (DR Horton divisions, Century); everything else is local/retail.
+NATIONAL_BUILDER_PREFIXES = ("DR Horton", "Century")

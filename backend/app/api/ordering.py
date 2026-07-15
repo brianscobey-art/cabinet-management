@@ -18,10 +18,9 @@ from app.models import Account, AccountType, Job, JobDocument, JobStatus, Orderi
 
 router = APIRouter(tags=["ordering"])
 
-STAGES = ("stage1", "stage2", "stage3", "stage4")
+from app.api.deps import NATIONAL_BUILDER_PREFIXES  # noqa: E402
 
-# The ordering board is for national builders only (Brian's 4-step process).
-NATIONAL_BUILDER_PREFIXES = ("DR Horton", "Century")
+STAGES = ("stage1", "stage2", "stage3", "stage4")
 
 STAGE_LABELS = {
     "stage1": "1. PO's and Selection File Creation",
