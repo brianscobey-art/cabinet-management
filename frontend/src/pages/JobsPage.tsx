@@ -18,10 +18,27 @@ export function statusLabel(s: string) {
 const isNational = (a: Account) =>
   a.type === "builder" && (a.name.startsWith("DR Horton") || a.name.startsWith("Century"));
 
+type Category = "" | "local" | "dr_horton" | "century" | "national_other";
+
+const CATEGORY_LABELS: Record<Exclude<Category, "">, string> = {
+  dr_horton: "DR Horton",
+  century: "Century",
+  national_other: "Other National",
+  local: "Local",
+};
+
+function accountInCategory(a: Account, category: Category): boolean {
+  if (category === "dr_horton") return a.name.startsWith("DR Horton");
+  if (category === "century") return a.name.startsWith("Century");
+  if (category === "national_other") return isNational(a) && !a.name.startsWith("DR Horton") && !a.name.startsWith("Century");
+  return !isNational(a); // local
+}
+
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [category, setCategory] = useState<"" | "national" | "local">(archived ? "national" : "");
+  const [category, setCategory] = useState<Category>("");
+  const [nationalStep, setNationalStep] = useState(false);
   const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
@@ -61,32 +78,57 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     }
   }, [accountFilter]);
 
-  // Jobs opens with a National/Local choice before showing anything.
+  // Jobs opens with a National/Local choice; National drills into a builder choice.
   if (!archived && !category) {
     return (
       <div className="center-page">
-        <h2>Which jobs?</h2>
-        <div className="category-choice">
-          <button className="category-card" onClick={() => setCategory("national")}>
-            <span className="category-title">National Accounts</span>
-            <span className="muted">DR Horton &amp; Century</span>
-          </button>
-          <button className="category-card" onClick={() => setCategory("local")}>
-            <span className="category-title">Local Accounts</span>
-            <span className="muted">Local builders &amp; retail customers</span>
-          </button>
-        </div>
+        {!nationalStep ? (
+          <>
+            <h2>Which jobs?</h2>
+            <div className="category-choice">
+              <button className="category-card" onClick={() => setNationalStep(true)}>
+                <span className="category-title">National Accounts</span>
+                <span className="muted">DR Horton, Century &amp; more</span>
+              </button>
+              <button className="category-card" onClick={() => setCategory("local")}>
+                <span className="category-title">Local Accounts</span>
+                <span className="muted">Local builders &amp; retail customers</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2>Which national builder?</h2>
+            <div className="category-choice">
+              <button className="category-card" onClick={() => setCategory("dr_horton")}>
+                <span className="category-title">DR Horton</span>
+                <span className="muted">All five divisions</span>
+              </button>
+              <button className="category-card" onClick={() => setCategory("century")}>
+                <span className="category-title">Century</span>
+                <span className="muted">Century Complete</span>
+              </button>
+              <button className="category-card" onClick={() => setCategory("national_other")}>
+                <span className="category-title">Other</span>
+                <span className="muted">Future national builders</span>
+              </button>
+            </div>
+            <button className="link-btn" onClick={() => setNationalStep(false)}>
+              ← back
+            </button>
+          </>
+        )}
       </div>
     );
   }
 
-  const categoryAccounts = accounts.filter((a) => (category === "national" ? isNational(a) : !isNational(a)));
+  const categoryAccounts = accounts.filter((a) => accountInCategory(a, category));
 
   return (
     <div>
       <div className="page-sticky">
       <div className="page-head">
-        <h2>{archived ? "Archive — closed jobs" : `Jobs — ${category === "national" ? "National" : "Local"}`}</h2>
+        <h2>{archived ? "Archive — closed jobs" : `Jobs — ${category ? CATEGORY_LABELS[category] : ""}`}</h2>
         {!archived && (
           <button onClick={() => setShowCreate((v) => !v)}>
             {showCreate ? "Close" : "+ New job"}
@@ -97,7 +139,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
       <div className="filters">
         {!archived && (
           <div className="view-toggle">
-            {(["national", "local"] as const).map((c) => (
+            {(["dr_horton", "century", "national_other", "local"] as const).map((c) => (
               <button
                 key={c}
                 className={category === c ? "active" : ""}
@@ -107,7 +149,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                   setCommunityFilter("");
                 }}
               >
-                {c}
+                {CATEGORY_LABELS[c]}
               </button>
             ))}
           </div>

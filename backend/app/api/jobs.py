@@ -64,16 +64,25 @@ def list_jobs(
     community_id: int | None = None,
     status_filter: JobStatus | None = None,
     archived: bool = False,
-    category: str | None = None,  # national | local
+    category: str | None = None,  # national | local | dr_horton | century | national_other
     q: str | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Job).options(joinedload(Job.account), joinedload(Job.community))
-    if category in ("national", "local"):
+    if category:
         national = or_(*[Account.name.like(f"{p}%") for p in NATIONAL_BUILDER_PREFIXES])
-        query = query.join(Account, Job.account_id == Account.id).filter(
-            national if category == "national" else ~national
-        )
+        drh = Account.name.like("DR Horton%")
+        century = Account.name.like("Century%")
+        conditions = {
+            "national": national,
+            "local": ~national,
+            "dr_horton": drh,
+            "century": century,
+            # national builders added to the prefix list later land here automatically
+            "national_other": national & ~drh & ~century,
+        }
+        if category in conditions:
+            query = query.join(Account, Job.account_id == Account.id).filter(conditions[category])
     if account_id is not None:
         query = query.filter(Job.account_id == account_id)
     if community_id is not None:

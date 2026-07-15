@@ -132,6 +132,12 @@ def test_category_filter_national_vs_local(client, db):
     local = [j["job_code"] for j in client.get("/jobs?category=local", headers=headers).json()]
     assert sorted(local) == ["JB-1", "RET-1"]  # local builders AND retail
 
+    cen_id = client.post("/accounts", headers=headers, json={"name": "Century PC", "type": "builder"}).json()["id"]
+    make_job(client, headers, cen_id, None, job_code="CEN-1", address="4 Cen Ct", lot_number=None)
+    assert [j["job_code"] for j in client.get("/jobs?category=dr_horton", headers=headers).json()] == ["DR-1"]
+    assert [j["job_code"] for j in client.get("/jobs?category=century", headers=headers).json()] == ["CEN-1"]
+    assert client.get("/jobs?category=national_other", headers=headers).json() == []  # none yet
+
 
 def test_jobs_sorted_by_job_code(client, db):
     make_user(db, email="sales@example.com", role=Role.sales)
