@@ -346,6 +346,7 @@ export interface InstallItem {
   lot_number: string | null;
   status: JobStatus;
   install_date: string;
+  salesperson: string | null;
 }
 
 export const getInstalls = (params: Record<string, string>) => {

@@ -20,6 +20,7 @@ class InstallItem(BaseModel):
     lot_number: str | None
     status: JobStatus
     install_date: date
+    salesperson: str | None  # first name for the calendar chip
 
 
 @router.get("/schedule/installs", response_model=list[InstallItem], dependencies=[Depends(read_access)])
@@ -48,6 +49,9 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
             lot_number=j.lot_number,
             status=j.status,
             install_date=j.install_date,
+            salesperson=(j.sales_contact_name or "").strip().split()[0] or None
+            if j.sales_contact_name
+            else None,
         )
         for j in jobs
     ]

@@ -658,7 +658,9 @@ h3.kb-head {
 }
 
 .cal-chip {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
   background: var(--brand);
   color: #fff;
   border-radius: 4px;
@@ -667,7 +669,16 @@ h3.kb-head {
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
+}
+
+.cal-chip-code {
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.cal-chip-sales {
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .cal-chip.not-ordered {

@@ -124,11 +124,12 @@ function Chip({ item }: { item: InstallItem }) {
     <a
       className={`cal-chip ${ordered ? "" : "not-ordered"}`}
       href={`#/jobs/${item.job_id}`}
-      title={`${item.address} — ${item.account_name}${item.community_name ? ` / ${item.community_name}` : ""} — ${
-        ordered ? "ordered" : "NOT ordered"
-      }`}
+      title={`${item.address} — ${item.account_name}${item.community_name ? ` / ${item.community_name}` : ""}${
+        item.salesperson ? ` — ${item.salesperson}` : ""
+      } — ${ordered ? "ordered" : "NOT ordered"}`}
     >
-      {item.job_code ?? item.address}
+      <span className="cal-chip-code">{item.job_code ?? item.address}</span>
+      {item.salesperson && <span className="cal-chip-sales">{item.salesperson}</span>}
     </a>
   );
 }
