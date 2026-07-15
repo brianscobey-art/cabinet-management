@@ -105,11 +105,14 @@ def test_closed_jobs_only_on_archive(client, db):
     done = make_job(client, headers, account_id, community_id, job_code="DONE-1", address="2 Done St", lot_number="2")
     client.patch(f"/jobs/{done['id']}", headers=headers, json={"status": "closed"})
 
-    default = [j["job_code"] for j in client.get("/jobs", headers=headers).json()]
-    assert default == ["OPEN-1"]  # closed hidden by default
+    voided = make_job(client, headers, account_id, community_id, job_code="VOID-1", address="3 Void St", lot_number="3")
+    client.patch(f"/jobs/{voided['id']}", headers=headers, json={"status": "void"})
 
-    archive = [j["job_code"] for j in client.get("/jobs?archived=true", headers=headers).json()]
-    assert archive == ["DONE-1"]  # archive shows only closed
+    default = [j["job_code"] for j in client.get("/jobs", headers=headers).json()]
+    assert default == ["OPEN-1"]  # closed and void hidden by default
+
+    archive = sorted(j["job_code"] for j in client.get("/jobs?archived=true", headers=headers).json())
+    assert archive == ["DONE-1", "VOID-1"]  # archive holds closed and void
 
     # explicit status filter can still reach closed if asked
     explicit = [j["job_code"] for j in client.get("/jobs?status_filter=closed", headers=headers).json()]

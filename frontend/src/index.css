@@ -315,6 +315,11 @@ td a {
   color: #2c6b31;
 }
 
+.badge-void {
+  background: #fbe2e2;
+  color: #9b2020;
+}
+
 .card {
   background: #fff;
   border-radius: 10px;

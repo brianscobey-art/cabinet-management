@@ -87,13 +87,14 @@ def list_jobs(
         query = query.filter(Job.account_id == account_id)
     if community_id is not None:
         query = query.filter(Job.community_id == community_id)
-    # Closed jobs live on the Archive tab; active views never show them.
+    # Closed and void jobs live on the Archive tab; active views never show them.
+    inactive = (JobStatus.closed, JobStatus.void)
     if archived:
-        query = query.filter(Job.status == JobStatus.closed)
+        query = query.filter(Job.status.in_(inactive))
     elif status_filter is not None:
         query = query.filter(Job.status == status_filter)
     else:
-        query = query.filter(Job.status != JobStatus.closed)
+        query = query.filter(Job.status.notin_(inactive))
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(

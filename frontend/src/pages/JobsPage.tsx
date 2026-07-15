@@ -128,7 +128,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     <div>
       <div className="page-sticky">
       <div className="page-head">
-        <h2>{archived ? "Archive — closed jobs" : `Jobs — ${category ? CATEGORY_LABELS[category] : ""}`}</h2>
+        <h2>{archived ? "Archive — closed & void jobs" : `Jobs — ${category ? CATEGORY_LABELS[category] : ""}`}</h2>
         {!archived && (
           <button onClick={() => setShowCreate((v) => !v)}>
             {showCreate ? "Close" : "+ New job"}
@@ -195,7 +195,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
         {!archived && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
-            {JOB_STATUSES.filter((s) => s !== "closed").map((s) => (
+            {JOB_STATUSES.filter((s) => s !== "closed" && s !== "void").map((s) => (
               <option key={s} value={s}>
                 {statusLabel(s)}
               </option>

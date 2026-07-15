@@ -33,7 +33,7 @@ def phase_report(db: Session = Depends(get_db)):
         db.query(Job)
         .join(Account, Job.account_id == Account.id)
         .options(joinedload(Job.account), joinedload(Job.community))
-        .filter(Account.type == AccountType.builder, Job.status != JobStatus.closed)
+        .filter(Account.type == AccountType.builder, Job.status.notin_((JobStatus.closed, JobStatus.void)))
         .all()
     )
 

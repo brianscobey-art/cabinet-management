@@ -139,7 +139,7 @@ def ordering_board(
     if community_id is not None:
         query = query.filter(Job.community_id == community_id)
     if not include_closed:
-        query = query.filter(Job.status != JobStatus.closed)
+        query = query.filter(Job.status.notin_((JobStatus.closed, JobStatus.void)))
     jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(500).all()
 
     checklists = {

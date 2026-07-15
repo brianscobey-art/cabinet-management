@@ -25,6 +25,7 @@ class JobStatus(str, enum.Enum):
     punch = "punch"
     warranty = "warranty"
     closed = "closed"
+    void = "void"  # cancelled/voided job — archived, never on active views
 
 
 class Job(Base):

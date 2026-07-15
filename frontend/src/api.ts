@@ -68,6 +68,7 @@ export const JOB_STATUSES = [
   "punch",
   "warranty",
   "closed",
+  "void",
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 export type JobType = "tract" | "custom" | "remodel";

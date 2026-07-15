@@ -60,7 +60,7 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
     """Active houses in a community with each one's current phase."""
     query = db.query(Job).filter(Job.community_id == community_id)
     if not include_closed:
-        query = query.filter(Job.status != JobStatus.closed)
+        query = query.filter(Job.status.notin_((JobStatus.closed, JobStatus.void)))
     jobs = query.all()
 
     latest: dict[int, PhaseUpdate] = {}

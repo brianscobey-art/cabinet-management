@@ -32,7 +32,7 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
             Job.install_date.isnot(None),
             Job.install_date >= start,
             Job.install_date <= end,
-            Job.status != JobStatus.closed,  # archived jobs stay off the calendar
+            Job.status.notin_((JobStatus.closed, JobStatus.void)),  # archived jobs stay off the calendar
         )
     )
     if account_id is not None:
