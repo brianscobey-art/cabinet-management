@@ -58,15 +58,18 @@ def _format_other_labor(labor_codes: dict | None) -> str | None:
 
 def import_rows(db: Session, rows: list[dict], source: str | None = None) -> dict:
     counts = {"matched": 0, "unmatched": 0}
+    seen: dict[int, JobCost] = {}  # dedupe rows that resolve to the same job in one batch
     for row in rows:
         job = _match_job(db, row)
         if job is None:
             counts["unmatched"] += 1
             continue
-        cost = db.query(JobCost).filter(JobCost.job_id == job.id).first()
+        cost = seen.get(job.id) or db.query(JobCost).filter(JobCost.job_id == job.id).first()
         if cost is None:
             cost = JobCost(job_id=job.id)
             db.add(cost)
+            db.flush()
+        seen[job.id] = cost
         cost.revenue = _money(row.get("revenue"))
         cost.product_cost = _money(row.get("product_cost"))
         cost.labor_revenue = _money(row.get("labor_revenue"))
