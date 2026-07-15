@@ -2,6 +2,7 @@ from app.models.account import Account, AccountType
 from app.models.community import Community
 from app.models.document import JobDocument
 from app.models.job import Job, JobStatus, JobType
+from app.models.note import JobNote
 from app.models.order import ConfirmationStatus, Order, ShipStatus, Supplier
 from app.models.ordering import OrderingChecklist
 from app.models.phase import PhaseUpdate
@@ -17,6 +18,7 @@ __all__ = [
     "HardwareSelection",
     "Job",
     "JobDocument",
+    "JobNote",
     "JobStatus",
     "JobType",
     "Order",

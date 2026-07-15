@@ -13,6 +13,7 @@ import {
 import DocumentsSection from "./DocumentsSection";
 import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
+import JobNotes from "./JobNotes";
 import OrderingCard from "./OrderingCard";
 import QuotesSection from "./QuotesSection";
 
@@ -121,6 +122,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
           </dl>
         </div>
       </div>
+
+      <JobNotes jobId={job.id} />
 
       {job.job_type === "tract" && <OrderingCard jobId={job.id} canWrite={canWrite} />}
 

@@ -511,6 +511,25 @@ h3.kb-head {
   color: var(--action-dark);
 }
 
+.note-entry {
+  border-top: 1px solid #e6ebee;
+  padding: 0.55rem 0;
+}
+
+.note-entry:first-of-type {
+  border-top: none;
+}
+
+.note-body {
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+}
+
+.note-meta {
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
 .back-row {
   display: flex;
   align-items: center;

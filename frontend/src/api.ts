@@ -172,6 +172,18 @@ export interface FeedResult {
 export const runFeedSync = () =>
   api<Record<string, FeedResult>>("/sync/feeds", { method: "POST" });
 
+export interface JobNote {
+  id: number;
+  job_id: number;
+  body: string;
+  author: string | null;
+  created_at: string;
+}
+
+export const listJobNotes = (jobId: number) => api<JobNote[]>(`/jobs/${jobId}/notes`);
+export const addJobNote = (jobId: number, body: string) =>
+  api<JobNote>(`/jobs/${jobId}/notes`, { method: "POST", body: JSON.stringify({ body }) });
+
 export const listAccounts = () => api<Account[]>("/accounts");
 export const getAccount = (id: number) => api<AccountDetail>(`/accounts/${id}`);
 export const createAccount = (data: { name: string; type: string }) =>
