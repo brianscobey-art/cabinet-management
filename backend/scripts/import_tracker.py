@@ -69,14 +69,14 @@ def derive_status(row: dict) -> JobStatus:
     if past("Full Punch Date"):
         return JobStatus.closed
     if past("Actual Install Date"):
-        return JobStatus.quality
+        return JobStatus.ndqw
     if past("Cabinet Receipt Date"):
-        return JobStatus.install
+        return JobStatus.ord
     if past("Cabinet Order Date") or clean(row.get("Cabinet PO#")):
-        return JobStatus.ordered
+        return JobStatus.ord
     if past("Actual Measure Date") or past("Req Measure Date"):
-        return JobStatus.field_measure
-    return JobStatus.quote
+        return JobStatus.preord
+    return JobStatus.track
 
 
 def load_rows(path: Path) -> list[dict]:

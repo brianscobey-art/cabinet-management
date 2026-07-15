@@ -38,7 +38,7 @@ def test_create_and_get_job(client, db):
     account_id, community_id = setup_account(client, headers)
 
     job = make_job(client, headers, account_id, community_id)
-    assert job["status"] == "quote"
+    assert job["status"] == "1.0-Track"
     assert job["sales_contact_name"] == "Brian Scobey"
 
     resp = client.get(f"/jobs/{job['id']}", headers=headers)
@@ -103,10 +103,10 @@ def test_closed_jobs_only_on_archive(client, db):
     account_id, community_id = setup_account(client, headers)
     make_job(client, headers, account_id, community_id, job_code="OPEN-1")
     done = make_job(client, headers, account_id, community_id, job_code="DONE-1", address="2 Done St", lot_number="2")
-    client.patch(f"/jobs/{done['id']}", headers=headers, json={"status": "closed"})
+    client.patch(f"/jobs/{done['id']}", headers=headers, json={"status": "6.0-Clsd"})
 
     voided = make_job(client, headers, account_id, community_id, job_code="VOID-1", address="3 Void St", lot_number="3")
-    client.patch(f"/jobs/{voided['id']}", headers=headers, json={"status": "void"})
+    client.patch(f"/jobs/{voided['id']}", headers=headers, json={"status": "8.0-Void"})
 
     default = [j["job_code"] for j in client.get("/jobs", headers=headers).json()]
     assert default == ["OPEN-1"]  # closed and void hidden by default
@@ -115,7 +115,7 @@ def test_closed_jobs_only_on_archive(client, db):
     assert archive == ["DONE-1", "VOID-1"]  # archive holds closed and void
 
     # explicit status filter can still reach closed if asked
-    explicit = [j["job_code"] for j in client.get("/jobs?status_filter=closed", headers=headers).json()]
+    explicit = [j["job_code"] for j in client.get("/jobs?status_filter=6.0-Clsd", headers=headers).json()]
     assert explicit == ["DONE-1"]
 
 
@@ -162,11 +162,11 @@ def test_update_status_and_warranty_defaults(client, db):
 
     resp = client.patch(
         f"/jobs/{job['id']}", headers=headers,
-        json={"status": "install", "install_date": "2026-08-15"},
+        json={"status": "2.0-Ord", "install_date": "2026-08-15"},
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["status"] == "install"
+    assert body["status"] == "2.0-Ord"
     # warranty_start defaults to install date per spec
     assert body["warranty_start_date"] == "2026-08-15"
 
@@ -180,4 +180,4 @@ def test_field_role_cannot_write_jobs(client, db):
     make_user(db, email="field@example.com", role=Role.field)
     field = login(client, "field@example.com")
     assert client.get(f"/jobs/{job['id']}", headers=field).status_code == 200
-    assert client.patch(f"/jobs/{job['id']}", headers=field, json={"status": "ordered"}).status_code == 403
+    assert client.patch(f"/jobs/{job['id']}", headers=field, json={"status": "2.0-Ord"}).status_code == 403

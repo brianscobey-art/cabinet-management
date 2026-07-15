@@ -4,6 +4,7 @@ import {
   Community,
   JOB_STATUSES,
   JobListItem,
+  statusSlug,
   createJob,
   listAccounts,
   listAllCommunities,
@@ -13,7 +14,7 @@ import {
 import { fmtDate } from "../format";
 
 export function statusLabel(s: string) {
-  return s.replace(/_/g, " ");
+  return s; // status values are already display-ready (1.0-Track ... 8.0-Void)
 }
 
 const isNational = (a: Account) =>
@@ -270,7 +271,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
         {!archived && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
-            {JOB_STATUSES.filter((s) => s !== "closed" && s !== "void").map((s) => (
+            {JOB_STATUSES.filter((s) => s !== "6.0-Clsd" && s !== "8.0-Void").map((s) => (
               <option key={s} value={s}>
                 {statusLabel(s)}
               </option>
@@ -320,7 +321,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 <td>{j.lot_number ?? "—"}</td>
                 <td>{j.job_type}</td>
                 <td>
-                  <span className={`badge badge-${j.status}`}>{statusLabel(j.status)}</span>
+                  <span className={`badge badge-${statusSlug(j.status)}`}>{statusLabel(j.status)}</span>
                 </td>
                 <td>{fmtDate(j.install_date)}</td>
               </tr>

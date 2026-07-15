@@ -291,7 +291,7 @@ def import_job_folder(db, folder: Path) -> str:
         address=(facts.get("address") or folder.name).title(),
         job_type=JobType.tract if ctx["acc_type"] == AccountType.builder else JobType.custom,
         plan=(facts.get("plan") or "").strip()[:100] or None,
-        status=JobStatus.ordered if ctx["kind"] == "drh" else JobStatus.quote,
+        status=JobStatus.ord if ctx["kind"] == "drh" else JobStatus.track,
         sales_contact_name=DEFAULT_SALES_CONTACT[0],
         sales_contact_phone=DEFAULT_SALES_CONTACT[1],
         sales_contact_email=DEFAULT_SALES_CONTACT[2],

@@ -25,7 +25,7 @@ def test_set_phase_and_board(client, db):
              address="12 Other St")
     closed = make_job(client, headers, account_id, community_id, job_code="DR-99", lot_number="99",
                       address="99 Done St")
-    client.patch(f"/jobs/{closed['id']}", headers=headers, json={"status": "closed"})
+    client.patch(f"/jobs/{closed['id']}", headers=headers, json={"status": "6.0-Clsd"})
 
     resp = client.post(f"/jobs/{job5['id']}/phase", headers=headers, json={"phase": "4.2"})
     assert resp.status_code == 201, resp.text

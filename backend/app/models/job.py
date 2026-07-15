@@ -14,18 +14,24 @@ class JobType(str, enum.Enum):
 
 
 class JobStatus(str, enum.Enum):
-    """Workflow stage — mirrors the lifecycle in the spec (§1)."""
+    """Brian's 16-stage job status ladder (order matters — it's the dropdown order)."""
 
-    quote = "quote"
-    field_measure = "field_measure"
-    ordered = "ordered"
-    delivery = "delivery"
-    install = "install"
-    quality = "quality"
-    punch = "punch"
-    warranty = "warranty"
-    closed = "closed"
-    void = "void"  # cancelled/voided job — archived, never on active views
+    track = "1.0-Track"
+    preord = "1.1-PreOrd"
+    ndord = "1.2-NdOrd"
+    ordprcss = "1.3-Ord Prcss"
+    ordsub = "1.4-OrdSub"
+    ordpo = "1.5-OrdPO"
+    ord = "2.0-Ord"
+    inst = "2.1-Inst"
+    ndqw = "3.0-Nd QW"
+    parts = "3.1-Parts"
+    punch = "4.0-Punch"
+    blue = "4.1-Blue"
+    epo = "5.0-EPO"
+    closed = "6.0-Clsd"
+    war = "7.0-War"
+    void = "8.0-Void"  # cancelled/voided job — archived, never on active views
 
 
 class Job(Base):
@@ -46,7 +52,9 @@ class Job(Base):
     job_type: Mapped[JobType] = mapped_column(Enum(JobType, native_enum=False, length=16))
     plan: Mapped[str | None] = mapped_column(String(100), default=None)  # house plan, e.g. "DRH1 Madison STD"
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus, native_enum=False, length=32), default=JobStatus.quote, index=True
+        Enum(JobStatus, native_enum=False, length=32, values_callable=lambda e: [m.value for m in e]),
+        default=JobStatus.track,
+        index=True,
     )
     measure_date: Mapped[date | None] = mapped_column(Date, default=None)  # field measure
     install_date: Mapped[date | None] = mapped_column(Date, default=None)

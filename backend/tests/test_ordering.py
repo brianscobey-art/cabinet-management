@@ -51,7 +51,7 @@ def test_board_lists_builder_jobs(client, db):
     assert row["checklist"]["stage1_done"] is False
 
     # closed jobs drop off unless requested
-    client.patch(f"/jobs/{job['id']}", headers=headers, json={"status": "closed"})
+    client.patch(f"/jobs/{job['id']}", headers=headers, json={"status": "6.0-Clsd"})
     assert client.get("/ordering", headers=headers).json() == []
     assert len(client.get("/ordering?include_closed=true", headers=headers).json()) == 1
 

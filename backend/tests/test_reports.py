@@ -16,7 +16,7 @@ def test_phase_report_grouping_and_sort(client, db):
     make_job(client, headers, zeta_id, zeta_comm, job_code="Z-2", lot_number="2", address="2 A St")
     make_job(client, headers, acme_id, acme_comm, job_code="A-1", lot_number="1", address="1 B St")
     closed = make_job(client, headers, acme_id, acme_comm, job_code="A-9", lot_number="9", address="9 B St")
-    client.patch(f"/jobs/{closed['id']}", headers=headers, json={"status": "closed"})
+    client.patch(f"/jobs/{closed['id']}", headers=headers, json={"status": "6.0-Clsd"})
     make_job(client, headers, retail_id, None, job_code="RET-1", address="5 Retail Ln", lot_number=None)
 
     client.post(f"/jobs/{closed['id']}/phase", headers=headers, json={"phase": "9"})  # closed job phase ignored

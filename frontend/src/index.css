@@ -326,25 +326,33 @@ td a {
   text-transform: capitalize;
 }
 
-.badge-install,
-.badge-delivery {
+/* ordered / installed — amber */
+.badge-2-0-ord,
+.badge-2-1-inst,
+.badge-1-5-ordpo {
   background: #fdf1d6;
   color: #8a6116;
 }
 
-.badge-quality,
-.badge-punch {
+/* post-install work — orange */
+.badge-3-0-nd-qw,
+.badge-3-1-parts,
+.badge-4-0-punch,
+.badge-4-1-blue,
+.badge-5-0-epo {
   background: #fde3d6;
   color: #8a3d16;
 }
 
-.badge-warranty,
-.badge-closed {
+/* done / warranty — green */
+.badge-accepted,
+.badge-6-0-clsd,
+.badge-7-0-war {
   background: #e3f1e4;
   color: #2c6b31;
 }
 
-.badge-void {
+.badge-8-0-void {
   background: #fbe2e2;
   color: #9b2020;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Account, InstallItem, getInstalls, listAccounts } from "../api";
+import { Account, InstallItem, getInstalls, listAccounts, statusSlug } from "../api";
 import { fmtDate } from "../format";
 
 type View = "month" | "week" | "day";
@@ -114,8 +114,9 @@ export default function SchedulePage() {
   );
 }
 
-// Cabinets are "ordered" once the job has reached the ordered stage or beyond.
-const isOrdered = (item: InstallItem) => item.status !== "quote" && item.status !== "field_measure";
+// Cabinets are "ordered" once a PO exists — 1.5-OrdPO and beyond; 1.0–1.4 are pre-order.
+const NOT_ORDERED = new Set(["1.0-Track", "1.1-PreOrd", "1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub"]);
+const isOrdered = (item: InstallItem) => !NOT_ORDERED.has(item.status);
 
 function Chip({ item }: { item: InstallItem }) {
   const ordered = isOrdered(item);
@@ -231,7 +232,7 @@ function DayList({ date, items }: { date: Date; items: InstallItem[] }) {
               <td>{i.community_name ?? "—"}</td>
               <td>{i.lot_number ?? "—"}</td>
               <td>
-                <span className={`badge badge-${i.status}`}>{i.status.replace(/_/g, " ")}</span>
+                <span className={`badge badge-${statusSlug(i.status)}`}>{i.status}</span>
               </td>
             </tr>
           ))}

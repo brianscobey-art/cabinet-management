@@ -136,8 +136,8 @@ def _set_feed_note(job: Job, tag: str, text: str) -> None:
 
 
 def _bump_to_ordered(job: Job) -> bool:
-    if job.status in (JobStatus.quote, JobStatus.field_measure):
-        job.status = JobStatus.ordered
+    if job.status in (JobStatus.track, JobStatus.preord, JobStatus.ndord):
+        job.status = JobStatus.ord
         return True
     return False
 
@@ -192,7 +192,7 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 address=str(row.get("Street Address") or f"{project} Lot {lot4}").title(),
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
-                status=JobStatus.ordered if row.get("PO Number") else JobStatus.quote,
+                status=JobStatus.ord if row.get("PO Number") else JobStatus.track,
                 measure_date=measure,
                 install_date=install,
                 warranty_start_date=install,
@@ -332,7 +332,7 @@ def sync_century(db: Session, path: Path) -> dict:
                 address=address,
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
-                status=JobStatus.ordered if ordered and ordered <= date.today() else JobStatus.quote,
+                status=JobStatus.ord if ordered and ordered <= date.today() else JobStatus.track,
                 measure_date=measure,
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],

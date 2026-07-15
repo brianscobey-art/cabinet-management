@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   JOB_STATUSES,
+  statusSlug,
   JobDetail,
   addHardware,
   addRoom,
@@ -54,7 +55,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             ))}
           </select>
         ) : (
-          <span className={`badge badge-${job.status}`}>{statusLabel(job.status)}</span>
+          <span className={`badge badge-${statusSlug(job.status)}`}>{statusLabel(job.status)}</span>
         )}
       </div>
 

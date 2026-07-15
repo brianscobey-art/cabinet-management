@@ -59,18 +59,27 @@ export interface HardwareSelection {
 }
 
 export const JOB_STATUSES = [
-  "quote",
-  "field_measure",
-  "ordered",
-  "delivery",
-  "install",
-  "quality",
-  "punch",
-  "warranty",
-  "closed",
-  "void",
+  "1.0-Track",
+  "1.1-PreOrd",
+  "1.2-NdOrd",
+  "1.3-Ord Prcss",
+  "1.4-OrdSub",
+  "1.5-OrdPO",
+  "2.0-Ord",
+  "2.1-Inst",
+  "3.0-Nd QW",
+  "3.1-Parts",
+  "4.0-Punch",
+  "4.1-Blue",
+  "5.0-EPO",
+  "6.0-Clsd",
+  "7.0-War",
+  "8.0-Void",
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
+
+// "3.0-Nd QW" -> "3-0-nd-qw" for CSS badge classes
+export const statusSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 export type JobType = "tract" | "custom" | "remodel";
 
 export interface JobListItem {

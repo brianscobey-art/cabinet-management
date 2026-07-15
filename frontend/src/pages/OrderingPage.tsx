@@ -6,6 +6,7 @@ import {
   getOrderingBoard,
   listAccounts,
   listCommunities,
+  statusSlug,
   updateOrderingChecklist,
 } from "../api";
 import { statusLabel } from "./JobsPage";
@@ -142,7 +143,7 @@ export default function OrderingPage({ canWrite }: { canWrite: boolean }) {
                   );
                 })}
                 <td>
-                  <span className={`badge badge-${row.status}`}>{statusLabel(row.status)}</span>
+                  <span className={`badge badge-${statusSlug(row.status)}`}>{statusLabel(row.status)}</span>
                 </td>
               </tr>
             ))}

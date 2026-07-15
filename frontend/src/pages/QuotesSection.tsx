@@ -93,7 +93,7 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
                   </button>
                 </td>
                 <td>
-                  <span className={`badge ${q.status === "accepted" ? "badge-closed" : ""}`}>{q.status}</span>
+                  <span className={`badge ${q.status === "accepted" ? "badge-accepted" : ""}`}>{q.status}</span>
                 </td>
                 <td>{q.line_count}</td>
                 <td>{money(q.list_total)}</td>
@@ -281,7 +281,7 @@ function QuoteLines({
     <div className="card">
       <div className="page-head">
         <h3>
-          {quote.name} — lines {quote.status === "accepted" && <span className="badge badge-closed">accepted</span>}
+          {quote.name} — lines {quote.status === "accepted" && <span className="badge badge-accepted">accepted</span>}
         </h3>
         <button className="link-btn" onClick={onClose}>
           close
