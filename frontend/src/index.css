@@ -511,6 +511,25 @@ h3.kb-head {
   color: var(--action-dark);
 }
 
+.back-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.back-btn {
+  background: #fff;
+  color: var(--action);
+  border: 1px solid var(--action);
+  border-radius: 8px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.88rem;
+}
+
+.back-btn:hover:not(:disabled) {
+  background: #fdeee6;
+}
+
 .date-input {
   padding: 0.15rem 0.3rem;
   font-size: 0.85rem;

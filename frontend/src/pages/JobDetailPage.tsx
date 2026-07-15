@@ -32,8 +32,11 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
 
   return (
     <div>
-      <p>
+      <p className="back-row">
         <a href="#/jobs">← Jobs</a>
+        <button className="back-btn" onClick={() => window.history.back()} title="Back to where you came from">
+          ← Back
+        </button>
       </p>
       <div className="page-head">
         <h2>
