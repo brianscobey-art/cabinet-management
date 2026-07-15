@@ -229,6 +229,13 @@ CENTURY_PLACEHOLDER_CONTACTS = {"TBD", "Century Superintendent"}
 _FAKE_PHONES = {"555-555-5555", "5555555555"}
 
 
+def _century_subdivision(name) -> str:
+    """SupplyPro lists some communities twice ('Grand Oaks at Callaway' and
+    'LCA - Grand Oaks at Callaway') — the LCA prefix is the same place."""
+    s = str(name).strip()
+    return s[6:].strip() if s.upper().startswith("LCA - ") else s
+
+
 def century_candidates(directory: Path) -> list[Path]:
     """SupplyPro Century files, newest first by the MMDDYY in the filename
     (revision R.N breaks ties). Files without a date code are ignored."""
@@ -273,13 +280,13 @@ def sync_century(db: Session, path: Path) -> dict:
         sub, lot = row.get("Subdivision"), row.get("Lot")
         if not sub or lot is None:
             continue
-        records[(str(sub).strip(), _canon_lot(lot))] = {"jobs": row}
+        records[(_century_subdivision(sub), _canon_lot(lot))] = {"jobs": row}
     if "Cabinet POs" in wb.sheetnames:
         for row in read_tab("Cabinet POs"):
             sub, lot = row.get("Subdivision"), row.get("Lot")
             if not sub or lot is None:
                 continue
-            records.setdefault((str(sub).strip(), _canon_lot(lot)), {})["pos"] = row
+            records.setdefault((_century_subdivision(sub), _canon_lot(lot)), {})["pos"] = row
     wb.close()
     cleanup()
 
