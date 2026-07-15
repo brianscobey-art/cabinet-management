@@ -361,7 +361,8 @@ function NewJobForm({ accounts, onCreated }: { accounts: Account[]; onCreated: (
 
   useEffect(() => {
     if (form.account_id) {
-      listCommunities(Number(form.account_id)).then(setCommunities).catch(() => {});
+      // all communities here — a new job may be the first in a new community
+      listCommunities(Number(form.account_id), false).then(setCommunities).catch(() => {});
     } else {
       setCommunities([]);
     }

@@ -11,7 +11,7 @@ from app.api.schemas import (
     CommunityOut,
 )
 from app.database import get_db
-from app.models import Account, Community
+from app.models import Account, Community, Job, JobStatus
 
 router = APIRouter(tags=["accounts"])
 
@@ -75,10 +75,19 @@ def update_account(account_id: int, payload: AccountUpdate, db: Session = Depend
 
 
 @router.get("/communities", response_model=list[CommunityOut], dependencies=[Depends(read_access)])
-def list_communities(account_id: int | None = None, db: Session = Depends(get_db)):
+def list_communities(
+    account_id: int | None = None, active_only: bool = False, db: Session = Depends(get_db)
+):
     q = db.query(Community)
     if account_id is not None:
         q = q.filter(Community.account_id == account_id)
+    if active_only:
+        # only communities we currently have live jobs in
+        live = db.query(Job.community_id).filter(
+            Job.community_id.isnot(None),
+            Job.status.notin_((JobStatus.closed, JobStatus.void)),
+        )
+        q = q.filter(Community.id.in_(live))
     return q.order_by(Community.name).all()
 
 

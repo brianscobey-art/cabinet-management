@@ -169,9 +169,10 @@ export const createAccount = (data: { name: string; type: string }) =>
   api<Account>("/accounts", { method: "POST", body: JSON.stringify(data) });
 export const createCommunity = (data: { account_id: number; name: string; market?: string }) =>
   api<Community>("/communities", { method: "POST", body: JSON.stringify(data) });
-export const listCommunities = (accountId: number) =>
-  api<Community[]>(`/communities?account_id=${accountId}`);
-export const listAllCommunities = () => api<Community[]>("/communities");
+export const listCommunities = (accountId: number, activeOnly = true) =>
+  api<Community[]>(`/communities?account_id=${accountId}${activeOnly ? "&active_only=true" : ""}`);
+export const listAllCommunities = (activeOnly = true) =>
+  api<Community[]>(`/communities${activeOnly ? "?active_only=true" : ""}`);
 
 export const listJobs = (params: Record<string, string> = {}) => {
   const qs = new URLSearchParams(params).toString();
