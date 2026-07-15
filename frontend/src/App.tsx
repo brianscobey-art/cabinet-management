@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { fetchMe, getToken, login, setToken, User } from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
+import FormsPage from "./pages/FormsPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
@@ -48,6 +49,7 @@ export default function App() {
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
   else if (hash.startsWith("#/reports")) page = <ReportsPage hash={hash} />;
+  else if (hash.startsWith("#/forms")) page = <FormsPage />;
   else if (hash.startsWith("#/archive")) page = <JobsPage archived />;
   else page = <JobsPage />;
 
@@ -67,6 +69,7 @@ export default function App() {
               !hash.startsWith("#/schedule") &&
               !hash.startsWith("#/phases") &&
               !hash.startsWith("#/reports") &&
+              !hash.startsWith("#/forms") &&
               !hash.startsWith("#/archive")
                 ? "active"
                 : ""
@@ -85,6 +88,9 @@ export default function App() {
           </a>
           <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
             Accounts
+          </a>
+          <a href="#/forms" className={hash.startsWith("#/forms") ? "active" : ""}>
+            Forms
           </a>
           <a href="#/reports" className={hash.startsWith("#/reports") ? "active" : ""}>
             Reports
