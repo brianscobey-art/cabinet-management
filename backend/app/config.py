@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
     feed_sync_enabled: bool = True
     domo_export_dir: str = r"C:\Users\Brian SE6\Downloads\domo-kb-tool"  # Domo cost JSON exports land here
+    domo_instance: str = "carterlumber.domo.com"
+    domo_dataset_id: str = "c9b70636-b093-4bcd-90e4-8f4b99e12df5"  # Sales Details PDP dataset
+    domo_access_token: str = ""  # DOMO_ACCESS_TOKEN in .env enables live server-side pulls
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

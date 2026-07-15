@@ -370,5 +370,15 @@ def job_pl_report(db: Session = Depends(get_db)):
 
 @router.post("/reports/job-pl/refresh", dependencies=[Depends(write_access)])
 def job_pl_refresh(db: Session = Depends(get_db)):
-    """Re-import the newest Domo cost export (the report's Update button)."""
+    """The report's Update button: live-pull from Domo if a token is set,
+    otherwise re-import the newest KB Job Costs*.json export file."""
+    from app.domo import pull_and_import, token_configured
+
+    if token_configured():
+        result = pull_and_import(db)
+        if "error" not in result:
+            return result
+        # token misconfigured/expired — fall back to the file so the button still works
+        file_result = refresh_from_file(db)
+        return {**file_result, "domo_error": result["error"]}
     return refresh_from_file(db)
