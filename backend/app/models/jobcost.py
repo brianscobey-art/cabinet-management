@@ -29,8 +29,10 @@ class JobCost(Base):
     # shown for transparency but excluded from the cabinet margin
     wash_labor_net: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     margin: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
-    # labor billed on codes != C9009, e.g. "C9091: -$4,736.12; C9005: $1,577.78"
+    # labor billed on codes != C9009, e.g. "C9005: $1,577.78; C9018: -$34.00"
     other_labor_codes: Mapped[str | None] = mapped_column(Text, default=None)
+    # the excluded wash codes per house, e.g. "C9091: -$4,736.12; C9002: -$540.00"
+    wash_labor_codes: Mapped[str | None] = mapped_column(Text, default=None)
     source_file: Mapped[str | None] = mapped_column(String(255), default=None)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

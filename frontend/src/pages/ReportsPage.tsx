@@ -138,6 +138,12 @@ const signed = (v: number) =>
   })}`;
 const pct = (v: number | null) => (v != null ? `${v}%` : "—");
 
+const WASH_CODE_NAMES: Record<string, string> = {
+  C9091: "C9091 — install-sales overhead/allocation",
+  C9002: "C9002 — installed-sales labor rebill",
+};
+const washCodeLabel = (code: string) => WASH_CODE_NAMES[code] ?? code;
+
 function JobPLPrintSummary({ data }: { data: JobPLReport }) {
   const byBuilder = useMemo(() => {
     const m = new Map<
@@ -366,7 +372,9 @@ function JobPLView() {
                   <td className="num">{r.other_labor_net ? signed(r.other_labor_net) : "—"}</td>
                   <td className="num">{money(r.margin)}</td>
                   <td className="num">{r.margin_pct != null ? `${r.margin_pct}%` : "—"}</td>
-                  <td className="num muted">{r.wash_labor_net ? signed(r.wash_labor_net) : "—"}</td>
+                  <td className="num muted" title={r.wash_labor_codes ?? ""}>
+                    {r.wash_labor_net ? signed(r.wash_labor_net) : "—"}
+                  </td>
                   <td>{r.other_labor_codes ?? ""}</td>
                 </tr>
               ))}
@@ -420,6 +428,42 @@ function OtherLaborView() {
       <div className="print-title print-only">
         Carter Kitchen and Bath — Labor on Non-C9009 Codes — {fmtDate(new Date().toISOString())}
       </div>
+
+      {data.wash_by_code.length > 0 && (
+        <div className="wash-summary">
+          <h3>Excluded overhead &amp; rebill (not in margin)</h3>
+          <table className="wash-code-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th className="num">Net on cabinet jobs</th>
+                <th className="num">Houses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.wash_by_code.map((w) => (
+                <tr key={w.code}>
+                  <td>{washCodeLabel(w.code)}</td>
+                  <td className="num">{signed(w.total)}</td>
+                  <td className="num">{w.houses}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>
+                  <strong>Total excluded</strong>
+                </td>
+                <td className="num">
+                  <strong>{signed(data.total_wash_labor_net)}</strong>
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
       <div className="table-wrap">
         <table>
           <thead>
@@ -432,6 +476,7 @@ function OtherLaborView() {
               <th className="num">Other labor (net)</th>
               <th className="num">All-in margin</th>
               <th className="num">Overhead (excl)</th>
+              <th>Overhead codes</th>
               <th>Codes</th>
             </tr>
           </thead>
@@ -448,6 +493,7 @@ function OtherLaborView() {
                 <td className="num">{signed(r.other_labor_net)}</td>
                 <td className="num">{money(r.all_in_margin)}</td>
                 <td className="num muted">{r.wash_labor_net ? signed(r.wash_labor_net) : "—"}</td>
+                <td className="muted">{r.wash_labor_codes ?? ""}</td>
                 <td>{r.other_labor_codes ?? ""}</td>
               </tr>
             ))}
@@ -469,15 +515,15 @@ function OtherLaborView() {
               <td className="num">
                 <strong>{signed(data.total_wash_labor_net)}</strong>
               </td>
-              <td />
+              <td colSpan={2} />
             </tr>
           </tfoot>
         </table>
       </div>
       <p className="pl-note">
-        "Other labor (net)" is folded into the all-in margin. The excluded overhead column is C9091
-        install-sales allocation and C9002 labor rebill ({data.excluded_codes.join(", ")}) parked on these
-        jobs by miscoding — shown for transparency but not counted as cabinet cost.
+        "Other labor (net)" is folded into the all-in margin. The excluded overhead — C9091 install-sales
+        allocation and C9002 labor rebill ({data.excluded_codes.join(", ")}) — is parked on these jobs by
+        miscoding; it nets to ~$0 company-wide and is shown for transparency but not counted as cabinet cost.
       </p>
     </>
   );

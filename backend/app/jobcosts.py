@@ -81,19 +81,20 @@ def _fmt_signed(a: Decimal) -> str:
     return f"-${abs(a):,.2f}" if a < 0 else f"${a:,.2f}"
 
 
-def _other_labor(labor_codes: dict | None) -> tuple[Decimal, str | None, Decimal]:
+def _other_labor(labor_codes: dict | None) -> tuple[Decimal, str | None, Decimal, str | None]:
     """Split net P&L of non-C9009 labor into real cabinet labor vs overhead wash.
 
     Each labor_codes value is already the net dollars for that code on the job.
-    Returns (included_net, included_display, wash_net):
-      - included_net folds into the cabinet margin (real miscoded install labor),
-      - wash_net is the excluded C9091/C9002 overhead/rebill parked on the job.
+    Returns (included_net, included_display, wash_net, wash_display):
+      - included_net / included_display: real miscoded install labor (folds into margin),
+      - wash_net / wash_display: the excluded C9091/C9002 overhead/rebill parked here.
     """
     if not labor_codes:
-        return Decimal("0"), None, Decimal("0")
+        return Decimal("0"), None, Decimal("0"), None
     included = Decimal("0")
     wash = Decimal("0")
     parts = []
+    wash_parts = []
     for code, amt in labor_codes.items():
         code_u = str(code).upper()
         if code_u == K_AND_B_LABOR_CODE:
@@ -103,10 +104,11 @@ def _other_labor(labor_codes: dict | None) -> tuple[Decimal, str | None, Decimal
             continue
         if code_u in MARGIN_EXCLUDED_LABOR_CODES:
             wash += a
+            wash_parts.append(f"{code}: {_fmt_signed(a)}")
         else:
             included += a
             parts.append(f"{code}: {_fmt_signed(a)}")
-    return included, ("; ".join(parts) or None), wash
+    return included, ("; ".join(parts) or None), wash, ("; ".join(wash_parts) or None)
 
 
 def import_rows(db: Session, rows: list[dict], source: str | None = None) -> dict:
@@ -127,10 +129,11 @@ def import_rows(db: Session, rows: list[dict], source: str | None = None) -> dic
         cost.product_cost = _money(row.get("product_cost"))
         cost.labor_revenue = _money(row.get("labor_revenue"))
         cost.labor_cost = _money(row.get("labor_cost"))
-        other_net, other_str, wash_net = _other_labor(row.get("labor_codes"))
+        other_net, other_str, wash_net, wash_str = _other_labor(row.get("labor_codes"))
         cost.other_labor_net = other_net if other_str else None
         cost.other_labor_codes = other_str
         cost.wash_labor_net = wash_net if wash_net != 0 else None
+        cost.wash_labor_codes = wash_str
         rev = (cost.revenue or 0) + (cost.labor_revenue or 0)
         cst = (cost.product_cost or 0) + (cost.labor_cost or 0)
         # all-in cabinet margin: product + C9009 + real non-C9009 labor (wash codes excluded)

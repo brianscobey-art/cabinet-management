@@ -419,6 +419,7 @@ export interface JobPLRow {
   margin: number;
   margin_pct: number | null;
   other_labor_codes: string | null;
+  wash_labor_codes: string | null;
 }
 export interface JobPLReport {
   rows: JobPLRow[];
@@ -449,6 +450,12 @@ export interface OtherLaborRow {
   all_in_margin: number;
   wash_labor_net: number;
   other_labor_codes: string | null;
+  wash_labor_codes: string | null;
+}
+export interface WashCodeTotal {
+  code: string;
+  total: number;
+  houses: number;
 }
 export interface OtherLaborReport {
   rows: OtherLaborRow[];
@@ -458,6 +465,7 @@ export interface OtherLaborReport {
   total_all_in_margin: number;
   total_wash_labor_net: number;
   excluded_codes: string[];
+  wash_by_code: WashCodeTotal[];
   updated_at: string | null;
 }
 export const getOtherLabor = () => api<OtherLaborReport>("/reports/other-labor");

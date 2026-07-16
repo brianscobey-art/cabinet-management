@@ -23,6 +23,15 @@ def _d(value) -> float:
     return float(value) if value is not None else 0.0
 
 
+def _parse_signed_money(s: str) -> float:
+    """'-$1,234.56' -> -1234.56 (parses the fixed format the app writes)."""
+    s = s.strip().replace("$", "").replace(",", "")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
 class PhaseReportRow(BaseModel):
     account_name: str
     community_name: str | None
@@ -332,6 +341,7 @@ class JobPLRow(BaseModel):
     margin: float
     margin_pct: float | None
     other_labor_codes: str | None
+    wash_labor_codes: str | None
 
 
 class JobPLReport(BaseModel):
@@ -362,7 +372,7 @@ def _pl_row(job: Job, cost: JobCost) -> JobPLRow:
         labor_revenue=_d(cost.labor_revenue), labor_cost=_d(cost.labor_cost),
         other_labor_net=round(other_net, 2), wash_labor_net=round(_d(cost.wash_labor_net), 2),
         margin=round(margin, 2), margin_pct=round(margin / rev * 100, 1) if rev else None,
-        other_labor_codes=cost.other_labor_codes,
+        other_labor_codes=cost.other_labor_codes, wash_labor_codes=cost.wash_labor_codes,
     )
 
 
@@ -412,6 +422,13 @@ class OtherLaborRow(BaseModel):
     all_in_margin: float      # c9009_margin + other_labor_net
     wash_labor_net: float     # C9091/C9002 overhead & rebill parked here (excluded)
     other_labor_codes: str | None
+    wash_labor_codes: str | None
+
+
+class WashCodeTotal(BaseModel):
+    code: str
+    total: float
+    houses: int
 
 
 class OtherLaborReport(BaseModel):
@@ -422,6 +439,7 @@ class OtherLaborReport(BaseModel):
     total_all_in_margin: float
     total_wash_labor_net: float
     excluded_codes: list[str]
+    wash_by_code: list[WashCodeTotal]
     updated_at: datetime | None
 
 
@@ -448,10 +466,25 @@ def other_labor_report(db: Session = Depends(get_db)):
             all_in_margin=round(all_in, 2),
             wash_labor_net=round(_d(cost.wash_labor_net), 2),
             other_labor_codes=cost.other_labor_codes,
+            wash_labor_codes=cost.wash_labor_codes,
         ))
         if cost.updated_at and (latest is None or cost.updated_at > latest):
             latest = cost.updated_at
     rows.sort(key=lambda r: r.other_labor_net)  # most negative (biggest drag) first
+
+    # per-code totals of the excluded overhead across every house (not just the rows above)
+    by_code: dict[str, list] = {}
+    for (wc,) in db.query(JobCost.wash_labor_codes).filter(JobCost.wash_labor_codes.isnot(None)).all():
+        for part in wc.split("; "):
+            code, _, amt = part.partition(": ")
+            slot = by_code.setdefault(code, [0.0, 0])
+            slot[0] += _parse_signed_money(amt)
+            slot[1] += 1
+    wash_by_code = [
+        WashCodeTotal(code=c, total=round(v[0], 2), houses=v[1])
+        for c, v in sorted(by_code.items(), key=lambda kv: kv[1][0])  # biggest drag first
+    ]
+
     return OtherLaborReport(
         rows=rows,
         count=len(rows),
@@ -460,6 +493,7 @@ def other_labor_report(db: Session = Depends(get_db)):
         total_all_in_margin=round(sum(r.all_in_margin for r in rows), 2),
         total_wash_labor_net=round(sum(r.wash_labor_net for r in rows), 2),
         excluded_codes=sorted(MARGIN_EXCLUDED_LABOR_CODES),
+        wash_by_code=wash_by_code,
         updated_at=latest,
     )
 
