@@ -11,6 +11,7 @@ latest KB Job Costs*.json export file.
 import json
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -47,62 +48,104 @@ def _prefix(job_field) -> str:
     return str(job_field).split(":")[0].strip()
 
 
-def pull_and_import(db: Session) -> dict:
-    """Live-pull product + labor actuals from Domo and import as job costs."""
-    if not token_configured():
-        return {"error": "no DOMO_ACCESS_TOKEN configured"}
-    try:
-        prod_rows = _domo_sql(
-            "SELECT `job`, SUM(`sales`) AS sales, SUM(`cost`) AS cost "
-            "FROM table WHERE `job` LIKE 'G%' GROUP BY `job`"
-        )
-        labor_rows = _domo_sql(
-            "SELECT `job`, `sku`, SUM(`sales`) AS sales, SUM(`cost`) AS cost "
-            "FROM table WHERE `job` LIKE 'I%' AND `sku` LIKE 'C90%' GROUP BY `job`, `sku`"
-        )
-    except urllib.error.HTTPError as e:
-        return {"error": f"Domo returned {e.code} — token invalid or expired?"}
-    except urllib.error.URLError as e:
-        return {"error": f"could not reach Domo: {e.reason}"}
+def _is_labor(sku: str) -> bool:
+    return sku.upper().startswith("C90")  # installed-sales labor family (C90xx)
 
-    prod: dict[str, dict] = {}
-    for r in prod_rows:
-        c = _prefix(r[0])
-        p = prod.setdefault(c, {"sales": 0.0, "cost": 0.0})
-        p["sales"] += r[1] or 0
-        p["cost"] += r[2] or 0
 
-    labor: dict[str, dict] = {}
-    for r in labor_rows:
-        c = _prefix(r[0])
+def combine_domo_rows(db: Session, all_rows: list) -> list[dict]:
+    """Turn raw Domo [job, sku, sales, cost] rows into per-house cost dicts.
+
+    A house's dollars live on its I-code while active and are rebilled to its
+    G-code once complete, so BOTH codes are combined per house. Within each code,
+    product is the non-C90xx SKUs and labor is the C90xx SKUs (C9009 = K&B install
+    labor; other C90xx net folds in / washes out downstream).
+    """
+    # code prefix -> {"prod": {sales, cost}, "labor": {sku: {sales, cost}}}
+    by_code: dict[str, dict] = {}
+    for r in all_rows:
+        code = _prefix(r[0])
         sku = _prefix(r[1])
-        L = labor.setdefault(c, {})
-        s = L.setdefault(sku, {"sales": 0.0, "cost": 0.0})
-        s["sales"] += r[2] or 0
-        s["cost"] += r[3] or 0
+        sales, cost = r[2] or 0, r[3] or 0
+        slot = by_code.setdefault(code, {"prod": {"sales": 0.0, "cost": 0.0}, "labor": {}})
+        if _is_labor(sku):
+            s = slot["labor"].setdefault(sku.upper(), {"sales": 0.0, "cost": 0.0})
+            s["sales"] += sales
+            s["cost"] += cost
+        else:
+            slot["prod"]["sales"] += sales
+            slot["prod"]["cost"] += cost
 
     rows = []
     for job in db.query(Job).filter((Job.g_code.isnot(None)) | (Job.i_code.isnot(None))).all():
-        p = prod.get(job.g_code) if job.g_code else None
-        L = labor.get(job.i_code, {}) if job.i_code else {}
-        if not p and not L:
+        prod = {"sales": 0.0, "cost": 0.0}
+        labor: dict[str, dict] = {}
+        seen = False
+        for code in (job.g_code, job.i_code):  # combine active (I) + rebilled/complete (G)
+            b = by_code.get(code) if code else None
+            if not b:
+                continue
+            seen = True
+            prod["sales"] += b["prod"]["sales"]
+            prod["cost"] += b["prod"]["cost"]
+            for sku, v in b["labor"].items():
+                s = labor.setdefault(sku, {"sales": 0.0, "cost": 0.0})
+                s["sales"] += v["sales"]
+                s["cost"] += v["cost"]
+        if not seen:
             continue
-        c9009 = L.get(K_AND_B_LABOR_CODE, {"sales": 0, "cost": 0})
-        # net P&L (billed − cost) per non-C9009 code, so it can be folded into margin
+        c9009 = labor.get(K_AND_B_LABOR_CODE, {"sales": 0, "cost": 0})
         others = {
             sku: round(v["sales"] - v["cost"], 2)
-            for sku, v in L.items()
+            for sku, v in labor.items()
             if sku != K_AND_B_LABOR_CODE
         }
         rows.append({
             "job_code": job.job_code,
             "g_code": job.g_code,
             "i_code": job.i_code,
-            "revenue": round(p["sales"], 2) if p else 0,
-            "product_cost": round(p["cost"], 2) if p else 0,
+            "revenue": round(prod["sales"], 2),
+            "product_cost": round(prod["cost"], 2),
             "labor_revenue": round(c9009["sales"], 2),
             "labor_cost": round(c9009["cost"], 2),
             "labor_codes": others,
         })
-    result = import_rows(db, rows, source="Domo live pull")
-    return {"source": "Domo live pull", **result}
+    return rows
+
+
+def pull_and_import(db: Session) -> dict:
+    """Live-pull Domo actuals (needs a token) and import as job costs."""
+    if not token_configured():
+        return {"error": "no DOMO_ACCESS_TOKEN configured"}
+    try:
+        all_rows = _domo_sql(
+            "SELECT `job`, `sku`, SUM(`sales`) AS sales, SUM(`cost`) AS cost "
+            "FROM table WHERE `job` LIKE 'G%' OR `job` LIKE 'I%' GROUP BY `job`, `sku`"
+        )
+    except urllib.error.HTTPError as e:
+        return {"error": f"Domo returned {e.code} — token invalid or expired?"}
+    except urllib.error.URLError as e:
+        return {"error": f"could not reach Domo: {e.reason}"}
+    rows = combine_domo_rows(db, all_rows)
+    return {"source": "Domo live pull", **import_rows(db, rows, source="Domo live pull")}
+
+
+def latest_raw_export(directory: Path) -> Path | None:
+    files = [f for f in directory.glob("KB Domo Raw*.json") if not f.name.startswith("~")]
+    return max(files, key=lambda f: f.stat().st_mtime) if files else None
+
+
+def import_raw_file(db: Session) -> dict:
+    """Import the newest raw Domo dump (KB Domo Raw*.json: job/sku/sales/cost rows),
+    combining each house's G-code and I-code."""
+    directory = Path(get_settings().domo_export_dir)
+    f = latest_raw_export(directory)
+    if f is None:
+        return {"error": "no 'KB Domo Raw*.json' export found — run the Domo cost pull first"}
+    data = json.loads(f.read_text(encoding="utf-8"))
+    raw = data.get("rows", data) if isinstance(data, dict) else data
+    all_rows = [
+        (r["job"], r["sku"], r.get("sales"), r.get("cost")) if isinstance(r, dict) else r
+        for r in raw
+    ]
+    rows = combine_domo_rows(db, all_rows)
+    return {"file": f.name, **import_rows(db, rows, source=f.name)}

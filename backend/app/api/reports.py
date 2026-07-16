@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -500,17 +501,24 @@ def other_labor_report(db: Session = Depends(get_db)):
 
 @router.post("/reports/job-pl/refresh", dependencies=[Depends(write_access)])
 def job_pl_refresh(db: Session = Depends(get_db)):
-    """The report's Update button: live-pull from Domo if a token is set,
-    otherwise re-import the newest KB Job Costs*.json export file."""
-    from app.domo import pull_and_import, token_configured
+    """The report's Update button. Preference order:
+    1. live token pull, 2. newest raw Domo dump (KB Domo Raw*.json — G+I combined),
+    3. legacy pre-combined KB Job Costs*.json. Options 1–2 combine each house's
+    active (I-code) and rebilled/complete (G-code) dollars; option 3 is whatever
+    the old export already contained."""
+    from app.config import get_settings
+    from app.domo import import_raw_file, latest_raw_export, pull_and_import, token_configured
 
     if token_configured():
         result = pull_and_import(db)
         if "error" not in result:
             return result
-        # token misconfigured/expired — fall back to the file so the button still works
-        file_result = refresh_from_file(db)
-        return {**file_result, "domo_error": result["error"]}
+        # token misconfigured/expired — fall back so the button still works
+        if latest_raw_export(Path(get_settings().domo_export_dir)):
+            return {**import_raw_file(db), "domo_error": result["error"]}
+        return {**refresh_from_file(db), "domo_error": result["error"]}
+    if latest_raw_export(Path(get_settings().domo_export_dir)):
+        return import_raw_file(db)
     return refresh_from_file(db)
 
 
