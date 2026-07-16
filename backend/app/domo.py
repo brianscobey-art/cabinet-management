@@ -117,9 +117,14 @@ def pull_and_import(db: Session) -> dict:
     if not token_configured():
         return {"error": "no DOMO_ACCESS_TOKEN configured"}
     try:
+        # Installed-sales job codes are whole-house (all trades), so restrict product to
+        # the Kitchen and Bath category; labor is the C90xx SKUs (C9009 = K&B install).
         all_rows = _domo_sql(
-            "SELECT `job`, `sku`, SUM(`sales`) AS sales, SUM(`cost`) AS cost "
-            "FROM table WHERE `job` LIKE 'G%' OR `job` LIKE 'I%' GROUP BY `job`, `sku`"
+            "SELECT SUBSTRING_INDEX(`job`,':',1) AS job, `sku` AS sku, "
+            "SUM(`sales`) AS sales, SUM(`cost`) AS cost FROM table "
+            "WHERE (`job` LIKE 'G%' OR `job` LIKE 'I%') "
+            "AND (`product category` = 'Kitchen and Bath' OR `sku` LIKE 'C90%') "
+            "GROUP BY SUBSTRING_INDEX(`job`,':',1), `sku`"
         )
     except urllib.error.HTTPError as e:
         return {"error": f"Domo returned {e.code} — token invalid or expired?"}
