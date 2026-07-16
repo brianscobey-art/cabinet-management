@@ -937,35 +937,6 @@ th.num {
   color: #595959;
 }
 
-/* Excluded overhead (wash-code) summary on the non-C9009 labor report */
-.wash-summary {
-  margin: 0.25rem 0 1.25rem;
-}
-
-.wash-summary h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.9rem;
-  color: var(--brand-ink);
-}
-
-.wash-code-table {
-  border-collapse: collapse;
-  min-width: 22rem;
-  font-size: 0.9rem;
-}
-
-.wash-code-table th,
-.wash-code-table td {
-  padding: 0.3rem 0.75rem;
-  border-bottom: 1px solid #e4ebec;
-  text-align: left;
-}
-
-.wash-code-table tfoot td {
-  border-top: 2px solid #595959;
-  border-bottom: none;
-}
-
 .report-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
