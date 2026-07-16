@@ -81,6 +81,9 @@ class Job(Base):
     margin_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     margin_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), default=None)
     po_status: Mapped[str | None] = mapped_column(String(32), default=None)
+    # builder-paid detail from the DRH Combined report (used as revenue in the P&L)
+    po_check_number: Mapped[str | None] = mapped_column(String(40), default=None)
+    po_paid_date: Mapped[date | None] = mapped_column(Date, default=None)  # PO Status Date when paid
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(

@@ -207,6 +207,8 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
         po_number = _po_str(row.get("PO Number"))
         po_amount = _money(row.get("PO Amount"))
         po_status = str(row.get("PO Status")).strip() if row.get("PO Status") else None
+        po_check = _po_str(row.get("Check #"))
+        po_paid = _as_date(row.get("PO Status Date")) if (po_status or "").lower() == "paid" else None
 
         job = _find_job(db, community, lot4)
         if job is None:
@@ -226,6 +228,8 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 builder_po=po_number,
                 po_amount=po_amount,
                 po_status=po_status,
+                po_check_number=po_check,
+                po_paid_date=po_paid,
                 salesperson=resolve_salesperson(account_name),
                 sales_contact_name=DEFAULT_SALES_CONTACT[0],
                 sales_contact_phone=DEFAULT_SALES_CONTACT[1],
@@ -246,7 +250,8 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 job.measure_date = measure
                 changed = True
             # PO facts are builder-authoritative — refresh from the daily VS report
-            for attr, value in (("builder_po", po_number), ("po_amount", po_amount), ("po_status", po_status)):
+            for attr, value in (("builder_po", po_number), ("po_amount", po_amount), ("po_status", po_status),
+                                ("po_check_number", po_check), ("po_paid_date", po_paid)):
                 if value is not None and getattr(job, attr) != value:
                     setattr(job, attr, value)
                     changed = True

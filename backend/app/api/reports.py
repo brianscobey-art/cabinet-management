@@ -1,14 +1,17 @@
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import read_access, write_access
 from app.database import get_db
-from app.jobcosts import refresh_from_file
-from app.models import Account, AccountType, Community, Job, JobCost, JobDocument, JobStatus, PhaseUpdate
+from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_from_file
+from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
+from app.models import (
+    Account, AccountType, Community, DomoTxn, Job, JobCost, JobDocument, JobStatus, PhaseUpdate,
+)
 from app.phases import PHASE_LABELS
 
 router = APIRouter(tags=["reports"])
@@ -105,25 +108,33 @@ class ReportInfo(BaseModel):
     key: str
     name: str
     description: str
+    category: str
 
+
+# Category display order on the Reports tab
+REPORT_CATEGORIES = ["Accounting", "Operations", "Sales"]
 
 REPORTS = [
-    ReportInfo(key="phases", name="Phase Report",
-               description="Active houses by builder, community, and lot with current construction phase."),
-    ReportInfo(key="open-po", name="Open PO Report",
-               description="Every job with an open builder PO, its amount, and totals by builder and community."),
-    ReportInfo(key="po-status", name="PO Status Summary",
+    ReportInfo(key="job-pl", name="Job Cost P&L (Domo)", category="Accounting",
+               description="Per-house all-in P&L from Domo actual costs by G/I code — product, C9009 install labor, and the net of every other labor code folded into margin. Click Update to re-pull."),
+    ReportInfo(key="domo-pl", name="Domo P&L by Period", category="Accounting",
+               description="Department P&L straight from Domo transactions, run by builder, single job, date window, quarter, half-year, YTD, or year-over-year. Click Update to re-pull transactions."),
+    ReportInfo(key="other-labor", name="Labor on Non-C9009 Codes", category="Accounting",
+               description="Every house carrying install labor billed to a code other than C9009, with the net dollar drag (or gain) on its margin — worst first."),
+    ReportInfo(key="po-status", name="PO Status Summary", category="Accounting",
                description="Count and dollar value of POs grouped by status (open, paid, voided)."),
-    ReportInfo(key="revenue-builder", name="Revenue by Builder & Community",
-               description="Total PO revenue rolled up by builder, then community."),
-    ReportInfo(key="revenue-salesperson", name="Revenue by Salesperson",
-               description="PO revenue and job count per salesperson."),
-    ReportInfo(key="install-week", name="Install Schedule by Week",
+    ReportInfo(key="phases", name="Phase Report", category="Operations",
+               description="Active houses by builder, community, and lot with current construction phase."),
+    ReportInfo(key="install-week", name="Install Schedule by Week", category="Operations",
                description="Scheduled installs grouped by install week with PO value."),
-    ReportInfo(key="unordered", name="Needs Ordering",
+    ReportInfo(key="unordered", name="Needs Ordering", category="Operations",
                description="Active jobs with an install date but no cabinet PO yet — the risk list."),
-    ReportInfo(key="job-pl", name="Job Cost P&L (Domo)",
-               description="Per-house P&L from Domo actual costs by G/I code, flagging labor billed on codes other than C9009. Click Update to re-pull."),
+    ReportInfo(key="revenue-builder", name="Revenue by Builder & Community", category="Sales",
+               description="Total PO revenue rolled up by builder, then community."),
+    ReportInfo(key="revenue-salesperson", name="Revenue by Salesperson", category="Sales",
+               description="PO revenue and job count per salesperson."),
+    ReportInfo(key="open-po", name="Open PO Report", category="Sales",
+               description="Every job with an open builder PO, its amount, and totals by builder and community."),
 ]
 
 
@@ -309,9 +320,15 @@ class JobPLRow(BaseModel):
     g_code: str | None
     i_code: str | None
     revenue: float
+    revenue_source: str
+    builder_po: str | None
+    po_check_number: str | None
+    po_paid_date: date | None
     product_cost: float
     labor_revenue: float
     labor_cost: float
+    other_labor_net: float
+    wash_labor_net: float
     margin: float
     margin_pct: float | None
     other_labor_codes: str | None
@@ -321,11 +338,32 @@ class JobPLReport(BaseModel):
     rows: list[JobPLRow]
     total_revenue: float
     total_cost: float
+    total_other_labor_net: float
+    total_wash_labor_net: float
     total_margin: float
     margin_pct: float | None
     count: int
     with_other_labor: int
+    drh_po_count: int
     updated_at: datetime | None
+
+
+def _pl_row(job: Job, cost: JobCost) -> JobPLRow:
+    rev, cst, other_net, margin, source = pl_components(job, cost)
+    return JobPLRow(
+        job_id=job.id, job_code=job.job_code, account_name=job.account.name,
+        community_name=job.community.name if job.community else None,
+        lot_number=job.lot_number, g_code=job.g_code, i_code=job.i_code,
+        revenue=round(rev, 2), revenue_source=source,
+        builder_po=job.builder_po if source == "DRH PO" else None,
+        po_check_number=job.po_check_number if source == "DRH PO" else None,
+        po_paid_date=job.po_paid_date if source == "DRH PO" else None,
+        product_cost=_d(cost.product_cost),
+        labor_revenue=_d(cost.labor_revenue), labor_cost=_d(cost.labor_cost),
+        other_labor_net=round(other_net, 2), wash_labor_net=round(_d(cost.wash_labor_net), 2),
+        margin=round(margin, 2), margin_pct=round(margin / rev * 100, 1) if rev else None,
+        other_labor_codes=cost.other_labor_codes,
+    )
 
 
 @router.get("/reports/job-pl", response_model=JobPLReport, dependencies=[Depends(read_access)])
@@ -339,18 +377,7 @@ def job_pl_report(db: Session = Depends(get_db)):
     rows: list[JobPLRow] = []
     latest: datetime | None = None
     for job, cost in q:
-        rev = _d(cost.revenue) + _d(cost.labor_revenue)
-        cst = _d(cost.product_cost) + _d(cost.labor_cost)
-        margin = _d(cost.margin) if cost.margin is not None else rev - cst
-        rows.append(JobPLRow(
-            job_id=job.id, job_code=job.job_code, account_name=job.account.name,
-            community_name=job.community.name if job.community else None,
-            lot_number=job.lot_number, g_code=job.g_code, i_code=job.i_code,
-            revenue=round(rev, 2), product_cost=_d(cost.product_cost),
-            labor_revenue=_d(cost.labor_revenue), labor_cost=_d(cost.labor_cost),
-            margin=round(margin, 2), margin_pct=round(margin / rev * 100, 1) if rev else None,
-            other_labor_codes=cost.other_labor_codes,
-        ))
+        rows.append(_pl_row(job, cost))
         if cost.updated_at and (latest is None or cost.updated_at > latest):
             latest = cost.updated_at
     rows.sort(key=lambda r: (r.account_name.lower(), (r.community_name or "~").lower(), _lotkey(r.lot_number)))
@@ -360,10 +387,79 @@ def job_pl_report(db: Session = Depends(get_db)):
         rows=rows,
         total_revenue=total_rev,
         total_cost=round(sum(r.product_cost + r.labor_cost for r in rows), 2),
+        total_other_labor_net=round(sum(r.other_labor_net for r in rows), 2),
+        total_wash_labor_net=round(sum(r.wash_labor_net for r in rows), 2),
         total_margin=total_margin,
         margin_pct=round(total_margin / total_rev * 100, 1) if total_rev else None,
         count=len(rows),
         with_other_labor=sum(1 for r in rows if r.other_labor_codes),
+        drh_po_count=sum(1 for r in rows if r.revenue_source == "DRH PO"),
+        updated_at=latest,
+    )
+
+
+# --- Labor on non-C9009 codes --------------------------------------------
+
+class OtherLaborRow(BaseModel):
+    job_id: int
+    job_code: str | None
+    account_name: str
+    community_name: str | None
+    lot_number: str | None
+    i_code: str | None
+    c9009_margin: float       # product + C9009 labor only
+    other_labor_net: float    # net drag/gain of the real non-C9009 codes (in margin)
+    all_in_margin: float      # c9009_margin + other_labor_net
+    wash_labor_net: float     # C9091/C9002 overhead & rebill parked here (excluded)
+    other_labor_codes: str | None
+
+
+class OtherLaborReport(BaseModel):
+    rows: list[OtherLaborRow]
+    count: int
+    total_other_labor_net: float
+    total_c9009_margin: float
+    total_all_in_margin: float
+    total_wash_labor_net: float
+    excluded_codes: list[str]
+    updated_at: datetime | None
+
+
+@router.get("/reports/other-labor", response_model=OtherLaborReport, dependencies=[Depends(read_access)])
+def other_labor_report(db: Session = Depends(get_db)):
+    """Every job carrying real (non-wash) labor billed to codes other than C9009, worst drag first."""
+    q = (
+        db.query(Job, JobCost)
+        .join(JobCost, JobCost.job_id == Job.id)
+        .options(joinedload(Job.account), joinedload(Job.community))
+        .filter(JobCost.other_labor_codes.isnot(None))
+        .all()
+    )
+    rows: list[OtherLaborRow] = []
+    latest: datetime | None = None
+    for job, cost in q:
+        _, _, other_net, all_in, _ = pl_components(job, cost)  # DRH-PO override applied
+        rows.append(OtherLaborRow(
+            job_id=job.id, job_code=job.job_code, account_name=job.account.name,
+            community_name=job.community.name if job.community else None,
+            lot_number=job.lot_number, i_code=job.i_code,
+            c9009_margin=round(all_in - other_net, 2),
+            other_labor_net=round(other_net, 2),
+            all_in_margin=round(all_in, 2),
+            wash_labor_net=round(_d(cost.wash_labor_net), 2),
+            other_labor_codes=cost.other_labor_codes,
+        ))
+        if cost.updated_at and (latest is None or cost.updated_at > latest):
+            latest = cost.updated_at
+    rows.sort(key=lambda r: r.other_labor_net)  # most negative (biggest drag) first
+    return OtherLaborReport(
+        rows=rows,
+        count=len(rows),
+        total_other_labor_net=round(sum(r.other_labor_net for r in rows), 2),
+        total_c9009_margin=round(sum(r.c9009_margin for r in rows), 2),
+        total_all_in_margin=round(sum(r.all_in_margin for r in rows), 2),
+        total_wash_labor_net=round(sum(r.wash_labor_net for r in rows), 2),
+        excluded_codes=sorted(MARGIN_EXCLUDED_LABOR_CODES),
         updated_at=latest,
     )
 
@@ -382,3 +478,207 @@ def job_pl_refresh(db: Session = Depends(get_db)):
         file_result = refresh_from_file(db)
         return {**file_result, "domo_error": result["error"]}
     return refresh_from_file(db)
+
+
+# --- Domo P&L by period (builder / job / window / quarter / half / YTD / YoY) ---
+
+
+class DomoCell(BaseModel):
+    revenue: float
+    cost: float
+    product_margin: float
+    c9009_margin: float
+    other_labor_net: float
+    wash_labor_net: float
+    margin: float
+    margin_pct: float | None
+    jobs: int
+
+
+class DomoPeriod(BaseModel):
+    key: str
+    label: str
+    start: date
+    end: date
+
+
+class DomoPLRow(BaseModel):
+    label: str
+    sublabel: str | None
+    cells: list[DomoCell]
+
+
+class DomoPLReport(BaseModel):
+    mode: str
+    builder: str | None
+    job: str | None
+    note: str | None
+    source: str | None
+    no_data: bool
+    periods: list[DomoPeriod]
+    totals: list[DomoCell]
+    rows: list[DomoPLRow]
+    updated_at: datetime | None
+
+
+def _aggregate(txns: list[DomoTxn]) -> DomoCell:
+    ps = pc = cs = cc = os_ = oc = ws = wc = 0.0
+    jobs: set = set()
+    for t in txns:
+        sales, cost = _d(t.sales), _d(t.cost)
+        jobs.add(t.job_id or t.code_prefix)
+        if t.code_type == "G":
+            ps += sales
+            pc += cost
+        elif t.code_type == "I":
+            sku = (t.sku or "").upper()
+            if sku == "C9009":
+                cs += sales
+                cc += cost
+            elif sku in MARGIN_EXCLUDED_LABOR_CODES:  # overhead/rebill wash — excluded from margin
+                ws += sales
+                wc += cost
+            else:
+                os_ += sales
+                oc += cost
+    # revenue/cost/margin exclude the wash codes (kept separately for transparency)
+    revenue = ps + cs + os_
+    cost_total = pc + cc + oc
+    margin = revenue - cost_total
+    return DomoCell(
+        revenue=round(revenue, 2), cost=round(cost_total, 2),
+        product_margin=round(ps - pc, 2), c9009_margin=round(cs - cc, 2),
+        other_labor_net=round(os_ - oc, 2), wash_labor_net=round(ws - wc, 2),
+        margin=round(margin, 2),
+        margin_pct=round(margin / revenue * 100, 1) if revenue else None,
+        jobs=len(jobs),
+    )
+
+
+def _mdy(d: date) -> str:
+    return f"{d.month}/{d.day}/{d.strftime('%y')}"
+
+
+def _periods(mode, year, quarter, half, start, end, today) -> list[DomoPeriod]:
+    if mode == "quarter":
+        s, e = quarter_range(year, quarter)
+        return [DomoPeriod(key="p", label=f"Q{quarter} {year}", start=s, end=e)]
+    if mode == "half":
+        s, e = half_range(year, half)
+        return [DomoPeriod(key="p", label=f"H{half} {year}", start=s, end=e)]
+    if mode == "ytd":
+        s, e = ytd_range(year, today)
+        return [DomoPeriod(key="p", label=f"YTD {year} (through {_mdy(e)})", start=s, end=e)]
+    if mode == "yoy":
+        s1, e1 = ytd_range(year, today)
+        s0, e0 = ytd_range(year - 1, today)
+        return [
+            DomoPeriod(key="cur", label=f"YTD {year}", start=s1, end=e1),
+            DomoPeriod(key="prior", label=f"YTD {year - 1}", start=s0, end=e0),
+        ]
+    # window (default)
+    s = start or date(today.year, 1, 1)
+    e = end or today
+    return [DomoPeriod(key="p", label=f"{_mdy(s)} – {_mdy(e)}", start=s, end=e)]
+
+
+@router.get("/reports/domo-pl", response_model=DomoPLReport, dependencies=[Depends(read_access)])
+def domo_pl_report(
+    db: Session = Depends(get_db),
+    mode: str = Query("window"),
+    builder: str | None = None,
+    job: str | None = None,
+    year: int | None = None,
+    quarter: int = 1,
+    half: int = 1,
+    start: date | None = None,
+    end: date | None = None,
+):
+    """Department P&L from Domo transactions, sliced by the chosen period and scope."""
+    today = date.today()
+    year = year or today.year
+    periods = _periods(mode, year, quarter, half, start, end, today)
+
+    updated_at = db.query(func.max(DomoTxn.imported_at)).scalar()
+    total_txns = db.query(func.count(DomoTxn.id)).scalar() or 0
+    sources = [s[0] for s in db.query(DomoTxn.source_file).distinct().all() if s[0]]
+    source = sources[0] if len(sources) == 1 else (sources[0] if sources else None)
+    if total_txns == 0:
+        return DomoPLReport(mode=mode, builder=builder, job=job, no_data=True, source=None,
+                            note="No period data yet — click “Calculate from last Domo pull” to "
+                                 "build it from the most recent Domo cost pull.",
+                            periods=periods, totals=[], rows=[], updated_at=updated_at)
+
+    # scope filter applied to every period query
+    def scoped(q):
+        if job:
+            q = q.filter((DomoTxn.job_code == job.strip()) | (DomoTxn.code_prefix == job.strip()))
+        elif builder:
+            q = q.filter(DomoTxn.account_name == builder)
+        return q
+
+    # grouping: single job -> that job; a builder -> its jobs; else -> builders
+    if job:
+        def key_of(t):
+            return (t.job_code or t.code_prefix or "—", t.account_name)
+    elif builder:
+        def key_of(t):
+            return (t.job_code or t.code_prefix or "—", t.community_name)
+    else:
+        def key_of(t):
+            return (t.account_name or "Unassigned / no job match", None)
+
+    # collect rows aligned across periods
+    row_keys: list[tuple] = []
+    row_cells: dict[tuple, list[DomoCell | None]] = {}
+    totals: list[DomoCell] = []
+
+    for pi, p in enumerate(periods):
+        txns = scoped(
+            db.query(DomoTxn).filter(DomoTxn.txn_date >= p.start, DomoTxn.txn_date <= p.end)
+        ).all()
+        totals.append(_aggregate(txns))
+        grouped: dict[tuple, list[DomoTxn]] = {}
+        for t in txns:
+            grouped.setdefault(key_of(t), []).append(t)
+        for k, ts in grouped.items():
+            if k not in row_cells:
+                row_keys.append(k)
+                row_cells[k] = [None] * len(periods)
+            row_cells[k][pi] = _aggregate(ts)
+
+    empty = DomoCell(revenue=0, cost=0, product_margin=0, c9009_margin=0,
+                     other_labor_net=0, wash_labor_net=0, margin=0, margin_pct=None, jobs=0)
+    # sort rows by first-period margin ascending (worst first) so drags surface
+    row_keys.sort(key=lambda k: (row_cells[k][0].margin if row_cells[k][0] else 0))
+    rows = [
+        DomoPLRow(label=k[0], sublabel=k[1], cells=[c or empty for c in row_cells[k]])
+        for k in row_keys
+    ]
+    note = None
+    if source == SNAPSHOT_SOURCE:
+        note = ("Calculated from the last Domo cost pull — each house's actual P&L is dated to its "
+                "install date. Houses without a date are not shown in a period.")
+    return DomoPLReport(
+        mode=mode, builder=builder, job=job, no_data=False, note=note, source=source,
+        periods=periods, totals=totals, rows=rows, updated_at=updated_at,
+    )
+
+
+@router.get("/reports/domo-pl/builders", response_model=list[str], dependencies=[Depends(read_access)])
+def domo_pl_builders(db: Session = Depends(get_db)):
+    rows = (
+        db.query(DomoTxn.account_name)
+        .filter(DomoTxn.account_name.isnot(None))
+        .distinct()
+        .order_by(DomoTxn.account_name)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+@router.post("/reports/domo-pl/refresh", dependencies=[Depends(write_access)])
+def domo_pl_refresh(db: Session = Depends(get_db)):
+    """The report's button: use a dated transaction export if present, else calculate
+    period data from the last Domo cost pull (each house dated by its install date)."""
+    return refresh_domo_txns(db)

@@ -1,6 +1,7 @@
 from app.models.account import Account, AccountType
 from app.models.community import Community
 from app.models.document import JobDocument
+from app.models.domotxn import DomoTxn
 from app.models.job import Job, JobStatus, JobType
 from app.models.jobcost import JobCost
 from app.models.note import JobNote
@@ -16,6 +17,7 @@ __all__ = [
     "AccountType",
     "Community",
     "ConfirmationStatus",
+    "DomoTxn",
     "HardwareSelection",
     "Job",
     "JobCost",

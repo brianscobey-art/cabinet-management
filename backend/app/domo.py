@@ -88,7 +88,12 @@ def pull_and_import(db: Session) -> dict:
         if not p and not L:
             continue
         c9009 = L.get(K_AND_B_LABOR_CODE, {"sales": 0, "cost": 0})
-        others = {sku: round(v["sales"], 2) for sku, v in L.items() if sku != K_AND_B_LABOR_CODE}
+        # net P&L (billed − cost) per non-C9009 code, so it can be folded into margin
+        others = {
+            sku: round(v["sales"] - v["cost"], 2)
+            for sku, v in L.items()
+            if sku != K_AND_B_LABOR_CODE
+        }
         rows.append({
             "job_code": job.job_code,
             "g_code": job.g_code,

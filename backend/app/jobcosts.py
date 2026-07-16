@@ -19,6 +19,40 @@ from app.config import get_settings
 from app.models import Job, JobCost
 
 K_AND_B_LABOR_CODE = "C9009"
+# Overhead/rebill "wash" codes: they net ~$0 company-wide but park cost on cabinet
+# jobs (C9091 install-sales allocation, C9002 labor rebill). Per Brian, they are NOT
+# real cabinet labor — shown for transparency but excluded from the cabinet margin.
+MARGIN_EXCLUDED_LABOR_CODES = {"C9091", "C9002"}
+
+# For DR Horton jobs, the DRH Combined report's PO amount (what DRH actually pays) is
+# the authoritative revenue — used in lieu of Domo's product sales. Voided POs never
+# count; every other status (Paid, Vouchered, Open) does. Flip to {"paid"}-only by
+# swapping this for an included-set check if Brian wants realized cash only.
+DRH_ACCOUNT_PREFIX = "DR Horton"
+DRH_PO_EXCLUDED_STATUSES = {"voided"}
+
+
+def drh_po_revenue(job, cost) -> tuple[float, str]:
+    """Product-side revenue for the P&L: the DRH builder PO in lieu of Domo where it applies.
+
+    Returns (product_revenue, source) with source "DRH PO" or "Domo".
+    """
+    name = (job.account.name if getattr(job, "account", None) else "") or ""
+    if name.startswith(DRH_ACCOUNT_PREFIX) and job.po_amount is not None:
+        if (job.po_status or "").strip().lower() not in DRH_PO_EXCLUDED_STATUSES:
+            return float(job.po_amount), "DRH PO"
+    return float(cost.revenue or 0), "Domo"
+
+
+def pl_components(job, cost) -> tuple[float, float, float, float, str]:
+    """(revenue, cost, other_labor_net, all_in_margin, revenue_source) for a house,
+    with the DRH-PO revenue override applied. Revenue = product (DRH PO or Domo) +
+    C9009 labor billed; margin folds in real non-C9009 labor (wash codes excluded)."""
+    prod_rev, source = drh_po_revenue(job, cost)
+    revenue = prod_rev + float(cost.labor_revenue or 0)
+    cost_total = float(cost.product_cost or 0) + float(cost.labor_cost or 0)
+    other_net = float(cost.other_labor_net or 0)
+    return revenue, cost_total, other_net, revenue - cost_total + other_net, source
 
 
 def _money(value) -> Decimal | None:
@@ -42,18 +76,37 @@ def _match_job(db: Session, row: dict) -> Job | None:
     return None
 
 
-def _format_other_labor(labor_codes: dict | None) -> str | None:
-    """Labor billed on codes != C9009, formatted for display."""
+def _fmt_signed(a: Decimal) -> str:
+    """-1234.5 -> '-$1,234.50', 200 -> '$200.00'."""
+    return f"-${abs(a):,.2f}" if a < 0 else f"${a:,.2f}"
+
+
+def _other_labor(labor_codes: dict | None) -> tuple[Decimal, str | None, Decimal]:
+    """Split net P&L of non-C9009 labor into real cabinet labor vs overhead wash.
+
+    Each labor_codes value is already the net dollars for that code on the job.
+    Returns (included_net, included_display, wash_net):
+      - included_net folds into the cabinet margin (real miscoded install labor),
+      - wash_net is the excluded C9091/C9002 overhead/rebill parked on the job.
+    """
     if not labor_codes:
-        return None
-    others = []
+        return Decimal("0"), None, Decimal("0")
+    included = Decimal("0")
+    wash = Decimal("0")
+    parts = []
     for code, amt in labor_codes.items():
-        if str(code).upper() == K_AND_B_LABOR_CODE:
+        code_u = str(code).upper()
+        if code_u == K_AND_B_LABOR_CODE:
             continue
         a = _money(amt)
-        if a is not None and a != 0:
-            others.append(f"{code}: ${a:,.2f}")
-    return "; ".join(others) or None
+        if a is None or a == 0:
+            continue
+        if code_u in MARGIN_EXCLUDED_LABOR_CODES:
+            wash += a
+        else:
+            included += a
+            parts.append(f"{code}: {_fmt_signed(a)}")
+    return included, ("; ".join(parts) or None), wash
 
 
 def import_rows(db: Session, rows: list[dict], source: str | None = None) -> dict:
@@ -74,10 +127,15 @@ def import_rows(db: Session, rows: list[dict], source: str | None = None) -> dic
         cost.product_cost = _money(row.get("product_cost"))
         cost.labor_revenue = _money(row.get("labor_revenue"))
         cost.labor_cost = _money(row.get("labor_cost"))
+        other_net, other_str, wash_net = _other_labor(row.get("labor_codes"))
+        cost.other_labor_net = other_net if other_str else None
+        cost.other_labor_codes = other_str
+        cost.wash_labor_net = wash_net if wash_net != 0 else None
         rev = (cost.revenue or 0) + (cost.labor_revenue or 0)
         cst = (cost.product_cost or 0) + (cost.labor_cost or 0)
-        cost.margin = rev - cst if (cost.revenue is not None or cost.labor_cost is not None) else None
-        cost.other_labor_codes = _format_other_labor(row.get("labor_codes"))
+        # all-in cabinet margin: product + C9009 + real non-C9009 labor (wash codes excluded)
+        has_data = cost.revenue is not None or cost.labor_cost is not None or other_str
+        cost.margin = (rev - cst + other_net) if has_data else None
         cost.source_file = source
         counts["matched"] += 1
     db.commit()

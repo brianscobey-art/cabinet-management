@@ -23,8 +23,13 @@ class JobCost(Base):
     product_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     labor_revenue: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     labor_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    # net P&L (billed − cost) of real non-C9009 cabinet labor; folded into margin
+    other_labor_net: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    # net of the overhead/rebill wash codes (C9091, C9002) parked on this job —
+    # shown for transparency but excluded from the cabinet margin
+    wash_labor_net: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     margin: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
-    # labor billed on codes != C9009, e.g. "C9005: $2,674.00; C9018: $500.00"
+    # labor billed on codes != C9009, e.g. "C9091: -$4,736.12; C9005: $1,577.78"
     other_labor_codes: Mapped[str | None] = mapped_column(Text, default=None)
     source_file: Mapped[str | None] = mapped_column(String(255), default=None)
     updated_at: Mapped[datetime] = mapped_column(

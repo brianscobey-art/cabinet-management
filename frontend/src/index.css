@@ -975,6 +975,32 @@ th.num {
   color: var(--action-dark);
 }
 
+/* Reports index — category sections of report cards */
+.report-category {
+  margin-bottom: 1.75rem;
+}
+
+.report-category-head {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray);
+  border-bottom: 1px solid #dfe6e8;
+  padding-bottom: 0.35rem;
+}
+
+a.report-card {
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+a.report-card:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.09);
+  transform: translateY(-1px);
+}
+
 .crumb {
   color: var(--action);
   text-decoration: none;

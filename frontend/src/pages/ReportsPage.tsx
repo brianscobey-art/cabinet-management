@@ -1,45 +1,101 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  DomoPLReport,
   InstallWeekRow,
   JobPLReport,
   NeedsOrderRow,
   OpenPOReport,
+  OtherLaborReport,
   PhaseReportRow,
   ReportInfo,
   RevenueGroup,
   StatusSummaryRow,
+  getDomoBuilders,
+  getDomoPL,
   getInstallWeek,
   getJobPL,
   getNeedsOrdering,
   getOpenPO,
+  getOtherLabor,
   getPhaseReport,
   getPoStatus,
   getReportsList,
   getRevenueBuilder,
   getRevenueSalesperson,
   openDocument,
+  refreshDomoPL,
   refreshJobPL,
 } from "../api";
 import { fmtDate } from "../format";
 
 const money = (v: number) =>
-  `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const CATEGORY_ORDER = ["Accounting", "Operations", "Sales"];
+
+function categorize(reports: ReportInfo[]): { category: string; reports: ReportInfo[] }[] {
+  const seen = new Set<string>();
+  const order = [...CATEGORY_ORDER, ...reports.map((r) => r.category)].filter(
+    (c) => !seen.has(c) && seen.add(c)
+  );
+  return order
+    .map((category) => ({ category, reports: reports.filter((r) => r.category === category) }))
+    .filter((g) => g.reports.length > 0);
+}
+
+function ReportsIndex({ reports }: { reports: ReportInfo[] }) {
+  const groups = categorize(reports);
+  return (
+    <div>
+      <div className="page-head">
+        <h2>Reports</h2>
+      </div>
+      {groups.map((g) => (
+        <section key={g.category} className="report-category">
+          <h3 className="report-category-head">{g.category}</h3>
+          <div className="report-list">
+            {g.reports.map((r) => (
+              <a key={r.key} className="card report-card" href={`#/reports/${r.key}`}>
+                <div>
+                  <h3>{r.name}</h3>
+                  <p className="muted">{r.description}</p>
+                </div>
+                <span className="report-open">Open →</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 export default function ReportsPage({ hash }: { hash: string }) {
   const [reports, setReports] = useState<ReportInfo[]>([]);
-  const key = hash.replace(/^#\/reports\/?/, "") || "phases";
+  const key = hash.replace(/^#\/reports\/?/, "");
 
   useEffect(() => {
     getReportsList().then(setReports).catch(() => {});
   }, []);
 
   const current = reports.find((r) => r.key === key);
+  const groups = categorize(reports);
+
+  if (!key) return <ReportsIndex reports={reports} />;
 
   return (
     <div>
       <div className="page-sticky no-print">
         <div className="page-head">
-          <h2>Reports</h2>
+          <h2>
+            <a className="crumb" href="#/reports">
+              Reports
+            </a>
+            {current ? ` · ${current.category}` : ""}
+          </h2>
           <select
             className="report-picker"
             value={key}
@@ -47,10 +103,14 @@ export default function ReportsPage({ hash }: { hash: string }) {
               window.location.hash = `#/reports/${e.target.value}`;
             }}
           >
-            {reports.map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.name}
-              </option>
+            {groups.map((g) => (
+              <optgroup key={g.category} label={g.category}>
+                {g.reports.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -65,18 +125,31 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "install-week" && <InstallWeekView />}
       {key === "unordered" && <NeedsOrderingView />}
       {key === "job-pl" && <JobPLView />}
+      {key === "other-labor" && <OtherLaborView />}
+      {key === "domo-pl" && <DomoPLView />}
     </div>
   );
 }
 
+const signed = (v: number) =>
+  `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+const pct = (v: number | null) => (v != null ? `${v}%` : "—");
+
 function JobPLPrintSummary({ data }: { data: JobPLReport }) {
   const byBuilder = useMemo(() => {
-    const m = new Map<string, { count: number; revenue: number; cost: number; margin: number }>();
+    const m = new Map<
+      string,
+      { count: number; revenue: number; cost: number; other: number; margin: number }
+    >();
     for (const r of data.rows) {
-      const g = m.get(r.account_name) || { count: 0, revenue: 0, cost: 0, margin: 0 };
+      const g = m.get(r.account_name) || { count: 0, revenue: 0, cost: 0, other: 0, margin: 0 };
       g.count += 1;
       g.revenue += r.revenue;
       g.cost += r.product_cost + r.labor_cost;
+      g.other += r.other_labor_net;
       g.margin += r.margin;
       m.set(r.account_name, g);
     }
@@ -97,11 +170,15 @@ function JobPLPrintSummary({ data }: { data: JobPLReport }) {
         </div>
         <div>
           <span className="pl-big">{money(data.total_cost)}</span>
-          <span>Cost</span>
+          <span>Product + C9009 cost</span>
+        </div>
+        <div>
+          <span className="pl-big">{signed(data.total_other_labor_net)}</span>
+          <span>Other cabinet labor</span>
         </div>
         <div>
           <span className="pl-big">{money(data.total_margin)}</span>
-          <span>Gross margin{data.margin_pct != null ? ` (${data.margin_pct}%)` : ""}</span>
+          <span>All-in margin{data.margin_pct != null ? ` (${data.margin_pct}%)` : ""}</span>
         </div>
         <div>
           <span className="pl-big">{data.count}</span>
@@ -114,8 +191,9 @@ function JobPLPrintSummary({ data }: { data: JobPLReport }) {
             <th>Builder</th>
             <th className="num">Houses</th>
             <th className="num">Revenue</th>
-            <th className="num">Cost</th>
-            <th className="num">Gross margin</th>
+            <th className="num">Product + C9009 cost</th>
+            <th className="num">Other labor</th>
+            <th className="num">All-in margin</th>
             <th className="num">GM %</th>
           </tr>
         </thead>
@@ -126,6 +204,7 @@ function JobPLPrintSummary({ data }: { data: JobPLReport }) {
               <td className="num">{b.count}</td>
               <td className="num">{money(b.revenue)}</td>
               <td className="num">{money(b.cost)}</td>
+              <td className="num">{signed(b.other)}</td>
               <td className="num">{money(b.margin)}</td>
               <td className="num">{b.revenue ? `${((b.margin / b.revenue) * 100).toFixed(1)}%` : "—"}</td>
             </tr>
@@ -146,6 +225,9 @@ function JobPLPrintSummary({ data }: { data: JobPLReport }) {
               <strong>{money(data.total_cost)}</strong>
             </td>
             <td className="num">
+              <strong>{signed(data.total_other_labor_net)}</strong>
+            </td>
+            <td className="num">
               <strong>{money(data.total_margin)}</strong>
             </td>
             <td className="num">
@@ -155,9 +237,14 @@ function JobPLPrintSummary({ data }: { data: JobPLReport }) {
         </tfoot>
       </table>
       <p className="pl-note">
-        Margin is cabinet product plus C9009 install labor. {data.with_other_labor} of {data.count} houses
-        also carry labor billed to codes other than C9009; that labor is excluded from the margin above and
-        is listed per house in the detail view.
+        All-in margin = cabinet product + C9009 install labor + the net of every other real cabinet labor
+        code (folded in per your direction). {data.with_other_labor} of {data.count} houses carry such labor.
+        {data.drh_po_count > 0
+          ? ` For ${data.drh_po_count} DR Horton houses, revenue is the actual DRH PO amount paid (with check number) from the DRH Combined report, in lieu of Domo product sales.`
+          : ""}{" "}
+        A further {signed(data.total_wash_labor_net)} of C9091 install-sales overhead and C9002 labor rebill
+        is parked on these jobs by miscoding; it nets to ~$0 company-wide and is excluded here as
+        non-cabinet cost.
       </p>
     </div>
   );
@@ -199,6 +286,7 @@ function JobPLView() {
               {data.count} houses · Revenue {money(data.total_revenue)} · Margin {money(data.total_margin)}
               {data.margin_pct != null ? ` (${data.margin_pct}%)` : ""}
               {data.with_other_labor > 0 ? ` · ${data.with_other_labor} with non-C9009 labor` : ""}
+              {data.drh_po_count > 0 ? ` · ${data.drh_po_count} using DRH PO revenue` : ""}
             </span>
           )}
           {data && (
@@ -237,11 +325,14 @@ function JobPLView() {
                 <th>Lot</th>
                 <th>G / I code</th>
                 <th className="num">Revenue</th>
+                <th>Revenue basis</th>
                 <th className="num">Product cost</th>
-                <th className="num">Labor cost</th>
+                <th className="num">C9009 cost</th>
+                <th className="num">Other labor</th>
                 <th className="num">Margin</th>
                 <th className="num">GM %</th>
-                <th>Non-C9009 labor</th>
+                <th className="num">Overhead (excl)</th>
+                <th>Non-C9009 codes</th>
               </tr>
             </thead>
             <tbody>
@@ -255,10 +346,27 @@ function JobPLView() {
                   <td>{r.lot_number ?? "—"}</td>
                   <td>{[r.g_code, r.i_code].filter(Boolean).join(" / ") || "—"}</td>
                   <td className="num">{money(r.revenue)}</td>
+                  <td>
+                    {r.revenue_source === "DRH PO" ? (
+                      <span
+                        title={
+                          `DRH PO ${r.builder_po ?? ""}` +
+                          (r.po_check_number ? ` · check #${r.po_check_number}` : "") +
+                          (r.po_paid_date ? ` · paid ${fmtDate(r.po_paid_date)}` : "")
+                        }
+                      >
+                        DRH PO{r.po_check_number ? ` · chk ${r.po_check_number}` : ""}
+                      </span>
+                    ) : (
+                      <span className="muted">Domo</span>
+                    )}
+                  </td>
                   <td className="num">{money(r.product_cost)}</td>
                   <td className="num">{money(r.labor_cost)}</td>
+                  <td className="num">{r.other_labor_net ? signed(r.other_labor_net) : "—"}</td>
                   <td className="num">{money(r.margin)}</td>
                   <td className="num">{r.margin_pct != null ? `${r.margin_pct}%` : "—"}</td>
+                  <td className="num muted">{r.wash_labor_net ? signed(r.wash_labor_net) : "—"}</td>
                   <td>{r.other_labor_codes ?? ""}</td>
                 </tr>
               ))}
@@ -271,12 +379,18 @@ function JobPLView() {
                 <td className="num">
                   <strong>{money(data.total_revenue)}</strong>
                 </td>
-                <td colSpan={2} className="num" />
+                <td colSpan={3} className="num" />
+                <td className="num">
+                  <strong>{signed(data.total_other_labor_net)}</strong>
+                </td>
                 <td className="num">
                   <strong>{money(data.total_margin)}</strong>
                 </td>
                 <td className="num">
                   <strong>{data.margin_pct != null ? `${data.margin_pct}%` : ""}</strong>
+                </td>
+                <td className="num">
+                  <strong>{signed(data.total_wash_labor_net)}</strong>
                 </td>
                 <td />
               </tr>
@@ -284,6 +398,398 @@ function JobPLView() {
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+function OtherLaborView() {
+  const [data, error] = useReport<OtherLaborReport>(getOtherLabor);
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+  if (data.count === 0)
+    return <p className="muted">No houses carry labor on codes other than C9009 yet. Update the Job Cost P&amp;L first.</p>;
+  return (
+    <>
+      <div className="page-head no-print" style={{ justifyContent: "space-between" }}>
+        <span className="report-total">
+          {data.count} houses · other cabinet labor {signed(data.total_other_labor_net)} · all-in margin{" "}
+          {money(data.total_all_in_margin)}
+        </span>
+        <button onClick={() => window.print()}>🖨 Print</button>
+      </div>
+      <div className="print-title print-only">
+        Carter Kitchen and Bath — Labor on Non-C9009 Codes — {fmtDate(new Date().toISOString())}
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job code</th>
+              <th>Builder</th>
+              <th>Community</th>
+              <th>I-code</th>
+              <th className="num">C9009 margin</th>
+              <th className="num">Other labor (net)</th>
+              <th className="num">All-in margin</th>
+              <th className="num">Overhead (excl)</th>
+              <th>Codes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r) => (
+              <tr key={r.job_id} className={r.other_labor_net < 0 ? "flag-row" : ""}>
+                <td>
+                  <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                </td>
+                <td>{r.account_name}</td>
+                <td>{r.community_name ?? "—"}</td>
+                <td>{r.i_code ?? "—"}</td>
+                <td className="num">{money(r.c9009_margin)}</td>
+                <td className="num">{signed(r.other_labor_net)}</td>
+                <td className="num">{money(r.all_in_margin)}</td>
+                <td className="num muted">{r.wash_labor_net ? signed(r.wash_labor_net) : "—"}</td>
+                <td>{r.other_labor_codes ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={4}>
+                <strong>Total</strong>
+              </td>
+              <td className="num">
+                <strong>{money(data.total_c9009_margin)}</strong>
+              </td>
+              <td className="num">
+                <strong>{signed(data.total_other_labor_net)}</strong>
+              </td>
+              <td className="num">
+                <strong>{money(data.total_all_in_margin)}</strong>
+              </td>
+              <td className="num">
+                <strong>{signed(data.total_wash_labor_net)}</strong>
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="pl-note">
+        "Other labor (net)" is folded into the all-in margin. The excluded overhead column is C9091
+        install-sales allocation and C9002 labor rebill ({data.excluded_codes.join(", ")}) parked on these
+        jobs by miscoding — shown for transparency but not counted as cabinet cost.
+      </p>
+    </>
+  );
+}
+
+const DOMO_MODES = [
+  { key: "window", label: "Date window" },
+  { key: "quarter", label: "By quarter" },
+  { key: "half", label: "By half-year" },
+  { key: "ytd", label: "Year to date" },
+  { key: "yoy", label: "Year over year" },
+];
+const YEARS = [2026, 2025, 2024];
+
+function DomoPLView() {
+  const [mode, setMode] = useState("window");
+  const [builder, setBuilder] = useState("");
+  const [job, setJob] = useState("");
+  const [year, setYear] = useState(2026);
+  const [quarter, setQuarter] = useState(1);
+  const [half, setHalf] = useState(1);
+  const [start, setStart] = useState("2026-01-01");
+  const [end, setEnd] = useState("2026-07-16");
+  const [builders, setBuilders] = useState<string[]>([]);
+  const [data, setData] = useState<DomoPLReport | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    getDomoBuilders().then(setBuilders).catch(() => {});
+  }, []);
+
+  function run() {
+    setError("");
+    const params: Record<string, string> = { mode };
+    if (builder) params.builder = builder;
+    if (job.trim()) params.job = job.trim();
+    if (mode === "window") {
+      params.start = start;
+      params.end = end;
+    } else {
+      params.year = String(year);
+      if (mode === "quarter") params.quarter = String(quarter);
+      if (mode === "half") params.half = String(half);
+    }
+    getDomoPL(params).then(setData).catch((e) => setError(e.message));
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(run, [mode, builder, job, year, quarter, half, start, end]);
+
+  async function update() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await refreshDomoPL();
+      if (res.error) {
+        setError(String(res.error));
+      } else if (res.houses != null) {
+        const skipped = Number(res.skipped_no_date ?? 0);
+        setNotice(
+          `Calculated from the last Domo cost pull: ${res.houses} houses` +
+            (skipped ? ` · ${skipped} without an install date were skipped` : "")
+        );
+      } else {
+        setNotice(
+          `Imported ${res.inserted ?? 0} transactions from ${res.file ?? "export"} (${res.matched ?? 0} matched)`
+        );
+      }
+      getDomoBuilders().then(setBuilders).catch(() => {});
+      run();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="filters no-print">
+        <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          {DOMO_MODES.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        <select value={builder} onChange={(e) => setBuilder(e.target.value)}>
+          <option value="">All builders</option>
+          {builders.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+        <input
+          placeholder="Job code (optional)"
+          value={job}
+          onChange={(e) => setJob(e.target.value)}
+          style={{ width: "10rem" }}
+        />
+        {mode === "window" && (
+          <>
+            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+            <span className="muted" style={{ alignSelf: "center" }}>
+              to
+            </span>
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </>
+        )}
+        {mode !== "window" && (
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        )}
+        {mode === "quarter" && (
+          <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
+            {[1, 2, 3, 4].map((q) => (
+              <option key={q} value={q}>
+                Q{q}
+              </option>
+            ))}
+          </select>
+        )}
+        {mode === "half" && (
+          <select value={half} onChange={(e) => setHalf(Number(e.target.value))}>
+            <option value={1}>H1 (Jan–Jun)</option>
+            <option value={2}>H2 (Jul–Dec)</option>
+          </select>
+        )}
+        <span style={{ flex: 1 }} />
+        {data && !data.no_data && (
+          <button onClick={() => window.print()}>🖨 Print</button>
+        )}
+        <button className="primary" onClick={update} disabled={busy}>
+          {busy ? "⟳ Calculating…" : "⟳ Calculate from last Domo pull"}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
+      {data && data.no_data && <p className="muted">{data.note}</p>}
+      {data && !data.no_data && <DomoPLResult data={data} builder={builder} job={job} />}
+      {data && !data.no_data && data.note && <p className="pl-note no-print">{data.note}</p>}
+      {data && (
+        <p className="muted no-print">
+          {data.updated_at ? `data updated ${fmtDate(data.updated_at)}` : ""}
+        </p>
+      )}
+    </>
+  );
+}
+
+function DomoPLResult({ data, builder, job }: { data: DomoPLReport; builder: string; job: string }) {
+  const scope = job.trim() ? `Job ${job.trim()}` : builder || "All builders";
+  const groupLabel = job.trim() ? "Job" : builder ? "Job" : "Builder";
+  const yoy = data.periods.length > 1;
+  return (
+    <>
+      <div className="print-title print-only">
+        Carter Kitchen and Bath — Domo P&amp;L ({scope}) — {data.periods.map((p) => p.label).join(" vs ")}
+      </div>
+      <div className="pl-topline">
+        {data.periods.map((p, i) => (
+          <div key={p.key}>
+            <span className="pl-big">{money(data.totals[i]?.margin ?? 0)}</span>
+            <span>
+              {p.label} margin{data.totals[i]?.margin_pct != null ? ` (${data.totals[i].margin_pct}%)` : ""}
+            </span>
+          </div>
+        ))}
+        <div>
+          <span className="pl-big">{money(data.totals[0]?.revenue ?? 0)}</span>
+          <span>Revenue {data.periods[0]?.label}</span>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{groupLabel}</th>
+              {data.periods.map((p) => (
+                <th key={p.key} className="num" colSpan={yoy ? 2 : 4}>
+                  {p.label}
+                </th>
+              ))}
+              {yoy && <th className="num">Δ margin</th>}
+            </tr>
+            <tr>
+              <th />
+              {data.periods.map((p) =>
+                yoy ? (
+                  <>
+                    <th key={p.key + "r"} className="num">
+                      Revenue
+                    </th>
+                    <th key={p.key + "m"} className="num">
+                      Margin
+                    </th>
+                  </>
+                ) : (
+                  <>
+                    <th key={p.key + "r"} className="num">
+                      Revenue
+                    </th>
+                    <th key={p.key + "o"} className="num">
+                      Other labor
+                    </th>
+                    <th key={p.key + "m"} className="num">
+                      Margin
+                    </th>
+                    <th key={p.key + "p"} className="num">
+                      GM %
+                    </th>
+                  </>
+                )
+              )}
+              {yoy && <th />}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row) => (
+              <tr key={row.label} className={(row.cells[0]?.margin ?? 0) < 0 ? "flag-row" : ""}>
+                <td>
+                  {row.label}
+                  {row.sublabel ? <span className="muted"> · {row.sublabel}</span> : ""}
+                </td>
+                {row.cells.map((c, i) =>
+                  yoy ? (
+                    <>
+                      <td key={i + "r"} className="num">
+                        {money(c.revenue)}
+                      </td>
+                      <td key={i + "m"} className="num">
+                        {money(c.margin)}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td key={i + "r"} className="num">
+                        {money(c.revenue)}
+                      </td>
+                      <td key={i + "o"} className="num">
+                        {c.other_labor_net ? signed(c.other_labor_net) : "—"}
+                      </td>
+                      <td key={i + "m"} className="num">
+                        {money(c.margin)}
+                      </td>
+                      <td key={i + "p"} className="num">
+                        {pct(c.margin_pct)}
+                      </td>
+                    </>
+                  )
+                )}
+                {yoy && (
+                  <td className="num">
+                    {signed((row.cells[0]?.margin ?? 0) - (row.cells[1]?.margin ?? 0))}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>
+                <strong>Total</strong>
+              </td>
+              {data.totals.map((c, i) =>
+                yoy ? (
+                  <>
+                    <td key={i + "r"} className="num">
+                      <strong>{money(c.revenue)}</strong>
+                    </td>
+                    <td key={i + "m"} className="num">
+                      <strong>{money(c.margin)}</strong>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td key={i + "r"} className="num">
+                      <strong>{money(c.revenue)}</strong>
+                    </td>
+                    <td key={i + "o"} className="num">
+                      <strong>{signed(c.other_labor_net)}</strong>
+                    </td>
+                    <td key={i + "m"} className="num">
+                      <strong>{money(c.margin)}</strong>
+                    </td>
+                    <td key={i + "p"} className="num">
+                      <strong>{pct(c.margin_pct)}</strong>
+                    </td>
+                  </>
+                )
+              )}
+              {yoy && (
+                <td className="num">
+                  <strong>{signed((data.totals[0]?.margin ?? 0) - (data.totals[1]?.margin ?? 0))}</strong>
+                </td>
+              )}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="pl-note">
+        Margin = product + C9009 install labor + real non-C9009 cabinet labor. C9091/C9002 overhead &amp;
+        rebill are excluded. Figures are Domo actuals for the period shown.
+      </p>
     </>
   );
 }

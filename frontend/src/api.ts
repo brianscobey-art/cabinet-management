@@ -353,6 +353,7 @@ export interface ReportInfo {
   key: string;
   name: string;
   description: string;
+  category: string;
 }
 export interface OpenPORow {
   job_id: number;
@@ -406,9 +407,15 @@ export interface JobPLRow {
   g_code: string | null;
   i_code: string | null;
   revenue: number;
+  revenue_source: string;
+  builder_po: string | null;
+  po_check_number: string | null;
+  po_paid_date: string | null;
   product_cost: number;
   labor_revenue: number;
   labor_cost: number;
+  other_labor_net: number;
+  wash_labor_net: number;
   margin: number;
   margin_pct: number | null;
   other_labor_codes: string | null;
@@ -417,15 +424,85 @@ export interface JobPLReport {
   rows: JobPLRow[];
   total_revenue: number;
   total_cost: number;
+  total_other_labor_net: number;
+  total_wash_labor_net: number;
   total_margin: number;
   margin_pct: number | null;
   count: number;
   with_other_labor: number;
+  drh_po_count: number;
   updated_at: string | null;
 }
 export const getJobPL = () => api<JobPLReport>("/reports/job-pl");
 export const refreshJobPL = () =>
   api<Record<string, unknown>>("/reports/job-pl/refresh", { method: "POST" });
+
+export interface OtherLaborRow {
+  job_id: number;
+  job_code: string | null;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  i_code: string | null;
+  c9009_margin: number;
+  other_labor_net: number;
+  all_in_margin: number;
+  wash_labor_net: number;
+  other_labor_codes: string | null;
+}
+export interface OtherLaborReport {
+  rows: OtherLaborRow[];
+  count: number;
+  total_other_labor_net: number;
+  total_c9009_margin: number;
+  total_all_in_margin: number;
+  total_wash_labor_net: number;
+  excluded_codes: string[];
+  updated_at: string | null;
+}
+export const getOtherLabor = () => api<OtherLaborReport>("/reports/other-labor");
+
+export interface DomoCell {
+  revenue: number;
+  cost: number;
+  product_margin: number;
+  c9009_margin: number;
+  other_labor_net: number;
+  wash_labor_net: number;
+  margin: number;
+  margin_pct: number | null;
+  jobs: number;
+}
+export interface DomoPeriod {
+  key: string;
+  label: string;
+  start: string;
+  end: string;
+}
+export interface DomoPLRow {
+  label: string;
+  sublabel: string | null;
+  cells: DomoCell[];
+}
+export interface DomoPLReport {
+  mode: string;
+  builder: string | null;
+  job: string | null;
+  note: string | null;
+  source: string | null;
+  no_data: boolean;
+  periods: DomoPeriod[];
+  totals: DomoCell[];
+  rows: DomoPLRow[];
+  updated_at: string | null;
+}
+export const getDomoPL = (params: Record<string, string> = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return api<DomoPLReport>(`/reports/domo-pl${qs ? `?${qs}` : ""}`);
+};
+export const getDomoBuilders = () => api<string[]>("/reports/domo-pl/builders");
+export const refreshDomoPL = () =>
+  api<Record<string, unknown>>("/reports/domo-pl/refresh", { method: "POST" });
 
 export const getReportsList = () => api<ReportInfo[]>("/reports");
 export const getOpenPO = () => api<OpenPOReport>("/reports/open-po");
