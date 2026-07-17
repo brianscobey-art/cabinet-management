@@ -24,21 +24,21 @@ export default function OrderingPage({ canWrite }: { canWrite: boolean }) {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [accountFilter, setAccountFilter] = useState("");
   const [communityFilter, setCommunityFilter] = useState("");
-  const [includeClosed, setIncludeClosed] = useState(false);
+  const [includeOrdered, setIncludeOrdered] = useState(false);
   const [error, setError] = useState("");
 
   async function refresh() {
     const params: Record<string, string> = {};
     if (accountFilter) params.account_id = accountFilter;
     if (communityFilter) params.community_id = communityFilter;
-    if (includeClosed) params.include_closed = "true";
+    if (includeOrdered) params.include_ordered = "true";
     setRows(await getOrderingBoard(params));
   }
 
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountFilter, communityFilter, includeClosed]);
+  }, [accountFilter, communityFilter, includeOrdered]);
 
   useEffect(() => {
     listAccounts()
@@ -94,8 +94,8 @@ export default function OrderingPage({ canWrite }: { canWrite: boolean }) {
             </select>
           )}
           <label className="check-inline">
-            <input type="checkbox" checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} />
-            include closed
+            <input type="checkbox" checked={includeOrdered} onChange={(e) => setIncludeOrdered(e.target.checked)} />
+            show ordered &amp; completed
           </label>
         </div>
       </div>

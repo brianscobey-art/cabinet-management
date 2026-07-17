@@ -22,6 +22,17 @@ from app.api.deps import NATIONAL_BUILDER_PREFIXES  # noqa: E402
 
 STAGES = ("stage1", "stage2", "stage3", "stage4")
 
+# The ordering board is a pre-order worklist: once a job is ordered (2.0-Ord) or
+# beyond, it drops off. These are the only statuses shown by default.
+PRE_ORDER_STATUSES = (
+    JobStatus.track,     # 1.0-Track
+    JobStatus.preord,    # 1.1-PreOrd
+    JobStatus.ndord,     # 1.2-NdOrd
+    JobStatus.ordprcss,  # 1.3-Ord Prcss
+    JobStatus.ordsub,    # 1.4-OrdSub
+    JobStatus.ordpo,     # 1.5-OrdPO
+)
+
 STAGE_LABELS = {
     "stage1": "1. PO's and Selection File Creation",
     "stage2": "2. Orders and Layouts",
@@ -121,10 +132,11 @@ def update_checklist(job_id: int, payload: ChecklistUpdate, db: Session = Depend
 def ordering_board(
     account_id: int | None = None,
     community_id: int | None = None,
-    include_closed: bool = False,
+    include_ordered: bool = False,
     db: Session = Depends(get_db),
 ):
-    """All national-builder (builder-account) jobs with their 4-stage progress."""
+    """National-builder jobs still to be ordered (pre-order stages), with their
+    4-stage progress. Pass include_ordered=true to also show ordered/completed jobs."""
     query = (
         db.query(Job)
         .join(Account, Job.account_id == Account.id)
@@ -138,8 +150,8 @@ def ordering_board(
         query = query.filter(Job.account_id == account_id)
     if community_id is not None:
         query = query.filter(Job.community_id == community_id)
-    if not include_closed:
-        query = query.filter(Job.status.notin_((JobStatus.closed, JobStatus.void)))
+    if not include_ordered:
+        query = query.filter(Job.status.in_(PRE_ORDER_STATUSES))
     jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(500).all()
 
     checklists = {
