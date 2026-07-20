@@ -73,6 +73,9 @@ _LADDER = [JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordp
 
 WORKLIST_STATUSES = (JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordpo)
 
+# Not yet in the pipeline — shown on the "Up Next" list with an Order Now button.
+UPCOMING_STATUSES = (JobStatus.track, JobStatus.preord)
+
 
 def _seed_steps(checklist: OrderingChecklist, job_status: JobStatus) -> bool:
     """Pre-check steps implied by the coarse stage flags and the job's status,
@@ -204,11 +207,15 @@ def platform_board(
     account_id: int | None = None,
     community_id: int | None = None,
     include_ordered: bool = False,
+    include_upcoming: bool = False,
     db: Session = Depends(get_db),
 ):
     """Active ordering worklist: national-builder jobs in 1.2-NdOrd → 1.5-OrdPO.
-    include_ordered=true also returns 2.0-Ord jobs (the platform's Completed view)."""
+    include_ordered=true adds 2.0-Ord jobs (the Ordered view);
+    include_upcoming=true adds 1.0-Track/1.1-PreOrd jobs (the Up Next list)."""
     statuses = list(WORKLIST_STATUSES) + ([JobStatus.ord] if include_ordered else [])
+    if include_upcoming:
+        statuses += list(UPCOMING_STATUSES)
     query = (
         db.query(Job)
         .join(Account, Job.account_id == Account.id)
@@ -233,6 +240,26 @@ def platform_board(
         rows.append(_row(job, checklist))
     db.commit()
     return rows
+
+
+@router.post("/jobs/{job_id}/order-now", response_model=PlatformRow, dependencies=[Depends(write_access)])
+def order_now(job_id: int, db: Session = Depends(get_db)):
+    """Pull an upcoming job (1.0-Track / 1.1-PreOrd) into the ordering pipeline at 1.2-NdOrd."""
+    job = (
+        db.query(Job)
+        .options(joinedload(Job.account), joinedload(Job.community))
+        .filter(Job.id == job_id)
+        .first()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.status not in UPCOMING_STATUSES:
+        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not an upcoming job")
+    job.status = JobStatus.ndord
+    checklist = get_or_create_checklist(db, job)
+    db.commit()
+    db.refresh(checklist)
+    return _row(job, checklist)
 
 
 @router.patch("/jobs/{job_id}", response_model=PlatformRow, dependencies=[Depends(write_access)])

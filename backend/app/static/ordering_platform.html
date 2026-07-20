@@ -254,6 +254,8 @@ function toast(msg, err) {
 
 const STALL_DAYS = 7;
 const STATUS_LABELS = {
+  "1.0-Track":     { short: "Tracking",                 sub: "not released yet" },
+  "1.1-PreOrd":    { short: "Released to construction", sub: "not ordering yet" },
   "1.2-NdOrd":     { short: "Need to order",            sub: "start the process" },
   "1.3-Ord Prcss": { short: "Order at vendor",          sub: "waiting on SO" },
   "1.4-OrdSub":    { short: "SO back — compare",        sub: "order · SO · layout" },
@@ -261,6 +263,8 @@ const STATUS_LABELS = {
   "2.0-Ord":       { short: "Ordered",                  sub: "PO filed, folder moved" },
 };
 const LADDER = ["1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub", "1.5-OrdPO", "2.0-Ord"];
+const WORK_STATUSES = ["1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub", "1.5-OrdPO"];
+const UPCOMING_STATUSES = ["1.0-Track", "1.1-PreOrd"];
 
 /* which extra field shows next to which step */
 const STEP_FIELDS = {
@@ -296,7 +300,9 @@ function progHTML(row) {
 }
 function jobTitle(row) { return row.job_code || row.address || ("Job #" + row.job_id); }
 function builders() { return [...new Set(ROWS.map(r => r.account_name))].sort(); }
-function worklist() { return ROWS.filter(r => !isOrdered(r)); }
+function worklist() { return ROWS.filter(r => WORK_STATUSES.includes(r.status)); }
+function upcoming() { return ROWS.filter(r => UPCOMING_STATUSES.includes(r.status)); }
+function isUpcoming(row) { return UPCOMING_STATUSES.includes(row.status); }
 
 let view = "dash", dashFilter = null, search = "", builderFilter = "";
 function matches(r) {
@@ -322,6 +328,7 @@ function renderShell() {
 }
 const NAV = [
   { key: "dash",  ico: "▦", label: "Dashboard" },
+  { key: "next",  ico: "⏵", label: "Up Next" },
   { key: "board", ico: "⫿", label: "Pipeline Board" },
   { key: "done",  ico: "✓", label: "Ordered" },
 ];
@@ -335,8 +342,9 @@ function go(v) { view = v; dashFilter = null; render(); }
 function render() {
   if (!$("nav")) renderShell();
   renderNav();
-  $("pageTitle").textContent = { dash: "Dashboard", board: "Pipeline Board", done: "Ordered Jobs" }[view];
+  $("pageTitle").textContent = { dash: "Dashboard", next: "Up Next — ready to order", board: "Pipeline Board", done: "Ordered Jobs" }[view];
   if (view === "dash") renderDash();
+  else if (view === "next") renderNext();
   else if (view === "board") renderBoard();
   else renderDone();
 }
@@ -351,6 +359,7 @@ function renderDash() {
 
   let h = '<div class="tiles">';
   h += tile("all", act.length, "Jobs to order", null);
+  h += '<div class="tile t-12" onclick="go(\'next\')"><div class="n">' + upcoming().length + '</div><div class="l">Up next (1.0–1.1) →</div></div>';
   h += tile("12", counts["1.2-NdOrd"], "1.2 Need to order", "1.2-NdOrd");
   h += tile("13", counts["1.3-Ord Prcss"], "1.3 At vendor — awaiting SO", "1.3-Ord Prcss");
   h += tile("14", counts["1.4-OrdSub"], "1.4 SO back — compare", "1.4-OrdSub");
@@ -411,6 +420,52 @@ function renderDashBody() {
   });
   h += "</tbody></table></div></div>";
   $("dashBody").innerHTML = h;
+}
+
+/* ---- Up Next: jobs not yet pulled into the pipeline ---- */
+function renderNext() {
+  const rows = upcoming().filter(matches)
+    .sort((a, b) => (a.job_code || "").localeCompare(b.job_code || ""));
+  let h = '<div class="filters">' +
+    '<input type="search" placeholder="Search…" value="' + esc(search) + '" oninput="search=this.value;renderNext()">' +
+    '<select onchange="builderFilter=this.value;renderNext()"><option value="">All builders</option>' +
+    builders().map(b => '<option ' + (b === builderFilter ? "selected" : "") + ">" + esc(b) + "</option>").join("") + "</select></div>";
+  if (!rows.length) {
+    h += '<div class="card"><div class="empty">No upcoming jobs' + (search || builderFilter ? " match the filter" : "") +
+      ". Jobs at 1.0-Track / 1.1-PreOrd show up here with an Order Now button.</div></div>";
+    $("content").innerHTML = h; return;
+  }
+  h += '<div class="card"><div class="tablewrap"><table class="grid"><thead><tr>' +
+    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>Plan</th><th>Status</th><th>Install</th><th></th></tr></thead><tbody>";
+  rows.forEach(r => {
+    const sl = STATUS_LABELS[r.status];
+    h += '<tr class="rowlink" onclick="openJob(' + r.job_id + ')">' +
+      "<td><b>" + esc(jobTitle(r)) + "</b></td>" +
+      "<td>" + esc(r.account_name) + "</td>" +
+      "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
+      "<td>" + esc(r.plan || "") + "</td>" +
+      '<td><span class="chip stage" title="' + esc(sl ? sl.short : "") + '">' + esc(r.status) + "</span></td>" +
+      "<td>" + fmtDate(r.install_date) + "</td>" +
+      '<td><button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now</button></td>' +
+      "</tr>";
+  });
+  h += "</tbody></table></div></div>";
+  $("content").innerHTML = h;
+}
+
+async function orderNow(id, ev, btn) {
+  if (ev) ev.stopPropagation();
+  if (btn) { btn.disabled = true; btn.textContent = "Starting…"; }
+  try {
+    const updated = await api("/ordering-platform/jobs/" + id + "/order-now", { method: "POST", body: JSON.stringify({}) });
+    Object.assign(rowById(id), updated);
+    toast("▶ " + jobTitle(updated) + " pulled into the pipeline — 1.2-NdOrd");
+    render();
+    openJob(id);   // straight into the checklist
+  } catch (e) {
+    toast("Couldn't start ordering: " + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = "▶ Order Now"; }
+  }
 }
 
 /* ---- Board (columns = Brian's status ladder) ---- */
@@ -486,6 +541,9 @@ function renderJobModal() {
     '<div class="mbd">' +
     (isOrdered(r)
       ? '<span class="chip done">✓ 2.0-Ord — ordered ' + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</span>"
+      : isUpcoming(r)
+      ? '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span> " +
+        '<button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now — start at 1.2-NdOrd</button>'
       : '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span>" +
         (isStalled(r) ? ' <span class="chip warn">idle ' + daysSince(r.updated_at) + " days</span>" : ""));
   if (r.address) h += '<div style="font-size:13px;color:var(--muted);margin-top:8px">' + esc(r.address) + "</div>";
@@ -583,7 +641,7 @@ async function doLogin() {
 async function refresh(manual) {
   try {
     if (!META) META = await api("/ordering-platform/meta");
-    ROWS = await api("/ordering-platform/board?include_ordered=true");
+    ROWS = await api("/ordering-platform/board?include_ordered=true&include_upcoming=true");
     render();
     if (manual) toast("Refreshed — " + worklist().length + " jobs in the pipeline");
   } catch (e) {
