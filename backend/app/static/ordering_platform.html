@@ -303,6 +303,7 @@ function builders() { return [...new Set(ROWS.map(r => r.account_name))].sort();
 function worklist() { return ROWS.filter(r => WORK_STATUSES.includes(r.status)); }
 function upcoming() { return ROWS.filter(r => UPCOMING_STATUSES.includes(r.status)); }
 function isUpcoming(row) { return UPCOMING_STATUSES.includes(row.status); }
+function queueRows() { return ROWS.filter(r => r.queued); }
 
 let view = "dash", dashFilter = null, search = "", builderFilter = "";
 function matches(r) {
@@ -329,6 +330,7 @@ function renderShell() {
 const NAV = [
   { key: "dash",  ico: "▦", label: "Dashboard" },
   { key: "next",  ico: "⏵", label: "Up Next" },
+  { key: "queue", ico: "☰", label: "Ordering Queue" },
   { key: "board", ico: "⫿", label: "Pipeline Board" },
   { key: "done",  ico: "✓", label: "Ordered" },
 ];
@@ -342,9 +344,10 @@ function go(v) { view = v; dashFilter = null; render(); }
 function render() {
   if (!$("nav")) renderShell();
   renderNav();
-  $("pageTitle").textContent = { dash: "Dashboard", next: "Up Next — ready to order", board: "Pipeline Board", done: "Ordered Jobs" }[view];
+  $("pageTitle").textContent = { dash: "Dashboard", next: "Up Next — ready to order", queue: "Ordering Queue", board: "Pipeline Board", done: "Ordered Jobs" }[view];
   if (view === "dash") renderDash();
   else if (view === "next") renderNext();
+  else if (view === "queue") renderQueue();
   else if (view === "board") renderBoard();
   else renderDone();
 }
@@ -360,6 +363,7 @@ function renderDash() {
   let h = '<div class="tiles">';
   h += tile("all", act.length, "Jobs to order", null);
   h += '<div class="tile t-12" onclick="go(\'next\')"><div class="n">' + upcoming().length + '</div><div class="l">Up next (1.0–1.1) →</div></div>';
+  h += '<div class="tile t-13" onclick="go(\'queue\')"><div class="n">' + queueRows().length + '</div><div class="l">In ordering queue →</div></div>';
   h += tile("12", counts["1.2-NdOrd"], "1.2 Need to order", "1.2-NdOrd");
   h += tile("13", counts["1.3-Ord Prcss"], "1.3 At vendor — awaiting SO", "1.3-Ord Prcss");
   h += tile("14", counts["1.4-OrdSub"], "1.4 SO back — compare", "1.4-OrdSub");
@@ -446,7 +450,38 @@ function renderNext() {
       "<td>" + esc(r.plan || "") + "</td>" +
       '<td><span class="chip stage" title="' + esc(sl ? sl.short : "") + '">' + esc(r.status) + "</span></td>" +
       "<td>" + fmtDate(r.install_date) + "</td>" +
-      '<td><button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now</button></td>' +
+      "<td>" + (r.queued
+        ? '<span class="chip done">☰ In queue</span> <button class="btn sm ghost" onclick="dequeueJob(' + r.job_id + ',event,this)">✕</button>'
+        : '<button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now</button>') + "</td>" +
+      "</tr>";
+  });
+  h += "</tbody></table></div></div>";
+  $("content").innerHTML = h;
+}
+
+/* ---- Ordering Queue: staged jobs, finalized with Process ---- */
+function renderQueue() {
+  const rows = queueRows().filter(matches)
+    .sort((a, b) => (a.job_code || "").localeCompare(b.job_code || ""));
+  let h = '<div class="filters">' +
+    '<input type="search" placeholder="Search…" value="' + esc(search) + '" oninput="search=this.value;renderQueue()">' +
+    '<span style="flex:1"></span>' +
+    '<button class="btn" ' + (queueRows().length ? "" : "disabled ") + 'onclick="processQueue(this)">▶ Process Queue (' + queueRows().length + ")</button></div>";
+  if (!rows.length) {
+    h += '<div class="card"><div class="empty">The queue is empty. Add jobs with the Order Now button on the Up Next list, then process the batch here — each job starts stage 1 (PO’s &amp; Selection File) at 1.2-NdOrd.</div></div>';
+    $("content").innerHTML = h; return;
+  }
+  h += '<div class="card"><div class="tablewrap"><table class="grid"><thead><tr>' +
+    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>Plan</th><th>Status</th><th>Queued</th><th></th></tr></thead><tbody>";
+  rows.forEach(r => {
+    h += '<tr class="rowlink" onclick="openJob(' + r.job_id + ')">' +
+      "<td><b>" + esc(jobTitle(r)) + "</b></td>" +
+      "<td>" + esc(r.account_name) + "</td>" +
+      "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
+      "<td>" + esc(r.plan || "") + "</td>" +
+      '<td><span class="chip stage">' + esc(r.status) + "</span></td>" +
+      "<td>" + fmtDate(r.queued_at) + "</td>" +
+      '<td><button class="btn sm ghost" onclick="dequeueJob(' + r.job_id + ',event,this)">✕ Remove</button></td>' +
       "</tr>";
   });
   h += "</tbody></table></div></div>";
@@ -455,16 +490,47 @@ function renderNext() {
 
 async function orderNow(id, ev, btn) {
   if (ev) ev.stopPropagation();
-  if (btn) { btn.disabled = true; btn.textContent = "Starting…"; }
+  if (btn) { btn.disabled = true; btn.textContent = "Queuing…"; }
   try {
     const updated = await api("/ordering-platform/jobs/" + id + "/order-now", { method: "POST", body: JSON.stringify({}) });
     Object.assign(rowById(id), updated);
-    toast("▶ " + jobTitle(updated) + " pulled into the pipeline — 1.2-NdOrd");
+    toast("☰ " + jobTitle(updated) + " added to the ordering queue (" + queueRows().length + " queued)");
     render();
-    openJob(id);   // straight into the checklist
+    if (openJobId === id) renderJobModal();
   } catch (e) {
-    toast("Couldn't start ordering: " + e.message, true);
+    toast("Couldn't queue: " + e.message, true);
     if (btn) { btn.disabled = false; btn.textContent = "▶ Order Now"; }
+  }
+}
+
+async function dequeueJob(id, ev, btn) {
+  if (ev) ev.stopPropagation();
+  if (btn) btn.disabled = true;
+  try {
+    const updated = await api("/ordering-platform/jobs/" + id + "/dequeue", { method: "POST", body: JSON.stringify({}) });
+    Object.assign(rowById(id), updated);
+    toast(jobTitle(updated) + " removed from the queue");
+    render();
+    if (openJobId === id) renderJobModal();
+  } catch (e) {
+    toast("Couldn't remove: " + e.message, true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function processQueue(btn) {
+  const n = queueRows().length;
+  if (!n) return;
+  if (!confirm("Process the ordering queue?\n\n" + n + " job(s) will enter the pipeline at 1.2-NdOrd and start stage 1 — PO's & Selection File.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Processing…"; }
+  try {
+    const processed = await api("/ordering-platform/queue/process", { method: "POST", body: JSON.stringify({}) });
+    processed.forEach(u => { const row = rowById(u.job_id); if (row) Object.assign(row, u); });
+    toast("▶ " + processed.length + " job(s) moved into the pipeline at 1.2-NdOrd");
+    go("dash");
+  } catch (e) {
+    toast("Couldn't process the queue: " + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = "▶ Process Queue (" + n + ")"; }
   }
 }
 
@@ -543,7 +609,9 @@ function renderJobModal() {
       ? '<span class="chip done">✓ 2.0-Ord — ordered ' + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</span>"
       : isUpcoming(r)
       ? '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span> " +
-        '<button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now — start at 1.2-NdOrd</button>'
+        (r.queued
+          ? '<span class="chip done">☰ In ordering queue</span> <button class="btn sm ghost" onclick="dequeueJob(' + r.job_id + ',event,this)">✕ Remove</button>'
+          : '<button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now — add to queue</button>')
       : '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span>" +
         (isStalled(r) ? ' <span class="chip warn">idle ' + daysSince(r.updated_at) + " days</span>" : ""));
   if (r.address) h += '<div style="font-size:13px;color:var(--muted);margin-top:8px">' + esc(r.address) + "</div>";

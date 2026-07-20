@@ -35,6 +35,11 @@ class OrderingChecklist(Base):
     # coarse rollup (all of stage N's steps checked) so the classic board keeps working.
     steps: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    # Ordering queue: Order Now stages a job here; processing the queue moves the
+    # batch into the pipeline at 1.2-NdOrd and clears the flag.
+    queued: Mapped[bool] = mapped_column(Boolean, default=False)
+    queued_at: Mapped[date | None] = mapped_column(Date, default=None)
+
     # Reference numbers captured along the way (builder PO, Everluxe SO, Carter PO).
     po_number: Mapped[str | None] = mapped_column(String(50), default=None)
     so_number: Mapped[str | None] = mapped_column(String(50), default=None)

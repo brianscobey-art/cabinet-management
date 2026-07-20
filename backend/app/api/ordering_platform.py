@@ -149,6 +149,8 @@ class PlatformRow(BaseModel):
     plan: str | None
     status: JobStatus
     install_date: date | None
+    queued: bool
+    queued_at: date | None
     steps: dict[str, str]
     po_number: str | None
     so_number: str | None
@@ -179,6 +181,8 @@ def _row(job: Job, checklist: OrderingChecklist) -> PlatformRow:
         plan=job.plan,
         status=job.status,
         install_date=job.install_date,
+        queued=checklist.queued,
+        queued_at=checklist.queued_at,
         steps=checklist.steps or {},
         po_number=checklist.po_number,
         so_number=checklist.so_number,
@@ -242,9 +246,7 @@ def platform_board(
     return rows
 
 
-@router.post("/jobs/{job_id}/order-now", response_model=PlatformRow, dependencies=[Depends(write_access)])
-def order_now(job_id: int, db: Session = Depends(get_db)):
-    """Pull an upcoming job (1.0-Track / 1.1-PreOrd) into the ordering pipeline at 1.2-NdOrd."""
+def _get_job(db: Session, job_id: int) -> Job:
     job = (
         db.query(Job)
         .options(joinedload(Job.account), joinedload(Job.community))
@@ -253,13 +255,62 @@ def order_now(job_id: int, db: Session = Depends(get_db)):
     )
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    return job
+
+
+@router.post("/jobs/{job_id}/order-now", response_model=PlatformRow, dependencies=[Depends(write_access)])
+def order_now(job_id: int, db: Session = Depends(get_db)):
+    """Stage an upcoming job (1.0-Track / 1.1-PreOrd) in the ordering queue.
+    The job's status doesn't change until the queue is processed."""
+    job = _get_job(db, job_id)
     if job.status not in UPCOMING_STATUSES:
         raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not an upcoming job")
-    job.status = JobStatus.ndord
     checklist = get_or_create_checklist(db, job)
+    if checklist.queued:
+        raise HTTPException(status_code=409, detail="Job is already in the ordering queue")
+    checklist.queued = True
+    checklist.queued_at = date.today()
     db.commit()
     db.refresh(checklist)
     return _row(job, checklist)
+
+
+@router.post("/jobs/{job_id}/dequeue", response_model=PlatformRow, dependencies=[Depends(write_access)])
+def dequeue(job_id: int, db: Session = Depends(get_db)):
+    """Take a job back out of the ordering queue (before it's processed)."""
+    job = _get_job(db, job_id)
+    checklist = get_or_create_checklist(db, job)
+    if not checklist.queued:
+        raise HTTPException(status_code=409, detail="Job is not in the ordering queue")
+    checklist.queued = False
+    checklist.queued_at = None
+    db.commit()
+    db.refresh(checklist)
+    return _row(job, checklist)
+
+
+@router.post("/queue/process", response_model=list[PlatformRow], dependencies=[Depends(write_access)])
+def process_queue(db: Session = Depends(get_db)):
+    """Finalize the queue: every queued job enters the pipeline at 1.2-NdOrd,
+    starting stage 1 (PO's & Selection File). Returns the processed jobs."""
+    queued = (
+        db.query(OrderingChecklist)
+        .join(Job, OrderingChecklist.job_id == Job.id)
+        .options(joinedload(OrderingChecklist.job).joinedload(Job.account),
+                 joinedload(OrderingChecklist.job).joinedload(Job.community))
+        .filter(OrderingChecklist.queued.is_(True))
+        .all()
+    )
+    rows = []
+    for checklist in queued:
+        job = checklist.job
+        if job.status in UPCOMING_STATUSES:
+            job.status = JobStatus.ndord
+        checklist.queued = False
+        checklist.queued_at = None
+        rows.append(_row(job, checklist))
+    db.commit()
+    return rows
 
 
 @router.patch("/jobs/{job_id}", response_model=PlatformRow, dependencies=[Depends(write_access)])
