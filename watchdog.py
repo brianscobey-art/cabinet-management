@@ -14,6 +14,7 @@ Log: watchdog.log next to this script. Repeated crash-starts back off
 (10s -> 60s -> 5min) so a broken app doesn't spin the CPU.
 """
 
+import socket
 import subprocess
 import sys
 import time
@@ -74,6 +75,16 @@ def start_app() -> None:
 
 
 def main() -> None:
+    # Single-instance lock: hold a localhost port for the watchdog's lifetime.
+    # A second copy (e.g. logon task while one is already running) exits quietly.
+    try:
+        lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lock.bind(("127.0.0.1", 8790))
+        lock.listen(1)
+    except OSError:
+        log("another watchdog is already running — exiting")
+        return
+
     log(f"watchdog running — checking {HEALTH_URL} every {CHECK_SECONDS}s")
     if not VENV_PY.exists():
         log(f"FATAL: venv python not found at {VENV_PY}")
