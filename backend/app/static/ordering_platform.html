@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ordering Platform — Carter Kitchen &amp; Bath</title>
+<style>
+  :root {
+    --green: #125952;
+    --green-dark: #0d423d;
+    --green-pale: #e7f2f0;
+    --mint: #2bb99f;
+    --mint-pale: #e4f6f2;
+    --orange: #df5822;
+    --orange-pale: #fdeee7;
+    --ink: #1e2b28;
+    --line: #d8e0de;
+    --bg: #f3f6f5;
+    --panel: #ffffff;
+    --muted: #64756f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Segoe UI", Arial, system-ui, sans-serif;
+    font-size: 14px; color: var(--ink); background: var(--bg);
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; }
+  input, select, textarea {
+    border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; background: #fff; color: var(--ink);
+  }
+  input:focus, select:focus, textarea:focus, button:focus-visible {
+    outline: 2px solid var(--mint); outline-offset: 1px;
+  }
+
+  .app { display: flex; height: 100vh; }
+  .sidebar {
+    width: 216px; background: var(--green); color: #d9e8e5;
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .brand { padding: 16px; background: var(--green-dark); color: #fff; line-height: 1.3; }
+  .brand b { font-size: 15px; letter-spacing: .3px; }
+  .brand small { display: block; font-weight: normal; opacity: .85; font-size: 11px; margin-top: 2px; }
+  .nav { padding: 8px 0; flex: 1; }
+  .nav button {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: none; color: #c5d8d4; padding: 11px 18px; font-size: 14px;
+  }
+  .nav button:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .nav button.active { background: var(--green-dark); color: #fff; box-shadow: inset 3px 0 0 var(--mint); }
+  .nav .ico { width: 18px; text-align: center; }
+  .sidebar .foot { padding: 12px 16px; font-size: 11px; color: #9db8b3; border-top: 1px solid #1d6b62; }
+  .sidebar .foot a { color: #c5d8d4; }
+
+  .main { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 22px; background: var(--panel); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .topbar h1 { font-size: 18px; margin: 0; }
+  .content { padding: 22px; }
+
+  .btn {
+    border: 1px solid var(--green); background: var(--green); color: #fff;
+    padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 600;
+  }
+  .btn:hover { background: var(--green-dark); border-color: var(--green-dark); }
+  .btn.ghost { background: #fff; color: var(--green); }
+  .btn.ghost:hover { background: var(--green-pale); }
+  .btn.sm { padding: 5px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; border-top: 3px solid var(--line); }
+  .tile:hover { border-color: var(--mint); }
+  .tile .n { font-size: 26px; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .tile .l { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+  .tile.t-all { border-top-color: var(--green); }
+  .tile.t-12 { border-top-color: #8fbcb5; }
+  .tile.t-13 { border-top-color: #5fae9f; }
+  .tile.t-14 { border-top-color: var(--mint); }
+  .tile.t-15 { border-top-color: var(--green); }
+  .tile.t-done { border-top-color: var(--green-dark); }
+  .tile.t-warn { border-top-color: var(--orange); }
+  .tile.sel { background: var(--mint-pale); border-color: var(--mint); }
+
+  table.grid { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .grid th {
+    background: var(--green); color: #fff; font-weight: normal; font-size: 12px;
+    padding: 8px 10px; text-align: left; position: sticky; top: 0; white-space: nowrap;
+  }
+  .grid td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .grid tr.rowlink { cursor: pointer; }
+  .grid tr.rowlink:hover td { background: var(--mint-pale); }
+  .tablewrap { overflow-x: auto; }
+
+  .prog { display: flex; gap: 3px; width: 130px; }
+  .prog span { flex: 1; height: 9px; border-radius: 2px; background: #e0e8e6; }
+  .prog span.done { background: var(--mint); }
+  .prog span.part { background: linear-gradient(90deg, var(--mint) 50%, #e0e8e6 50%); }
+  .prog span.full { background: var(--green); }
+
+  .chip { display: inline-block; padding: 3px 9px; border-radius: 11px; font-size: 12px; white-space: nowrap; }
+  .chip.stage { background: var(--mint-pale); color: var(--green); border: 1px solid #b9e4da; }
+  .chip.done { background: var(--green-pale); color: var(--green); border: 1px solid #b9d4cf; }
+  .chip.warn { background: var(--orange-pale); color: var(--orange); border: 1px solid #f3c4ad; }
+
+  .board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+  .boardwrap { overflow-x: auto; padding-bottom: 8px; }
+  .col { background: #e9efed; border: 1px solid var(--line); border-radius: 8px; min-height: 120px; }
+  .col .colhd {
+    padding: 10px 12px; font-weight: bold; font-size: 13px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center; gap: 6px; background: var(--panel);
+    border-radius: 8px 8px 0 0; border-top: 3px solid var(--mint);
+  }
+  .col.c-done .colhd { border-top-color: var(--green-dark); }
+  .colhd small { display: block; font-weight: normal; color: var(--muted); font-size: 11px; }
+  .col .colhd .cnt { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: normal; }
+  .col .cards { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .jcard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; cursor: pointer; }
+  .jcard:hover { border-color: var(--mint); box-shadow: 0 1px 4px rgba(43,185,159,.3); }
+  .jcard .code { font-weight: bold; }
+  .jcard .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .jcard .next { font-size: 12px; margin-top: 6px; color: var(--green); }
+  .jcard .meta { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; }
+  .jcard .days { font-size: 11px; color: var(--muted); }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(13,45,41,.55); z-index: 50;
+    display: flex; align-items: flex-start; justify-content: center; padding: 30px 14px; overflow: auto;
+  }
+  .modal { background: var(--panel); border-radius: 10px; width: 100%; max-width: 780px; margin-bottom: 40px; }
+  .modal .mhd {
+    padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center;
+    justify-content: space-between; gap: 10px; position: sticky; top: 0; background: var(--panel);
+    border-radius: 10px 10px 0 0; z-index: 2;
+  }
+  .modal .mhd h2 { margin: 0; font-size: 17px; }
+  .modal .mbd { padding: 18px 20px; }
+  .x { background: none; border: none; font-size: 20px; color: var(--muted); padding: 2px 8px; border-radius: 5px; }
+  .x:hover { background: #eef2f1; color: var(--ink); }
+
+  .stages { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .stagebox { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .stagebox .shd {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg);
+    border-bottom: 1px solid var(--line); font-weight: bold; font-size: 14px;
+  }
+  .stagebox.active .shd { background: var(--mint-pale); }
+  .stagebox.done .shd { background: var(--green-pale); }
+  .snum {
+    width: 24px; height: 24px; border-radius: 50%; background: #b3c6c1; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;
+  }
+  .stagebox.active .snum { background: var(--mint); }
+  .stagebox.done .snum { background: var(--green); }
+  .shd .stat { margin-left: auto; font-size: 12px; font-weight: normal; color: var(--muted); }
+  .steps { padding: 6px 14px 12px; display: flex; flex-direction: column; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px dashed #e4eae8; flex-wrap: wrap; }
+  .step:last-child { border-bottom: none; }
+  .step input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--mint); flex-shrink: 0; }
+  .step .lbl { flex: 1; min-width: 150px; }
+  .step.checked .lbl { color: var(--muted); text-decoration: line-through; }
+  .step .when { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .step input[type="text"] { padding: 4px 7px; font-size: 13px; width: 140px; }
+
+  .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  .filters input[type="search"] { min-width: 220px; }
+
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; background: var(--green-dark); color: #fff;
+    padding: 10px 16px; border-radius: 6px; font-size: 13px; z-index: 99; opacity: 0;
+    transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { background: var(--orange); }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+  /* login */
+  .loginbox { max-width: 360px; margin: 80px auto; }
+  .loginbox .card { padding: 24px; }
+  .loginbox h2 { margin: 0 0 4px; color: var(--green); }
+  .loginbox p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .loginbox .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .loginbox label { font-size: 12px; color: var(--muted); }
+  .loginbox input { width: 100%; }
+  .loginerr { color: var(--orange); font-size: 13px; margin-bottom: 10px; min-height: 17px; }
+
+  @media (max-width: 760px) {
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
+    .brand { padding: 12px 14px; white-space: nowrap; }
+    .nav { display: flex; padding: 0; flex: 1; }
+    .nav button { width: auto; white-space: nowrap; padding: 14px 12px; }
+    .sidebar .foot { display: none; }
+    .prog { width: 90px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================= API ================= */
+const TOKEN_KEY = "cms_token";   // shared with the main Carter K&B app — one login
+let META = null;                 // stage/step definitions from the server
+let ROWS = [];                   // board rows (worklist + ordered)
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
+async function api(path, opts = {}) {
+  const resp = await fetch("/api" + path, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: "Bearer " + token(),
+    },
+  });
+  if (resp.status === 401) { renderLogin(); throw new Error("Not signed in"); }
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null))?.detail;
+    throw new Error(detail || resp.statusText);
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+
+/* ================= Helpers ================= */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function fmtDate(iso) {           // m/d/yy
+  if (!iso) return "";
+  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return m + "/" + d + "/" + String(y).slice(2);
+}
+function daysSince(iso) {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+function toast(msg, err) {
+  const t = $("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), err ? 4000 : 2200);
+}
+
+const STALL_DAYS = 7;
+const STATUS_LABELS = {
+  "1.2-NdOrd":     { short: "Need to order",            sub: "start the process" },
+  "1.3-Ord Prcss": { short: "Order at vendor",          sub: "waiting on SO" },
+  "1.4-OrdSub":    { short: "SO back — compare",        sub: "order · SO · layout" },
+  "1.5-OrdPO":     { short: "With coordinator",         sub: "Carter PO being created" },
+  "2.0-Ord":       { short: "Ordered",                  sub: "PO filed, folder moved" },
+};
+const LADDER = ["1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub", "1.5-OrdPO", "2.0-Ord"];
+
+/* which extra field shows next to which step */
+const STEP_FIELDS = {
+  "s1.poRecv":   { key: "po_number",        ph: "Builder PO #" },
+  "s2.ordSub":   { key: "vendor",           ph: "Vendor" },
+  "s3.soRecv":   { key: "so_number",        ph: "SO #" },
+  "s4.poGen":    { key: "carter_po_number", ph: "Carter PO #" },
+};
+
+function stageSteps(sk) { return META.stages.find(s => s.key === sk).steps.map(st => sk + "." + st.key); }
+function stageDone(row, sk) { return stageSteps(sk).every(k => row.steps[k]); }
+function stagePart(row, sk) { return stageSteps(sk).some(k => row.steps[k]); }
+function currentStageIdx(row) {
+  for (let i = 0; i < META.stages.length; i++) if (!stageDone(row, META.stages[i].key)) return i;
+  return 4;
+}
+function isOrdered(row) { return row.status === "2.0-Ord"; }
+function isStalled(row) { return !isOrdered(row) && daysSince(row.updated_at) >= STALL_DAYS; }
+function nextAction(row) {
+  const ci = currentStageIdx(row);
+  if (ci === 4) return "Ordered — complete";
+  const stg = META.stages[ci];
+  const st = stg.steps.find(st => !row.steps[stg.key + "." + st.key]);
+  return st ? st.label : "";
+}
+function progHTML(row) {
+  let h = '<div class="prog">';
+  META.stages.forEach(s => {
+    const cls = stageDone(row, s.key) ? (isOrdered(row) ? "full" : "done") : (stagePart(row, s.key) ? "part" : "");
+    h += '<span class="' + cls + '"></span>';
+  });
+  return h + "</div>";
+}
+function jobTitle(row) { return row.job_code || row.address || ("Job #" + row.job_id); }
+function builders() { return [...new Set(ROWS.map(r => r.account_name))].sort(); }
+function worklist() { return ROWS.filter(r => !isOrdered(r)); }
+
+let view = "dash", dashFilter = null, search = "", builderFilter = "";
+function matches(r) {
+  if (builderFilter && r.account_name !== builderFilter) return false;
+  if (search) {
+    const hay = [r.job_code, r.account_name, r.community_name, r.lot_number, r.plan, r.address, r.po_number, r.so_number, r.carter_po_number, r.vendor].join(" ").toLowerCase();
+    if (!hay.includes(search.toLowerCase())) return false;
+  }
+  return true;
+}
+
+/* ================= Shell ================= */
+function renderShell() {
+  $("app").innerHTML =
+    '<div class="app"><aside class="sidebar">' +
+    '<div class="brand"><b>Carter Kitchen &amp; Bath</b><small>Ordering Platform</small></div>' +
+    '<nav class="nav" id="nav"></nav>' +
+    '<div class="foot">Live CabinetTron data — statuses sync both ways. <a href="/">Back to main app</a></div>' +
+    "</aside>" +
+    '<div class="main"><div class="topbar"><h1 id="pageTitle"></h1>' +
+    '<div class="btnrow"><button class="btn ghost sm" onclick="refresh(true)">⟳ Refresh</button></div></div>' +
+    '<div class="content" id="content"></div></div></div>';
+}
+const NAV = [
+  { key: "dash",  ico: "▦", label: "Dashboard" },
+  { key: "board", ico: "⫿", label: "Pipeline Board" },
+  { key: "done",  ico: "✓", label: "Ordered" },
+];
+function renderNav() {
+  $("nav").innerHTML = NAV.map(n =>
+    '<button class="' + (view === n.key ? "active" : "") + '" onclick="go(\'' + n.key + '\')"><span class="ico">' + n.ico + "</span>" + n.label + "</button>"
+  ).join("");
+}
+function go(v) { view = v; dashFilter = null; render(); }
+
+function render() {
+  if (!$("nav")) renderShell();
+  renderNav();
+  $("pageTitle").textContent = { dash: "Dashboard", board: "Pipeline Board", done: "Ordered Jobs" }[view];
+  if (view === "dash") renderDash();
+  else if (view === "board") renderBoard();
+  else renderDone();
+}
+
+/* ---- Dashboard ---- */
+function renderDash() {
+  const act = worklist();
+  const counts = {};
+  LADDER.forEach(s => counts[s] = 0);
+  act.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
+  const stalled = act.filter(isStalled).length;
+
+  let h = '<div class="tiles">';
+  h += tile("all", act.length, "Jobs to order", null);
+  h += tile("12", counts["1.2-NdOrd"], "1.2 Need to order", "1.2-NdOrd");
+  h += tile("13", counts["1.3-Ord Prcss"], "1.3 At vendor — awaiting SO", "1.3-Ord Prcss");
+  h += tile("14", counts["1.4-OrdSub"], "1.4 SO back — compare", "1.4-OrdSub");
+  h += tile("15", counts["1.5-OrdPO"], "1.5 With coordinator", "1.5-OrdPO");
+  h += tile("warn", stalled, "Stalled " + STALL_DAYS + "+ days", "stalled");
+  h += tile("done", ROWS.filter(isOrdered).length, "2.0 Ordered", "done");
+  h += "</div>";
+
+  h += '<div class="filters">' +
+    '<input type="search" placeholder="Search job, PO, SO, community…" value="' + esc(search) + '" oninput="search=this.value;renderDashBody()">' +
+    '<select onchange="builderFilter=this.value;renderDashBody()"><option value="">All builders</option>' +
+    builders().map(b => '<option ' + (b === builderFilter ? "selected" : "") + ">" + esc(b) + "</option>").join("") + "</select>" +
+    (dashFilter !== null ? '<button class="btn sm ghost" onclick="dashFilter=null;render()">Clear filter ✕</button>' : "") +
+    "</div><div id='dashBody'></div>";
+  $("content").innerHTML = h;
+  renderDashBody();
+}
+function tile(cls, n, label, filter) {
+  const sel = dashFilter === filter && filter !== null;
+  const arg = filter === null ? "null" : '"' + filter + '"';
+  return '<div class="tile t-' + cls + (sel ? " sel" : "") + '" onclick="dashFilter=' + arg + ';render()"><div class="n">' + n + '</div><div class="l">' + esc(label) + "</div></div>";
+}
+function renderDashBody() {
+  let rows;
+  if (dashFilter === "done") rows = ROWS.filter(isOrdered);
+  else if (dashFilter === "stalled") rows = worklist().filter(isStalled);
+  else if (dashFilter) rows = worklist().filter(r => r.status === dashFilter);
+  else rows = worklist();
+  rows = rows.filter(matches);
+  rows.sort((a, b) => (a.job_code || "").localeCompare(b.job_code || ""));
+
+  if (!rows.length) {
+    $("dashBody").innerHTML = '<div class="card"><div class="empty">' +
+      (ROWS.length ? "No jobs match the current filter." : "No jobs in the ordering window (1.2-NdOrd → 1.5-OrdPO).") + "</div></div>";
+    return;
+  }
+  let h = '<div class="card"><div class="tablewrap"><table class="grid"><thead><tr>' +
+    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>Plan</th><th>Progress</th><th>Status</th><th>Next action</th><th>PO #</th><th>SO #</th><th>Idle</th>" +
+    "</tr></thead><tbody>";
+  rows.forEach(r => {
+    const sl = STATUS_LABELS[r.status] || { short: r.status };
+    const chip = isOrdered(r)
+      ? '<span class="chip done">✓ ' + esc(r.status) + "</span>"
+      : '<span class="chip stage" title="' + esc(sl.short) + '">' + esc(r.status) + "</span>";
+    const idle = isOrdered(r) ? "" : daysSince(r.updated_at);
+    h += '<tr class="rowlink" onclick="openJob(' + r.job_id + ')">' +
+      "<td><b>" + esc(jobTitle(r)) + "</b></td>" +
+      "<td>" + esc(r.account_name) + "</td>" +
+      "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
+      "<td>" + esc(r.plan || "") + "</td>" +
+      "<td>" + progHTML(r) + "</td>" +
+      "<td>" + chip + "</td>" +
+      "<td>" + esc(nextAction(r)) + "</td>" +
+      "<td>" + esc(r.po_number || "") + "</td>" +
+      "<td>" + esc(r.so_number || "") + "</td>" +
+      "<td>" + (idle === "" ? "" : (isStalled(r) ? '<span class="chip warn">' + idle + " d</span>" : idle + " d")) + "</td>" +
+      "</tr>";
+  });
+  h += "</tbody></table></div></div>";
+  $("dashBody").innerHTML = h;
+}
+
+/* ---- Board (columns = Brian's status ladder) ---- */
+function renderBoard() {
+  let h = '<div class="filters">' +
+    '<input type="search" placeholder="Search…" value="' + esc(search) + '" oninput="search=this.value;renderBoard()">' +
+    '<select onchange="builderFilter=this.value;renderBoard()"><option value="">All builders</option>' +
+    builders().map(b => '<option ' + (b === builderFilter ? "selected" : "") + ">" + esc(b) + "</option>").join("") + "</select></div>";
+
+  h += '<div class="boardwrap"><div class="board">';
+  LADDER.forEach(st => {
+    const rows = ROWS.filter(r => r.status === st && matches(r))
+      .sort((a, b) => (a.job_code || "").localeCompare(b.job_code || ""));
+    const sl = STATUS_LABELS[st];
+    h += '<div class="col' + (st === "2.0-Ord" ? " c-done" : "") + '"><div class="colhd"><span>' + esc(st) +
+      "<small>" + esc(sl.short) + "</small></span>" + '<span class="cnt">' + rows.length + "</span></div><div class='cards'>";
+    rows.forEach(r => {
+      h += '<div class="jcard" onclick="openJob(' + r.job_id + ')">' +
+        '<div class="code">' + esc(jobTitle(r)) + "</div>" +
+        '<div class="sub">' + esc(r.community_name || r.account_name) + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</div>" +
+        (st === "2.0-Ord" ? "" : '<div class="next">▸ ' + esc(nextAction(r)) + "</div>") +
+        '<div class="meta">' + progHTML(r) +
+        (st === "2.0-Ord" ? "" : '<span class="days">' + (isStalled(r) ? '<span class="chip warn">' + daysSince(r.updated_at) + " d</span>" : daysSince(r.updated_at) + " d") + "</span>") +
+        "</div></div>";
+    });
+    if (!rows.length) h += '<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0">—</div>';
+    h += "</div></div>";
+  });
+  h += "</div></div>";
+  $("content").innerHTML = h;
+}
+
+/* ---- Ordered ---- */
+function renderDone() {
+  const rows = ROWS.filter(isOrdered).filter(matches)
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+  let h = '<div class="filters"><input type="search" placeholder="Search…" value="' + esc(search) + '" oninput="search=this.value;renderDone()"></div>';
+  if (!rows.length) {
+    h += '<div class="card"><div class="empty">No ordered jobs to show. Jobs land here at 2.0-Ord — PO filed and folder moved.</div></div>';
+    $("content").innerHTML = h; return;
+  }
+  h += '<div class="card"><div class="tablewrap"><table class="grid"><thead><tr>' +
+    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>PO #</th><th>SO #</th><th>Carter PO #</th><th>Vendor</th><th>Ordered</th></tr></thead><tbody>";
+  rows.forEach(r => {
+    h += '<tr class="rowlink" onclick="openJob(' + r.job_id + ')">' +
+      "<td><b>" + esc(jobTitle(r)) + "</b></td><td>" + esc(r.account_name) + "</td>" +
+      "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
+      "<td>" + esc(r.po_number || "") + "</td><td>" + esc(r.so_number || "") + "</td>" +
+      "<td>" + esc(r.carter_po_number || "") + "</td><td>" + esc(r.vendor || "") + "</td>" +
+      "<td>" + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</td></tr>";
+  });
+  h += "</tbody></table></div></div>";
+  $("content").innerHTML = h;
+}
+
+/* ================= Job modal ================= */
+let openJobId = null;
+function openJob(id) { openJobId = id; renderJobModal(); }
+function rowById(id) { return ROWS.find(r => r.job_id === id); }
+
+function renderJobModal() {
+  const r = rowById(openJobId);
+  if (!r) { closeModal(); return; }
+  const ci = currentStageIdx(r);
+  const sl = STATUS_LABELS[r.status];
+  let h = '<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<div class="mhd"><div><h2>' + esc(jobTitle(r)) + "</h2>" +
+    '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(r.account_name) +
+    (r.community_name ? " · " + esc(r.community_name) : "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") +
+    (r.plan ? " · " + esc(r.plan) : "") +
+    (r.install_date ? " · install <b>" + fmtDate(r.install_date) + "</b>" : "") + "</div></div>" +
+    '<button class="x" onclick="closeModal()" aria-label="Close">✕</button></div>' +
+    '<div class="mbd">' +
+    (isOrdered(r)
+      ? '<span class="chip done">✓ 2.0-Ord — ordered ' + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</span>"
+      : '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span>" +
+        (isStalled(r) ? ' <span class="chip warn">idle ' + daysSince(r.updated_at) + " days</span>" : ""));
+  if (r.address) h += '<div style="font-size:13px;color:var(--muted);margin-top:8px">' + esc(r.address) + "</div>";
+
+  h += '<div class="stages">';
+  META.stages.forEach((s, i) => {
+    const done = stageDone(r, s.key);
+    const cls = done ? "done" : (i === ci ? "active" : "");
+    const dc = s.steps.filter(st => r.steps[s.key + "." + st.key]).length;
+    h += '<div class="stagebox ' + cls + '"><div class="shd"><span class="snum">' + (done ? "✓" : (i + 1)) + "</span>" +
+      esc(s.label) + '<span class="stat">' + dc + " / " + s.steps.length + "</span></div><div class='steps'>";
+    s.steps.forEach(st => {
+      const sk = s.key + "." + st.key;
+      const when = r.steps[sk];
+      const fieldDef = STEP_FIELDS[sk];
+      h += '<div class="step' + (when ? " checked" : "") + '">' +
+        '<input type="checkbox" id="cb_' + sk.replace(".", "_") + '" ' + (when ? "checked" : "") +
+        ' onchange="toggleStep(\'' + sk + "',this.checked,this)\">" +
+        '<label class="lbl" for="cb_' + sk.replace(".", "_") + '">' + esc(st.label) + "</label>";
+      if (fieldDef) {
+        h += '<input type="text" placeholder="' + esc(fieldDef.ph) + '" value="' + esc(r[fieldDef.key] || "") +
+          '" onchange="setField(\'' + fieldDef.key + "',this.value)\">";
+      }
+      if (when) h += '<span class="when">✓ ' + fmtDate(when) + "</span>";
+      h += "</div>";
+    });
+    h += "</div></div>";
+  });
+  h += "</div>";
+  h += '<div style="margin-top:14px"><label style="font-size:12px;color:var(--muted)">Notes</label>' +
+    '<textarea rows="2" style="width:100%;margin-top:4px" onchange="setField(\'notes\',this.value)">' + esc(r.notes || "") + "</textarea></div>";
+  h += "</div></div></div>";
+  $("modalRoot").innerHTML = h;
+}
+
+async function toggleStep(stepKey, done, el) {
+  el.disabled = true;
+  try {
+    const before = rowById(openJobId).status;
+    const updated = await api("/ordering-platform/jobs/" + openJobId, {
+      method: "PATCH", body: JSON.stringify({ step: stepKey, done }),
+    });
+    Object.assign(rowById(openJobId), updated);
+    if (updated.status !== before) {
+      toast(updated.status === "2.0-Ord"
+        ? "🎉 " + jobTitle(updated) + " fully ordered → 2.0-Ord"
+        : "Status → " + updated.status);
+    }
+    renderJobModal(); render();
+  } catch (e) {
+    toast("Couldn't save: " + e.message, true);
+    el.checked = !done; el.disabled = false;
+  }
+}
+async function setField(key, value) {
+  try {
+    const updated = await api("/ordering-platform/jobs/" + openJobId, {
+      method: "PATCH", body: JSON.stringify({ [key]: value }),
+    });
+    Object.assign(rowById(openJobId), updated);
+    render();
+  } catch (e) { toast("Couldn't save: " + e.message, true); }
+}
+function closeModal() { $("modalRoot").innerHTML = ""; openJobId = null; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+/* ================= Login ================= */
+function renderLogin() {
+  $("app").innerHTML =
+    '<div class="loginbox"><div class="card">' +
+    "<h2>Ordering Platform</h2><p>Sign in with your Carter Kitchen &amp; Bath account.</p>" +
+    '<div class="loginerr" id="loginErr"></div>' +
+    '<div class="field"><label for="l_email">Email</label><input id="l_email" type="email" autocomplete="username"></div>' +
+    '<div class="field"><label for="l_pw">Password</label><input id="l_pw" type="password" autocomplete="current-password"></div>' +
+    '<button class="btn" style="width:100%" onclick="doLogin()">Sign in</button>' +
+    "</div></div>";
+  $("l_email").focus();
+  $("l_pw").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+}
+async function doLogin() {
+  $("loginErr").textContent = "";
+  const body = new URLSearchParams({ username: $("l_email").value, password: $("l_pw").value });
+  try {
+    const resp = await fetch("/api/auth/token", { method: "POST", body });
+    if (!resp.ok) {
+      const detail = (await resp.json().catch(() => null))?.detail;
+      throw new Error(detail || "Login failed");
+    }
+    localStorage.setItem(TOKEN_KEY, (await resp.json()).access_token);
+    renderShell(); await refresh();
+  } catch (e) { $("loginErr").textContent = e.message; }
+}
+
+/* ================= Boot ================= */
+async function refresh(manual) {
+  try {
+    if (!META) META = await api("/ordering-platform/meta");
+    ROWS = await api("/ordering-platform/board?include_ordered=true");
+    render();
+    if (manual) toast("Refreshed — " + worklist().length + " jobs in the pipeline");
+  } catch (e) {
+    if (e.message !== "Not signed in") toast("Load failed: " + e.message, true);
+  }
+}
+if (!token()) renderLogin();
+else { renderShell(); refresh(); }
+</script>
+</body>
+</html>

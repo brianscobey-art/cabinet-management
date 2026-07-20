@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,6 +29,17 @@ class OrderingChecklist(Base):
     stage2_date: Mapped[date | None] = mapped_column(Date, default=None)
     stage3_date: Mapped[date | None] = mapped_column(Date, default=None)
     stage4_date: Mapped[date | None] = mapped_column(Date, default=None)
+
+    # Fine-grained sub-steps for the Ordering Platform page: {"s1.poRecv": "2026-07-20", ...}
+    # Key = stage.step, value = ISO date the step was checked. stageN_done stays the
+    # coarse rollup (all of stage N's steps checked) so the classic board keeps working.
+    steps: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Reference numbers captured along the way (builder PO, Everluxe SO, Carter PO).
+    po_number: Mapped[str | None] = mapped_column(String(50), default=None)
+    so_number: Mapped[str | None] = mapped_column(String(50), default=None)
+    carter_po_number: Mapped[str | None] = mapped_column(String(50), default=None)
+    vendor: Mapped[str | None] = mapped_column(String(100), default=None)  # None = Everluxe default
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     updated_at: Mapped[datetime] = mapped_column(

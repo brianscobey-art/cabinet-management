@@ -132,6 +132,7 @@ export default function App() {
           <a href="#/ordering" className={hash.startsWith("#/ordering") ? "active" : ""}>
             Ordering
           </a>
+          <a href="/ordering-platform">Platform</a>
           <a href="#/schedule" className={hash.startsWith("#/schedule") ? "active" : ""}>
             Schedule
           </a>

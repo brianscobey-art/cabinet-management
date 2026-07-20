@@ -11,6 +11,7 @@ from app.api.documents import router as documents_router
 from app.api.jobs import router as jobs_router
 from app.api.notes import router as notes_router
 from app.api.ordering import router as ordering_router
+from app.api.ordering_platform import router as ordering_platform_router
 from app.api.orders import router as orders_router
 from app.api.phases import router as phases_router
 from app.api.quotes import router as quotes_router
@@ -91,6 +92,7 @@ app.include_router(quotes_router)
 app.include_router(orders_router)
 app.include_router(documents_router)
 app.include_router(ordering_router)
+app.include_router(ordering_platform_router)
 app.include_router(sync_router)
 app.include_router(schedule_router)
 app.include_router(phases_router)
@@ -101,6 +103,18 @@ app.include_router(notes_router)
 @app.get("/health", tags=["system"])
 def health():
     return {"status": "ok"}
+
+
+# The Ordering Platform is a self-contained page (not part of the React bundle);
+# registered as a route so it wins over the frontend static mount.
+_static = Path(__file__).resolve().parent / "static"
+
+
+@app.get("/ordering-platform", include_in_schema=False)
+def ordering_platform_page():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_static / "ordering_platform.html")
 
 
 # Serve the built frontend (frontend/dist) when present — single-port deployment.

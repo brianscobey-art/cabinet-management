@@ -7,6 +7,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      workbox: {
+        // Server-rendered pages outside the SPA — never fall back to index.html
+        navigateFallbackDenylist: [/^\/ordering-platform/, /^\/api\//, /^\/docs/],
+      },
       manifest: {
         name: "Carter Kitchen and Bath",
         short_name: "Carter K&B",
