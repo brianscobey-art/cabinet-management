@@ -39,6 +39,8 @@ class OrderingChecklist(Base):
     # batch into the pipeline at 1.2-NdOrd and clears the flag.
     queued: Mapped[bool] = mapped_column(Boolean, default=False)
     queued_at: Mapped[date | None] = mapped_column(Date, default=None)
+    # Status the job had before the queue was processed — lets Undo put it back.
+    prior_status: Mapped[str | None] = mapped_column(String(20), default=None)
 
     # Reference numbers captured along the way (builder PO, Everluxe SO, Carter PO).
     po_number: Mapped[str | None] = mapped_column(String(50), default=None)

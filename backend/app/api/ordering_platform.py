@@ -305,12 +305,35 @@ def process_queue(db: Session = Depends(get_db)):
     for checklist in queued:
         job = checklist.job
         if job.status in UPCOMING_STATUSES:
+            checklist.prior_status = job.status.value  # so Undo can put it back
             job.status = JobStatus.ndord
         checklist.queued = False
         checklist.queued_at = None
         rows.append(_row(job, checklist))
     db.commit()
     return rows
+
+
+@router.post("/jobs/{job_id}/undo-order", response_model=PlatformRow, dependencies=[Depends(write_access)])
+def undo_order(job_id: int, db: Session = Depends(get_db)):
+    """Undo a processed order that hasn't gone out yet: the job returns to its
+    pre-queue status (Up Next) and the checklist is deleted outright, so the
+    next Order Now starts a completely fresh pull (re-seeded from documents).
+    Only allowed at 1.2-NdOrd — once the order is sent (1.3+), there's real
+    work to lose and the status ladder should be walked back step by step."""
+    job = _get_job(db, job_id)
+    if job.status != JobStatus.ndord:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is {job.status.value}; undo is only available at 1.2-NdOrd",
+        )
+    checklist = db.query(OrderingChecklist).filter(OrderingChecklist.job_id == job.id).first()
+    prior = checklist.prior_status if checklist else None
+    job.status = JobStatus(prior) if prior in {s.value for s in UPCOMING_STATUSES} else JobStatus.track
+    if checklist is not None:
+        db.delete(checklist)  # fresh pull next time
+    db.commit()
+    return _row(job, get_or_create_checklist(db, job))
 
 
 @router.patch("/jobs/{job_id}", response_model=PlatformRow, dependencies=[Depends(write_access)])

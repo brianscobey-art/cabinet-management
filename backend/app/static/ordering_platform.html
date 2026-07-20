@@ -518,6 +518,25 @@ async function dequeueJob(id, ev, btn) {
   }
 }
 
+async function undoOrder(id, btn) {
+  const r = rowById(id);
+  const checked = Object.keys(r.steps).length;
+  if (!confirm("Undo this order?\n\n" + jobTitle(r) + " goes back to Up Next and its PO / selection checklist is cleared" +
+    (checked ? " (" + checked + " checked step" + (checked > 1 ? "s" : "") + " will be wiped)" : "") +
+    " — the next Order Now starts a fresh pull.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Undoing…"; }
+  try {
+    const updated = await api("/ordering-platform/jobs/" + id + "/undo-order", { method: "POST", body: JSON.stringify({}) });
+    Object.assign(rowById(id), updated);
+    toast("↩ " + jobTitle(updated) + " back to Up Next (" + updated.status + ") — checklist cleared");
+    render();
+    renderJobModal();
+  } catch (e) {
+    toast("Couldn't undo: " + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = "↩ Undo — back to Up Next"; }
+  }
+}
+
 async function processQueue(btn) {
   const n = queueRows().length;
   if (!n) return;
@@ -613,7 +632,8 @@ function renderJobModal() {
           ? '<span class="chip done">☰ In ordering queue</span> <button class="btn sm ghost" onclick="dequeueJob(' + r.job_id + ',event,this)">✕ Remove</button>'
           : '<button class="btn sm" onclick="orderNow(' + r.job_id + ',event,this)">▶ Order Now — add to queue</button>')
       : '<span class="chip stage">' + esc(r.status) + " — " + esc(sl ? sl.short : "") + "</span>" +
-        (isStalled(r) ? ' <span class="chip warn">idle ' + daysSince(r.updated_at) + " days</span>" : ""));
+        (isStalled(r) ? ' <span class="chip warn">idle ' + daysSince(r.updated_at) + " days</span>" : "") +
+        (r.status === "1.2-NdOrd" ? ' <button class="btn sm ghost" onclick="undoOrder(' + r.job_id + ',this)">↩ Undo — back to Up Next</button>' : ""));
   if (r.address) h += '<div style="font-size:13px;color:var(--muted);margin-top:8px">' + esc(r.address) + "</div>";
 
   h += '<div class="stages">';
