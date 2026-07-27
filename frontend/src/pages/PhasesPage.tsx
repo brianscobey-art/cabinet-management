@@ -192,14 +192,17 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                       <td>{row.plan ?? "—"}</td>
                       <td>
                         {canWrite ? (
+                          // value stays neutral so picking the SAME phase still fires onChange
+                          // (re-confirming a phase bumps the Updated date)
                           <select
                             className={`phase-select ${row.phase ? "" : "unset"}`}
-                            value={row.phase ?? ""}
-                            onChange={(e) => updatePhase(row, e.target.value).catch((err) => setError(err.message))}
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value)
+                                updatePhase(row, e.target.value).catch((err) => setError(err.message));
+                            }}
                           >
-                            <option value="" disabled>
-                              — set phase —
-                            </option>
+                            <option value="">{row.phase_label ?? "— set phase —"}</option>
                             {phases.map((p) => (
                               <option key={p.code} value={p.code}>
                                 {p.label}
