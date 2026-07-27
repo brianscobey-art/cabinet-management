@@ -177,7 +177,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 </tr>
                 <tr>
                   <th>Requested</th>
-                  <th>Completed</th>
+                  <th className="fm-completed">Completed</th>
                 </tr>
               </thead>
               <tbody>
@@ -225,7 +225,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                           </>
                         )}
                       </td>
-                      <td>
+                      <td className="fm-completed">
                         {canWrite ? (
                           <input
                             type="date"

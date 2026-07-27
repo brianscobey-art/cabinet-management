@@ -943,6 +943,11 @@ th.group-head {
   border-bottom: 1px solid #dfe6e8;
 }
 
+th.fm-completed,
+td.fm-completed {
+  text-align: center;
+}
+
 /* Field-measure verification on the phase board + job detail */
 th.fm-col,
 td.fm-col {
