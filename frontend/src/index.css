@@ -937,6 +937,12 @@ th.num {
   color: #595959;
 }
 
+/* Grouped column header (e.g. Field Measure over Requested/Completed) */
+th.group-head {
+  text-align: center;
+  border-bottom: 1px solid #dfe6e8;
+}
+
 /* Field-measure verification on the phase board + job detail */
 th.fm-col,
 td.fm-col {

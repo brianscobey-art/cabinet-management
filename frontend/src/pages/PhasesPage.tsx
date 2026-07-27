@@ -156,17 +156,28 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
             <table>
               <thead>
                 <tr>
-                  <th>Lot</th>
-                  <th>Job code</th>
-                  <th>Address</th>
-                  <th>Current phase</th>
-                  <th>Updated</th>
-                  <th>Red Field Measure</th>
-                  <th>Field Measure Complete</th>
-                  <th>Plan</th>
-                  <th className="fm-col">Correct</th>
-                  <th className="fm-col">Incorrect</th>
-                  <th className="fm-col">Super Notified</th>
+                  <th rowSpan={2}>Lot</th>
+                  <th rowSpan={2}>Job code</th>
+                  <th rowSpan={2}>Address</th>
+                  <th rowSpan={2}>Plan</th>
+                  <th rowSpan={2}>Current phase</th>
+                  <th rowSpan={2}>Updated</th>
+                  <th colSpan={2} className="group-head">
+                    Field Measure
+                  </th>
+                  <th rowSpan={2} className="fm-col">
+                    Correct
+                  </th>
+                  <th rowSpan={2} className="fm-col">
+                    Incorrect
+                  </th>
+                  <th rowSpan={2} className="fm-col">
+                    Super Notified
+                  </th>
+                </tr>
+                <tr>
+                  <th>Requested</th>
+                  <th>Completed</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,6 +189,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                         <a href={`#/jobs/${row.job_id}`}>{row.job_code ?? `#${row.job_id}`}</a>
                       </td>
                       <td>{row.address}</td>
+                      <td>{row.plan ?? "—"}</td>
                       <td>
                         {canWrite ? (
                           <select
@@ -227,7 +239,6 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                           "—"
                         )}
                       </td>
-                      <td>{row.plan ?? "—"}</td>
                       <td className="fm-col">
                         <input
                           type="checkbox"
