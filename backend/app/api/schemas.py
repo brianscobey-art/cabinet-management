@@ -185,6 +185,7 @@ class JobOut(BaseModel):
     plan: str | None
     status: JobStatus
     install_date: date | None
+    measure_date: date | None  # the "red" field measure date
     warranty_start_date: date | None
     sales_contact_name: str
     sales_contact_phone: str | None

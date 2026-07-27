@@ -11,6 +11,7 @@ import {
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
+import FieldMeasureSection from "./FieldMeasureSection";
 import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
 import JobNotes from "./JobNotes";
@@ -121,6 +122,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dd>{job.field_contact_email ?? "—"}</dd>
           </dl>
         </div>
+        <FieldMeasureSection jobId={job.id} redMeasureDate={job.measure_date} />
       </div>
 
       <JobNotes jobId={job.id} />

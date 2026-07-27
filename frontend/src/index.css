@@ -937,6 +937,86 @@ th.num {
   color: #595959;
 }
 
+/* Field-measure verification on the phase board + job detail */
+th.fm-col,
+td.fm-col {
+  text-align: center;
+  white-space: nowrap;
+}
+
+td.fm-col input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  cursor: pointer;
+}
+
+.fm-note-row td {
+  background: #fdf3e6;
+}
+
+.fm-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.35rem 0.15rem;
+}
+
+.fm-note-editor label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--brand-ink);
+}
+
+.fm-note-editor textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+
+.fm-note-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.fm-notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fm-notes-list li {
+  border-left: 3px solid var(--kb);
+  padding: 0.15rem 0 0.15rem 0.6rem;
+}
+
+.fm-note-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--gray);
+}
+
+.fm-note-body {
+  white-space: pre-wrap;
+}
+
+.fm-card dl {
+  margin-bottom: 0.5rem;
+}
+
+.fm-stamp {
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+
+.fm-card-notes {
+  border-top: 1px solid #e4ebec;
+  padding-top: 0.5rem;
+}
+
 .report-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

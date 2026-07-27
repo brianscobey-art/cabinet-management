@@ -1,0 +1,17 @@
+07/20/26 08:08:12  watchdog running — checking http://localhost:8000/health every 30s
+07/20/26 08:08:16  app is DOWN — restarting
+07/20/26 08:08:16  started app (pid 10788); waiting for it to come up…
+07/20/26 08:08:22  app is up
+07/20/26 08:08:58  app process exited with code 4294967295
+07/20/26 08:08:58  app is DOWN — restarting
+07/20/26 08:08:58  started app (pid 24680); waiting for it to come up…
+07/20/26 08:09:04  app is up
+07/20/26 08:18:41  watchdog.stop found — shutting down watchdog (app left as-is)
+07/20/26 08:18:58  watchdog running — checking http://localhost:8000/health every 30s
+07/20/26 09:17:44  app is DOWN — restarting
+07/20/26 09:17:44  started app (pid 17776); waiting for it to come up…
+07/20/26 09:17:50  app is up
+07/20/26 09:42:27  app process exited with code 4294967295
+07/20/26 09:42:27  app is DOWN — restarting
+07/20/26 09:42:27  started app (pid 36788); waiting for it to come up…
+07/20/26 09:42:33  app is up

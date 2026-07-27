@@ -106,6 +106,7 @@ export interface Job {
   plan: string | null;
   status: JobStatus;
   install_date: string | null;
+  measure_date: string | null;
   warranty_start_date: string | null;
   sales_contact_name: string;
   sales_contact_phone: string | null;
@@ -308,6 +309,12 @@ export interface PhaseDef {
   label: string;
 }
 
+export interface FieldMeasureNote {
+  body: string;
+  author: string | null;
+  created_at: string;
+}
+
 export interface PhaseBoardRow {
   job_id: number;
   job_code: string | null;
@@ -321,6 +328,11 @@ export interface PhaseBoardRow {
   measure_date: string | null;
   layout_doc_id: number | null;
   ordering_stages: boolean[];
+  fm_complete_date: string | null;
+  fm_correct: boolean;
+  fm_incorrect: boolean;
+  fm_super_notified: boolean;
+  fm_notes: FieldMeasureNote[];
 }
 
 export const getPhaseDefs = () => api<PhaseDef[]>("/phases");
@@ -330,6 +342,36 @@ export const setJobPhase = (jobId: number, phase: string) =>
   api<{ phase: string; noted_at: string }>(`/jobs/${jobId}/phase`, {
     method: "POST",
     body: JSON.stringify({ phase }),
+  });
+
+export interface FieldMeasureNoteFull extends FieldMeasureNote {
+  id: number;
+  job_id: number;
+}
+export interface FieldMeasure {
+  complete_date: string | null;
+  correct: boolean;
+  correct_by: string | null;
+  correct_at: string | null;
+  incorrect: boolean;
+  incorrect_by: string | null;
+  incorrect_at: string | null;
+  super_notified: boolean;
+  super_notified_by: string | null;
+  super_notified_at: string | null;
+}
+export interface FieldMeasureDetail extends FieldMeasure {
+  notes: FieldMeasureNoteFull[];
+}
+
+export const getFieldMeasure = (jobId: number) =>
+  api<FieldMeasureDetail>(`/jobs/${jobId}/field-measure`);
+export const updateFieldMeasure = (jobId: number, data: Partial<Record<string, unknown>>) =>
+  api<FieldMeasure>(`/jobs/${jobId}/field-measure`, { method: "PATCH", body: JSON.stringify(data) });
+export const addFieldMeasureNote = (jobId: number, body: string) =>
+  api<FieldMeasureNoteFull>(`/jobs/${jobId}/field-measure/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
   });
 
 export interface PhaseReportRow {

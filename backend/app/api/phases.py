@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import read_access
 from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import Job, JobDocument, JobStatus, OrderingChecklist, PhaseUpdate, Role, User
+from app.models import (
+    FieldMeasure, FieldMeasureNote, Job, JobDocument, JobStatus, OrderingChecklist,
+    PhaseUpdate, Role, User,
+)
 from app.phases import PHASE_CODES, PHASE_LABELS, PHASES
 
 router = APIRouter(tags=["phases"])
@@ -37,6 +40,12 @@ class PhaseSet(BaseModel):
     phase: str
 
 
+class FMNote(BaseModel):
+    body: str
+    author: str | None
+    created_at: datetime
+
+
 class PhaseBoardRow(BaseModel):
     job_id: int
     job_code: str | None
@@ -47,9 +56,15 @@ class PhaseBoardRow(BaseModel):
     phase: str | None
     phase_label: str | None
     phase_date: datetime | None
-    measure_date: date | None
+    measure_date: date | None  # the "red" field measure date
     layout_doc_id: int | None  # the job's field layout PDF, if attached
     ordering_stages: list[bool]  # the 4-step ordering pipeline, in order
+    # field-measure verification (checkbox state only; stamps live on the job page)
+    fm_complete_date: date | None
+    fm_correct: bool
+    fm_incorrect: bool
+    fm_super_notified: bool
+    fm_notes: list[FMNote]
 
 
 @router.get("/phases", response_model=list[PhaseDef], dependencies=[Depends(read_access)])
@@ -67,6 +82,8 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
 
     latest: dict[int, PhaseUpdate] = {}
     checklists: dict[int, OrderingChecklist] = {}
+    measures: dict[int, FieldMeasure] = {}
+    fm_notes: dict[int, list[FieldMeasureNote]] = {}
     if jobs:
         job_ids = [j.id for j in jobs]
         sub = (
@@ -79,6 +96,15 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
             latest[row.job_id] = row
         for cl in db.query(OrderingChecklist).filter(OrderingChecklist.job_id.in_(job_ids)).all():
             checklists[cl.job_id] = cl
+        for fm in db.query(FieldMeasure).filter(FieldMeasure.job_id.in_(job_ids)).all():
+            measures[fm.job_id] = fm
+        for n in (
+            db.query(FieldMeasureNote)
+            .filter(FieldMeasureNote.job_id.in_(job_ids))
+            .order_by(FieldMeasureNote.created_at.desc())
+            .all()
+        ):
+            fm_notes.setdefault(n.job_id, []).append(n)
 
     layouts: dict[int, int] = {}
     if jobs:
@@ -98,6 +124,7 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
     for job in sorted(jobs, key=lot_key):
         current = latest.get(job.id)
         cl = checklists.get(job.id)
+        fm = measures.get(job.id)
         rows.append(
             PhaseBoardRow(
                 job_id=job.id,
@@ -113,6 +140,14 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
                 layout_doc_id=layouts.get(job.id),
                 ordering_stages=[
                     bool(cl and getattr(cl, f"stage{i}_done")) for i in (1, 2, 3, 4)
+                ],
+                fm_complete_date=fm.complete_date if fm else None,
+                fm_correct=bool(fm and fm.correct),
+                fm_incorrect=bool(fm and fm.incorrect),
+                fm_super_notified=bool(fm and fm.super_notified),
+                fm_notes=[
+                    FMNote(body=n.body, author=n.author, created_at=n.created_at)
+                    for n in fm_notes.get(job.id, [])
                 ],
             )
         )
