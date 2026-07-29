@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -64,6 +64,11 @@ class ServiceLine(Base):
         ForeignKey("service_parts.id", ondelete="SET NULL"), default=None
     )
     instruction: Mapped[str] = mapped_column(Text)
+    # filled in by the service tech working the report
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    done_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    note: Mapped[str | None] = mapped_column(Text, default=None)
 
     request: Mapped["ServiceRequest"] = relationship(back_populates="lines")
     part: Mapped["ServicePart | None"] = relationship()

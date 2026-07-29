@@ -3,13 +3,14 @@ parts. Printed for the tech so they gather every part in the morning, then work
 each labor line against its part.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import read_access
+from app.api.schemas import HardwareSelectionOut, RoomSelectionOut
 from app.auth.deps import require_roles
 from app.database import get_db
 from app.models import Job, Role, ServiceLine, ServicePart, ServiceRequest, User
@@ -34,6 +35,10 @@ class LineOut(BaseModel):
     id: int
     part_id: int | None
     instruction: str
+    done: bool
+    done_by: str | None
+    done_at: datetime | None
+    note: str | None
 
 
 class ServiceRequestSummary(BaseModel):
@@ -61,6 +66,8 @@ class ServiceRequestDetail(BaseModel):
     created_at: datetime
     parts: list[PartOut]
     lines: list[LineOut]
+    rooms: list[RoomSelectionOut]
+    hardware: list[HardwareSelectionOut]
 
 
 class RequestIn(BaseModel):
@@ -84,6 +91,12 @@ class LineIn(BaseModel):
     instruction: str = Field(min_length=1)
 
 
+class LinePatch(BaseModel):
+    done: bool | None = None
+    note: str | None = None
+    instruction: str | None = Field(default=None, min_length=1)
+
+
 def _summary(sr: ServiceRequest) -> ServiceRequestSummary:
     return ServiceRequestSummary(
         id=sr.id, job_id=sr.job_id, title=sr.title, status=sr.status,
@@ -101,6 +114,8 @@ def _detail(sr: ServiceRequest) -> ServiceRequestDetail:
         created_by=sr.created_by, created_at=sr.created_at,
         parts=[PartOut.model_validate(p) for p in sr.parts],
         lines=[LineOut.model_validate(l) for l in sr.lines],
+        rooms=[RoomSelectionOut.model_validate(r) for r in job.room_selections],
+        hardware=[HardwareSelectionOut.model_validate(h) for h in job.hardware_selections],
     )
 
 
@@ -206,6 +221,26 @@ def add_line(sr_id: int, payload: LineIn, db: Session = Depends(get_db),
     line = ServiceLine(service_request_id=sr_id, part_id=payload.part_id,
                        instruction=payload.instruction.strip())
     db.add(line)
+    db.commit()
+    db.refresh(line)
+    return line
+
+
+@router.patch("/service-lines/{line_id}", response_model=LineOut)
+def patch_line(line_id: int, payload: LinePatch, db: Session = Depends(get_db),
+               user: User = Depends(service_write)):
+    line = db.get(ServiceLine, line_id)
+    if line is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "instruction" in data and data["instruction"]:
+        line.instruction = data["instruction"].strip()
+    if "note" in data:
+        line.note = (data["note"] or None)
+    if "done" in data and data["done"] is not None:
+        line.done = data["done"]
+        line.done_by = user.full_name if data["done"] else None
+        line.done_at = datetime.now(timezone.utc) if data["done"] else None
     db.commit()
     db.refresh(line)
     return line

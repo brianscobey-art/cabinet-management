@@ -635,6 +635,10 @@ export interface ServiceLine {
   id: number;
   part_id: number | null;
   instruction: string;
+  done: boolean;
+  done_by: string | null;
+  done_at: string | null;
+  note: string | null;
 }
 export interface ServiceRequestSummary {
   id: number;
@@ -659,6 +663,8 @@ export interface ServiceRequestDetail {
   created_at: string;
   parts: ServicePart[];
   lines: ServiceLine[];
+  rooms: RoomSelection[];
+  hardware: HardwareSelection[];
 }
 
 export const listServiceRequests = (jobId: number) =>
@@ -680,5 +686,7 @@ export const deleteServicePart = (partId: number) =>
   api<void>(`/service-parts/${partId}`, { method: "DELETE" });
 export const addServiceLine = (id: number, data: Record<string, unknown>) =>
   api<ServiceLine>(`/service-requests/${id}/lines`, { method: "POST", body: JSON.stringify(data) });
+export const patchServiceLine = (lineId: number, data: Record<string, unknown>) =>
+  api<ServiceLine>(`/service-lines/${lineId}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteServiceLine = (lineId: number) =>
   api<void>(`/service-lines/${lineId}`, { method: "DELETE" });
