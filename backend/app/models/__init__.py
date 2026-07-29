@@ -11,6 +11,7 @@ from app.models.ordering import OrderingChecklist
 from app.models.phase import PhaseUpdate
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
 from app.models.selections import HardwareSelection, RoomSelection
+from app.models.service import ServiceLine, ServicePart, ServiceRequest
 from app.models.user import Role, User
 
 __all__ = [
@@ -36,6 +37,9 @@ __all__ = [
     "QuoteStatus",
     "Role",
     "RoomSelection",
+    "ServiceLine",
+    "ServicePart",
+    "ServiceRequest",
     "ShipStatus",
     "Supplier",
     "User",

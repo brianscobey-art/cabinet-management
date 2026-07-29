@@ -19,6 +19,7 @@ from app.api.quotes import router as quotes_router
 from app.api.reports import router as reports_router
 from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
+from app.api.service import router as service_router
 from app.api.sync import router as sync_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
@@ -100,6 +101,7 @@ app.include_router(phases_router)
 app.include_router(reports_router)
 app.include_router(notes_router)
 app.include_router(fieldmeasure_router)
+app.include_router(service_router)
 
 
 @app.get("/health", tags=["system"])

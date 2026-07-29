@@ -17,6 +17,7 @@ import { statusLabel } from "./JobsPage";
 import JobNotes from "./JobNotes";
 import OrderingCard from "./OrderingCard";
 import QuotesSection from "./QuotesSection";
+import ServiceRequestsSection from "./ServiceRequestsSection";
 
 export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -238,6 +239,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
       <DocumentsSection jobId={job.id} canWrite={canWrite} />
 
       <QuotesSection jobId={job.id} canWrite={canWrite} />
+
+      <ServiceRequestsSection jobId={job.id} canWrite={canWrite} />
     </div>
   );
 }

@@ -622,3 +622,63 @@ export const deleteRoom = (id: number) => api<void>(`/rooms/${id}`, { method: "D
 export const addHardware = (jobId: number, data: Record<string, unknown>) =>
   api<HardwareSelection>(`/jobs/${jobId}/hardware`, { method: "POST", body: JSON.stringify(data) });
 export const deleteHardware = (id: number) => api<void>(`/hardware/${id}`, { method: "DELETE" });
+
+// --- Service requests -------------------------------------------------------
+export interface ServicePart {
+  id: number;
+  part: string;
+  cabinet: string | null;
+  qty: number;
+  notes: string | null;
+}
+export interface ServiceLine {
+  id: number;
+  part_id: number | null;
+  instruction: string;
+}
+export interface ServiceRequestSummary {
+  id: number;
+  job_id: number;
+  title: string | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  part_count: number;
+  line_count: number;
+}
+export interface ServiceRequestDetail {
+  id: number;
+  job_id: number;
+  job_code: string | null;
+  address: string;
+  community_name: string | null;
+  lot_number: string | null;
+  title: string | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  parts: ServicePart[];
+  lines: ServiceLine[];
+}
+
+export const listServiceRequests = (jobId: number) =>
+  api<ServiceRequestSummary[]>(`/jobs/${jobId}/service-requests`);
+export const createServiceRequest = (jobId: number, title: string | null) =>
+  api<ServiceRequestDetail>(`/jobs/${jobId}/service-requests`, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+export const getServiceRequest = (id: number) =>
+  api<ServiceRequestDetail>(`/service-requests/${id}`);
+export const patchServiceRequest = (id: number, data: Record<string, unknown>) =>
+  api<ServiceRequestDetail>(`/service-requests/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteServiceRequest = (id: number) =>
+  api<void>(`/service-requests/${id}`, { method: "DELETE" });
+export const addServicePart = (id: number, data: Record<string, unknown>) =>
+  api<ServicePart>(`/service-requests/${id}/parts`, { method: "POST", body: JSON.stringify(data) });
+export const deleteServicePart = (partId: number) =>
+  api<void>(`/service-parts/${partId}`, { method: "DELETE" });
+export const addServiceLine = (id: number, data: Record<string, unknown>) =>
+  api<ServiceLine>(`/service-requests/${id}/lines`, { method: "POST", body: JSON.stringify(data) });
+export const deleteServiceLine = (lineId: number) =>
+  api<void>(`/service-lines/${lineId}`, { method: "DELETE" });

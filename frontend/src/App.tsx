@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { fetchMe, getToken, login, runFeedSync, setToken, User } from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
+import ServiceRequestPage from "./pages/ServiceRequestPage";
 import FormsPage from "./pages/FormsPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
@@ -83,9 +84,12 @@ export default function App() {
   // field crews log phases from the community, so they get write access there
   const canWritePhases = [...WRITE_ROLES, "field", "installer_coordinator"].includes(user.role);
   const jobMatch = hash.match(/^#\/jobs\/(\d+)$/);
+  const serviceMatch = hash.match(/^#\/service\/(\d+)$/);
 
   let page;
-  if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
+  if (serviceMatch)
+    page = <ServiceRequestPage srId={Number(serviceMatch[1])} canWrite={canWritePhases} />;
+  else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
