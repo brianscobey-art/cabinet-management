@@ -1110,6 +1110,28 @@ tr.line-done td:nth-child(4) {
   font-size: 7.5pt;
 }
 
+/* The service report prints landscape so every column fits one page wide */
+.qc-report {
+  page: qc-svc;
+}
+
+@page qc-svc {
+  size: landscape;
+  margin: 0.35in;
+}
+
+/* centered headers + Item#/Qty/Part#/Order#/dates columns on the report */
+.qc-table th {
+  text-align: center;
+}
+
+.qc-table td.num,
+.qc-table th.num,
+.qc-table td.ctr,
+.qc-table th.ctr {
+  text-align: center;
+}
+
 .qc-blank td {
   height: 1.15rem;
 }

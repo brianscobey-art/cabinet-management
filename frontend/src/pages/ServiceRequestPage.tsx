@@ -439,9 +439,9 @@ export function ServiceReportPrint({
             <th>Style</th>
             <th>Color</th>
             <th>Vendor</th>
-            <th>Order #</th>
-            <th>Order Date</th>
-            <th>Due Date</th>
+            <th className="ctr">Order #</th>
+            <th className="ctr">Order Date</th>
+            <th className="ctr">Due Date</th>
             <th>Notes</th>
             <th style={{ width: "2rem" }}>✓</th>
           </tr>
@@ -456,9 +456,9 @@ export function ServiceReportPrint({
               <td>{p.style ?? ""}</td>
               <td>{p.color ?? ""}</td>
               <td>{p.vendor ?? ""}</td>
-              <td>{p.order_number ?? ""}</td>
-              <td>{p.order_date ? fmtDate(p.order_date) : ""}</td>
-              <td>{p.due_date ? fmtDate(p.due_date) : ""}</td>
+              <td className="ctr">{p.order_number ?? ""}</td>
+              <td className="ctr">{p.order_date ? fmtDate(p.order_date) : ""}</td>
+              <td className="ctr">{p.due_date ? fmtDate(p.due_date) : ""}</td>
               <td>{p.notes ?? ""}</td>
               <td className="qc-check">☐</td>
             </tr>
@@ -475,8 +475,8 @@ export function ServiceReportPrint({
             <th>Cabinet</th>
             <th>Description of Work</th>
             <th style={{ width: "2.5rem" }}>✓</th>
+            <th className="ctr" style={{ width: "5rem" }}>Date</th>
             <th style={{ width: "4rem" }}>Tech</th>
-            <th style={{ width: "5rem" }}>Date</th>
           </tr>
         </thead>
         <tbody>
@@ -491,8 +491,8 @@ export function ServiceReportPrint({
                   {l.note ? ` — ${l.note}` : ""}
                 </td>
                 <td className="qc-check">{l.done ? "☑" : "☐"}</td>
+                <td className="ctr">{l.done_at ? fmtDate(l.done_at) : ""}</td>
                 <td>{l.done ? initials(l.done_by) : ""}</td>
-                <td>{l.done_at ? fmtDate(l.done_at) : ""}</td>
               </tr>
             );
           })}

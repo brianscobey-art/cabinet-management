@@ -15,6 +15,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.page import PageMargins
+from openpyxl.worksheet.properties import PageSetupProperties
 
 PARTS_MARKER = "PARTS NEEDED"
 SERVICE_MARKER = "SERVICE NEEDED"
@@ -31,7 +33,7 @@ NCOLS = len(PART_HEADERS)  # 11 — the grid every section spans
 CABINET_SPEC = [("Room / Zone", 2), ("Vendor", 2), ("Series", 2), ("Door Style", 2),
                 ("Color", 2), ("Species", 1)]
 HARDWARE_SPEC = [("Room", 3), ("Type", 2), ("Vendor", 2), ("Item", 3), ("Qty", 1)]
-SERVICE_SPEC = [("Part #", 1), ("Cabinet", 1), ("Description of Work", 7), ("Tech", 1), ("Date", 1)]
+SERVICE_SPEC = [("Part #", 1), ("Cabinet", 1), ("Description of Work", 7), ("Date", 1), ("Tech", 1)]
 
 _thin = Side(style="thin", color="000000")
 _BORDER = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
@@ -74,12 +76,14 @@ def _spec_headers(ws, row, spec):
         col += span
 
 
-def _spec_blanks(ws, start, n, spec):
+def _spec_blanks(ws, start, n, spec, center_starts=(), date_starts=()):
     for i in range(n):
         row = start + i
         col = 1
         for _, span in spec:
-            _box(ws, row, col, span)
+            cell = _box(ws, row, col, span, center=col in center_starts)
+            if col in date_starts:
+                cell.number_format = "m/d/yy"
             col += span
 
 
@@ -109,13 +113,13 @@ def build_blank_template() -> bytes:
     info = [("PROJECT", "DATE"), ("ADDRESS", "JOB CODE"), ("LOT", "STATUS")]
     r = 4
     for left, right in info:
-        _box(ws, r, 1, 1, left, kind="label")
-        _box(ws, r, 2, 4)  # left value
+        _box(ws, r, 1, 2, left, kind="label")  # A:B — same width as the Room/Zone cell
+        _box(ws, r, 3, 3)  # left value (C:E)
         _box(ws, r, 6, 1, right, kind="label")
         _box(ws, r, 7, 5)  # right value
         r += 1
 
-    def section(title, spec, blanks, *, marker=False):
+    def section(title, spec, blanks, *, center_starts=(), date_starts=()):
         nonlocal r
         r += 1
         _box(ws, r, 1, NCOLS, title, kind="section")
@@ -124,20 +128,26 @@ def build_blank_template() -> bytes:
             for i, h in enumerate(PART_HEADERS, start=1):
                 _box(ws, r, i, 1, h, kind="header")
             r += 1
+            # center Item#, Qty, Order#, Order Date, Due Date; m/d/yy on the date cols
+            part_center = {1, 2, 8, 9, 10}
+            part_dates = {9, 10}
             for _ in range(blanks):
                 for i in range(1, NCOLS + 1):
-                    _box(ws, r, i)
+                    cell = _box(ws, r, i, center=i in part_center)
+                    if i in part_dates:
+                        cell.number_format = "m/d/yy"
                 r += 1
         else:
             _spec_headers(ws, r, spec)
             r += 1
-            _spec_blanks(ws, r, blanks, spec)
+            _spec_blanks(ws, r, blanks, spec, center_starts, date_starts)
             r += blanks
 
     section("CABINET SPECIFICATIONS", CABINET_SPEC, 3)
     section("HARDWARE", HARDWARE_SPEC, 3)
     section(PARTS_MARKER, "PARTS", PART_ROWS)
-    section(SERVICE_MARKER, SERVICE_SPEC, SERVICE_ROWS)
+    # service: center Part # (col 1) and Date (col 10); Date col is m/d/yy
+    section(SERVICE_MARKER, SERVICE_SPEC, SERVICE_ROWS, center_starts={1, 10}, date_starts={10})
 
     # --- signatures -------------------------------------------------------
     r += 1
@@ -158,6 +168,14 @@ def build_blank_template() -> bytes:
             value="Fill in the Job Code and the Parts / Service tables, save, and import into "
                   "Carter Kitchen and Bath. Part # in Service refers to the Item # in Parts.").font = Font(
         italic=True, size=8, color="888888")
+
+    # print landscape, all columns on one page wide, narrow margins
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.3, bottom=0.3, header=0.15, footer=0.15)
+    ws.print_area = f"A1:{get_column_letter(NCOLS)}{r + 1}"
 
     buf = io.BytesIO()
     wb.save(buf)
