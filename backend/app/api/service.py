@@ -3,7 +3,7 @@ parts. Printed for the tech so they gather every part in the morning, then work
 each labor line against its part.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +29,12 @@ class PartOut(BaseModel):
     id: int
     part: str
     cabinet: str | None
+    style: str | None
+    color: str | None
+    vendor: str | None
+    order_number: str | None
+    order_date: date | None
+    due_date: date | None
     qty: int
     notes: str | None
 
@@ -85,6 +91,12 @@ class RequestPatch(BaseModel):
 class PartIn(BaseModel):
     part: str = Field(min_length=1, max_length=200)
     cabinet: str | None = Field(default=None, max_length=100)
+    style: str | None = Field(default=None, max_length=100)
+    color: str | None = Field(default=None, max_length=100)
+    vendor: str | None = Field(default=None, max_length=120)
+    order_number: str | None = Field(default=None, max_length=60)
+    order_date: date | None = None
+    due_date: date | None = None
     qty: int = Field(default=1, ge=1)
     notes: str | None = Field(default=None, max_length=300)
 
@@ -195,8 +207,12 @@ def import_excel(file: UploadFile = File(...), db: Session = Depends(get_db),
     db.flush()
     part_by_num: dict[int, int] = {}
     for p in parsed["parts"]:
-        part = ServicePart(service_request_id=sr.id, part=p["part"], cabinet=p.get("cabinet"),
-                           qty=p.get("qty") or 1, notes=p.get("notes"))
+        part = ServicePart(
+            service_request_id=sr.id, part=p["part"], cabinet=p.get("cabinet"),
+            style=p.get("style"), color=p.get("color"), vendor=p.get("vendor"),
+            order_number=p.get("order_number"), order_date=p.get("order_date"),
+            due_date=p.get("due_date"), qty=p.get("qty") or 1, notes=p.get("notes"),
+        )
         db.add(part)
         db.flush()
         if p.get("item_num"):
@@ -239,9 +255,13 @@ def delete_request(sr_id: int, db: Session = Depends(get_db), user: User = Depen
 def add_part(sr_id: int, payload: PartIn, db: Session = Depends(get_db),
              user: User = Depends(service_write)):
     _get_request(db, sr_id)
-    part = ServicePart(service_request_id=sr_id, part=payload.part.strip(),
-                       cabinet=(payload.cabinet or None), qty=payload.qty,
-                       notes=(payload.notes or None))
+    part = ServicePart(
+        service_request_id=sr_id, part=payload.part.strip(),
+        cabinet=(payload.cabinet or None), style=(payload.style or None),
+        color=(payload.color or None), vendor=(payload.vendor or None),
+        order_number=(payload.order_number or None), order_date=payload.order_date,
+        due_date=payload.due_date, qty=payload.qty, notes=(payload.notes or None),
+    )
     db.add(part)
     db.commit()
     db.refresh(part)

@@ -628,6 +628,12 @@ export interface ServicePart {
   id: number;
   part: string;
   cabinet: string | null;
+  style: string | null;
+  color: string | null;
+  vendor: string | null;
+  order_number: string | null;
+  order_date: string | null;
+  due_date: string | null;
   qty: number;
   notes: string | null;
 }

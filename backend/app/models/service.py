@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,12 @@ class ServicePart(Base):
     )
     part: Mapped[str] = mapped_column(String(200))          # e.g. "L-Door"
     cabinet: Mapped[str | None] = mapped_column(String(100), default=None)  # e.g. "W3636"
+    style: Mapped[str | None] = mapped_column(String(100), default=None)
+    color: Mapped[str | None] = mapped_column(String(100), default=None)
+    vendor: Mapped[str | None] = mapped_column(String(120), default=None)
+    order_number: Mapped[str | None] = mapped_column(String(60), default=None)
+    order_date: Mapped[date | None] = mapped_column(Date, default=None)
+    due_date: Mapped[date | None] = mapped_column(Date, default=None)
     qty: Mapped[int] = mapped_column(Integer, default=1)
     notes: Mapped[str | None] = mapped_column(String(300), default=None)
 

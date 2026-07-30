@@ -178,6 +178,12 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
                 <th className="num">#</th>
                 <th>Part</th>
                 <th>Cabinet</th>
+                <th>Style</th>
+                <th>Color</th>
+                <th>Vendor</th>
+                <th>Order #</th>
+                <th>Order Date</th>
+                <th>Due Date</th>
                 <th className="num">Qty</th>
                 <th>Notes</th>
                 {canWrite && <th />}
@@ -189,6 +195,12 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
                   <td className="num">{i + 1}</td>
                   <td>{p.part}</td>
                   <td>{p.cabinet ?? "—"}</td>
+                  <td>{p.style ?? "—"}</td>
+                  <td>{p.color ?? "—"}</td>
+                  <td>{p.vendor ?? "—"}</td>
+                  <td>{p.order_number ?? "—"}</td>
+                  <td>{p.order_date ? fmtDate(p.order_date) : "—"}</td>
+                  <td>{p.due_date ? fmtDate(p.due_date) : "—"}</td>
                   <td className="num">{p.qty}</td>
                   <td>{p.notes ?? "—"}</td>
                   {canWrite && (
@@ -202,7 +214,7 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
               ))}
               {sr.parts.length === 0 && (
                 <tr>
-                  <td colSpan={canWrite ? 6 : 5} className="muted">
+                  <td colSpan={canWrite ? 12 : 11} className="muted">
                     No parts yet — add the parts the tech needs to gather.
                   </td>
                 </tr>
@@ -417,15 +429,21 @@ export function ServiceReportPrint({
       )}
 
       <div className="qc-bar">PARTS NEEDED</div>
-      <table className="qc-table">
+      <table className="qc-table qc-parts">
         <thead>
           <tr>
-            <th className="num" style={{ width: "3rem" }}>Item #</th>
-            <th className="num" style={{ width: "3rem" }}>Qty</th>
+            <th className="num" style={{ width: "2.4rem" }}>Item #</th>
+            <th className="num" style={{ width: "2.2rem" }}>Qty</th>
             <th>Part</th>
             <th>Cabinet</th>
+            <th>Style</th>
+            <th>Color</th>
+            <th>Vendor</th>
+            <th>Order #</th>
+            <th>Order Date</th>
+            <th>Due Date</th>
             <th>Notes</th>
-            <th style={{ width: "2.5rem" }}>✓</th>
+            <th style={{ width: "2rem" }}>✓</th>
           </tr>
         </thead>
         <tbody>
@@ -435,11 +453,17 @@ export function ServiceReportPrint({
               <td className="num">{p.qty}</td>
               <td>{p.part}</td>
               <td>{p.cabinet ?? ""}</td>
+              <td>{p.style ?? ""}</td>
+              <td>{p.color ?? ""}</td>
+              <td>{p.vendor ?? ""}</td>
+              <td>{p.order_number ?? ""}</td>
+              <td>{p.order_date ? fmtDate(p.order_date) : ""}</td>
+              <td>{p.due_date ? fmtDate(p.due_date) : ""}</td>
               <td>{p.notes ?? ""}</td>
               <td className="qc-check">☐</td>
             </tr>
           ))}
-          {blanks(partBlanks, 6)}
+          {blanks(partBlanks, 12)}
         </tbody>
       </table>
 
@@ -518,7 +542,10 @@ function TitleEditor({ sr, onSaved }: { sr: ServiceRequestDetail; onSaved: () =>
 }
 
 function AddPartForm({ srId, onAdded }: { srId: number; onAdded: () => void }) {
-  const empty = { part: "", cabinet: "", qty: "1", notes: "" };
+  const empty = {
+    part: "", cabinet: "", style: "", color: "", vendor: "",
+    order_number: "", order_date: "", due_date: "", qty: "1", notes: "",
+  };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState("");
   const set = (k: keyof typeof empty) => (e: { target: { value: string } }) =>
@@ -531,6 +558,12 @@ function AddPartForm({ srId, onAdded }: { srId: number; onAdded: () => void }) {
       await addServicePart(srId, {
         part: form.part,
         cabinet: form.cabinet || null,
+        style: form.style || null,
+        color: form.color || null,
+        vendor: form.vendor || null,
+        order_number: form.order_number || null,
+        order_date: form.order_date || null,
+        due_date: form.due_date || null,
         qty: Number(form.qty) || 1,
         notes: form.notes || null,
       });
@@ -545,6 +578,16 @@ function AddPartForm({ srId, onAdded }: { srId: number; onAdded: () => void }) {
     <form className="inline-form" onSubmit={submit}>
       <input placeholder="Part * (e.g. L-Door)" value={form.part} onChange={set("part")} required />
       <input placeholder="Cabinet (e.g. W3636)" value={form.cabinet} onChange={set("cabinet")} />
+      <input placeholder="Style" value={form.style} onChange={set("style")} />
+      <input placeholder="Color" value={form.color} onChange={set("color")} />
+      <input placeholder="Vendor" value={form.vendor} onChange={set("vendor")} />
+      <input placeholder="Order #" value={form.order_number} onChange={set("order_number")} style={{ width: "7rem" }} />
+      <label className="inline-date" title="Order date">
+        Ord<input type="date" value={form.order_date} onChange={set("order_date")} />
+      </label>
+      <label className="inline-date" title="Due date">
+        Due<input type="date" value={form.due_date} onChange={set("due_date")} />
+      </label>
       <input placeholder="Qty" type="number" min="1" value={form.qty} onChange={set("qty")} style={{ width: "4.5rem" }} />
       <input placeholder="Notes" value={form.notes} onChange={set("notes")} />
       <button type="submit">Add part</button>

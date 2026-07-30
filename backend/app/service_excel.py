@@ -6,14 +6,20 @@ structured shape the service API creates a ServiceRequest from.
 """
 
 import io
+from datetime import date, datetime
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Border, Font, PatternFill, Side
 
 PARTS_MARKER = "PARTS NEEDED"
 SERVICE_MARKER = "SERVICE NEEDED"
 PART_ROWS = 15
 SERVICE_ROWS = 15
+# Parts table columns (must match the on-screen / print Parts Needed table)
+PART_HEADERS = ["Item #", "Qty", "Part", "Cabinet", "Style", "Color", "Vendor",
+                "Order #", "Order Date", "Due Date", "Notes"]
+PART_WIDTHS = [8, 6, 24, 12, 14, 14, 16, 12, 12, 12, 24]
+SERVICE_HEADERS = ["Part #", "Cabinet", "Description of Work", "Tech", "Date"]
 
 _HEAD_FILL = PatternFill("solid", fgColor="4A4A4A")
 _HEAD_FONT = Font(color="FFFFFF", bold=True)
@@ -41,9 +47,9 @@ def build_blank_template() -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Service Request"
-    widths = [10, 8, 30, 16, 30]
-    for i, w in enumerate(widths, start=1):
+    for i, w in enumerate(PART_WIDTHS, start=1):
         ws.column_dimensions[chr(64 + i)].width = w
+    nparts = len(PART_HEADERS)
 
     ws.cell(row=1, column=1, value="SERVICE REQUEST").font = Font(size=15, bold=True)
     ws.cell(row=2, column=1,
@@ -56,21 +62,21 @@ def build_blank_template() -> bytes:
         ws.cell(row=r, column=2).border = _BORDER
 
     # Parts section
-    _section(ws, 6, PARTS_MARKER, 5)
-    _headers(ws, 7, ["Item #", "Qty", "Part", "Cabinet", "Notes"])
+    _section(ws, 6, PARTS_MARKER, nparts)
+    _headers(ws, 7, PART_HEADERS)
     for i in range(PART_ROWS):
         row = 8 + i
         ws.cell(row=row, column=1, value=i + 1)  # pre-numbered
-        for col in range(1, 6):
+        for col in range(1, nparts + 1):
             ws.cell(row=row, column=col).border = _BORDER
 
     # Service section
     svc_head = 8 + PART_ROWS + 1  # blank row between
-    _section(ws, svc_head, SERVICE_MARKER, 5)
-    _headers(ws, svc_head + 1, ["Part #", "Cabinet", "Description of Work", "Tech", "Date"])
+    _section(ws, svc_head, SERVICE_MARKER, len(SERVICE_HEADERS))
+    _headers(ws, svc_head + 1, SERVICE_HEADERS)
     for i in range(SERVICE_ROWS):
         row = svc_head + 2 + i
-        for col in range(1, 6):
+        for col in range(1, len(SERVICE_HEADERS) + 1):
             ws.cell(row=row, column=col).border = _BORDER
 
     ws.cell(row=svc_head + 2 + SERVICE_ROWS + 2, column=1,
@@ -80,6 +86,22 @@ def build_blank_template() -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _pdate(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    s = str(value).strip()[:10]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _find_marker(ws, marker: str) -> int | None:
@@ -125,7 +147,13 @@ def parse_import(data: bytes) -> dict:
             "qty": int(float(qty)) if qty and qty.replace(".", "").isdigit() else 1,
             "part": part,
             "cabinet": _cell(ws, row, 4),
-            "notes": _cell(ws, row, 5),
+            "style": _cell(ws, row, 5),
+            "color": _cell(ws, row, 6),
+            "vendor": _cell(ws, row, 7),
+            "order_number": _cell(ws, row, 8),
+            "order_date": _pdate(ws.cell(row=row, column=9).value),
+            "due_date": _pdate(ws.cell(row=row, column=10).value),
+            "notes": _cell(ws, row, 11),
         })
 
     lines = []

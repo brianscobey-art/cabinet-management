@@ -1090,8 +1090,28 @@ tr.line-done td:nth-child(4) {
   font-size: 11pt;
 }
 
+/* Parts table carries more columns (style/color/vendor/order/dates) — shrink to fit */
+.qc-parts th,
+.qc-parts td {
+  padding: 0.18rem 0.25rem;
+  font-size: 7.5pt;
+}
+
 .qc-blank td {
   height: 1.15rem;
+}
+
+/* date sub-fields inside the add-part inline form */
+.inline-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--gray);
+}
+
+.inline-date input {
+  font: inherit;
 }
 
 .qc-signoff {
