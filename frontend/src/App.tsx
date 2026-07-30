@@ -3,6 +3,8 @@ import { fetchMe, getToken, login, runFeedSync, setToken, User } from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import ServiceRequestPage from "./pages/ServiceRequestPage";
+import ServiceFormsPage from "./pages/ServiceFormsPage";
+import BlankServiceForm from "./pages/BlankServiceForm";
 import FormsPage from "./pages/FormsPage";
 import JobsPage from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
@@ -89,6 +91,8 @@ export default function App() {
   let page;
   if (serviceMatch)
     page = <ServiceRequestPage srId={Number(serviceMatch[1])} canWrite={canWritePhases} />;
+  else if (hash.startsWith("#/service-blank")) page = <BlankServiceForm />;
+  else if (hash.startsWith("#/forms/service")) page = <ServiceFormsPage canWrite={canWritePhases} />;
   else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;

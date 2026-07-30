@@ -690,3 +690,32 @@ export const patchServiceLine = (lineId: number, data: Record<string, unknown>) 
   api<ServiceLine>(`/service-lines/${lineId}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteServiceLine = (lineId: number) =>
   api<void>(`/service-lines/${lineId}`, { method: "DELETE" });
+
+export async function downloadServiceTemplate(): Promise<void> {
+  const resp = await fetch("/api/forms/service-template", {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new Error("Download failed");
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Service Request Template.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function importServiceExcel(file: File): Promise<ServiceRequestDetail> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const resp = await fetch("/api/service-requests/import", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: fd,
+  });
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null))?.detail;
+    throw new Error(typeof detail === "string" ? detail : `Import failed (${resp.status})`);
+  }
+  return resp.json();
+}

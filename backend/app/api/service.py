@@ -5,7 +5,7 @@ each labor line against its part.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,6 +14,9 @@ from app.api.schemas import HardwareSelectionOut, RoomSelectionOut
 from app.auth.deps import require_roles
 from app.database import get_db
 from app.models import Job, Role, ServiceLine, ServicePart, ServiceRequest, User
+from app.service_excel import build_blank_template, parse_import
+
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 router = APIRouter(tags=["service"])
 
@@ -155,6 +158,52 @@ def create_request(job_id: int, payload: RequestIn, db: Session = Depends(get_db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     sr = ServiceRequest(job_id=job_id, title=payload.title, created_by=user.full_name)
     db.add(sr)
+    db.commit()
+    return _detail(_get_request(db, sr.id))
+
+
+@router.get("/forms/service-template", dependencies=[Depends(read_access)])
+def service_template():
+    """Download a blank Service Request Excel template (fill + re-import)."""
+    return Response(
+        content=build_blank_template(),
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": 'attachment; filename="Service Request Template.xlsx"'},
+    )
+
+
+@router.post("/service-requests/import", response_model=ServiceRequestDetail,
+             status_code=status.HTTP_201_CREATED)
+def import_excel(file: UploadFile = File(...), db: Session = Depends(get_db),
+                 user: User = Depends(service_write)):
+    """Import a filled Service Request template — matches the job by Job Code."""
+    try:
+        parsed = parse_import(file.file.read())
+    except Exception as e:  # noqa: BLE001 - surface a friendly parse error
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Could not read that file: {e}")
+    job_code = (parsed.get("job_code") or "").strip()
+    if not job_code:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="No Job Code in the sheet — add one so it can attach to a job.")
+    job = db.query(Job).filter(Job.job_code == job_code).first()
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Job code '{job_code}' not found in the app.")
+    sr = ServiceRequest(job_id=job.id, title=parsed.get("title"), created_by=user.full_name)
+    db.add(sr)
+    db.flush()
+    part_by_num: dict[int, int] = {}
+    for p in parsed["parts"]:
+        part = ServicePart(service_request_id=sr.id, part=p["part"], cabinet=p.get("cabinet"),
+                           qty=p.get("qty") or 1, notes=p.get("notes"))
+        db.add(part)
+        db.flush()
+        if p.get("item_num"):
+            part_by_num[p["item_num"]] = part.id
+    for ln in parsed["lines"]:
+        pid = part_by_num.get(ln["part_num"]) if ln.get("part_num") else None
+        db.add(ServiceLine(service_request_id=sr.id, part_id=pid, instruction=ln["instruction"]))
     db.commit()
     return _detail(_get_request(db, sr.id))
 

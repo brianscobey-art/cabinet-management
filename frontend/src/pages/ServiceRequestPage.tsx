@@ -312,17 +312,23 @@ function blanks(n: number, cols: number) {
   ));
 }
 
-function ServiceReportPrint({
+export function ServiceReportPrint({
   sr,
   partNumber,
   partById,
+  blank = false,
+  screen = false,
 }: {
   sr: ServiceRequestDetail;
   partNumber: (id: number | null) => number | null;
   partById: (id: number | null) => ServicePart | null;
+  blank?: boolean;
+  screen?: boolean;
 }) {
+  const partBlanks = blank ? 12 : BLANK_PART_ROWS;
+  const svcBlanks = blank ? 12 : BLANK_SERVICE_ROWS;
   return (
-    <div className="print-only qc-report">
+    <div className={`${screen ? "" : "print-only "}qc-report`}>
       <div className="qc-header">
         <div>
           <div className="qc-title">SERVICE REQUEST</div>
@@ -335,21 +341,21 @@ function ServiceReportPrint({
         <tbody>
           <tr>
             <th>PROJECT</th>
-            <td>{sr.community_name ?? "—"}</td>
+            <td>{sr.community_name ?? ""}</td>
             <th>DATE</th>
-            <td>{fmtDate(sr.created_at)}</td>
+            <td>{blank ? "" : fmtDate(sr.created_at)}</td>
           </tr>
           <tr>
             <th>ADDRESS</th>
             <td>{sr.address}</td>
             <th>JOB CODE</th>
-            <td>{sr.job_code ?? "—"}</td>
+            <td>{sr.job_code ?? ""}</td>
           </tr>
           <tr>
             <th>LOT</th>
-            <td>{sr.lot_number ?? "—"}</td>
+            <td>{sr.lot_number ?? ""}</td>
             <th>STATUS</th>
-            <td>{sr.status}</td>
+            <td>{blank ? "" : sr.status}</td>
           </tr>
         </tbody>
       </table>
@@ -377,11 +383,11 @@ function ServiceReportPrint({
               <td>{r.wood_species ?? ""}</td>
             </tr>
           ))}
-          {sr.rooms.length === 0 && blanks(1, 6)}
+          {sr.rooms.length === 0 && blanks(blank ? 3 : 1, 6)}
         </tbody>
       </table>
 
-      {sr.hardware.length > 0 && (
+      {(sr.hardware.length > 0 || blank) && (
         <>
           <div className="qc-bar">HARDWARE</div>
           <table className="qc-table">
@@ -404,6 +410,7 @@ function ServiceReportPrint({
                   <td className="num">{h.qty}</td>
                 </tr>
               ))}
+              {sr.hardware.length === 0 && blank && blanks(3, 5)}
             </tbody>
           </table>
         </>
@@ -432,7 +439,7 @@ function ServiceReportPrint({
               <td className="qc-check">☐</td>
             </tr>
           ))}
-          {blanks(BLANK_PART_ROWS, 6)}
+          {blanks(partBlanks, 6)}
         </tbody>
       </table>
 
@@ -465,7 +472,7 @@ function ServiceReportPrint({
               </tr>
             );
           })}
-          {blanks(BLANK_SERVICE_ROWS, 6)}
+          {blanks(svcBlanks, 6)}
         </tbody>
       </table>
 

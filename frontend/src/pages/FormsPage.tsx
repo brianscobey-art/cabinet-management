@@ -15,8 +15,9 @@ const FORM_LIST = [
   {
     key: "service-request",
     name: "Service Request Form",
-    desc: "Intake for service calls — issue type, warranty check, billable calculation.",
-    available: false,
+    desc: "Parts + service report for a job (or blank/Excel). Load a job, fill it in, print, or import from Excel.",
+    href: "#/forms/service",
+    available: true,
   },
   {
     key: "warranty",
