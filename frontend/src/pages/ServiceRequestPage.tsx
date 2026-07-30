@@ -468,6 +468,29 @@ function ServiceReportPrint({
           {blanks(BLANK_SERVICE_ROWS, 6)}
         </tbody>
       </table>
+
+      <div className="qc-signoff">
+        <div className="qc-sign-row">
+          <div className="qc-sign qc-sign-sig">
+            <div className="qc-sign-blank" />
+            <div className="qc-sign-label">Service Tech — Signature</div>
+          </div>
+          <div className="qc-sign qc-sign-date">
+            <div className="qc-sign-blank" />
+            <div className="qc-sign-label">Date</div>
+          </div>
+        </div>
+        <div className="qc-sign-row">
+          <div className="qc-sign qc-sign-sig">
+            <div className="qc-sign-blank" />
+            <div className="qc-sign-label">Customer — Signature (work completed)</div>
+          </div>
+          <div className="qc-sign qc-sign-date">
+            <div className="qc-sign-blank" />
+            <div className="qc-sign-label">Date</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

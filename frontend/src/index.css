@@ -1094,6 +1094,38 @@ tr.line-done td:nth-child(4) {
   height: 1.15rem;
 }
 
+.qc-signoff {
+  margin-top: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.qc-sign-row {
+  display: flex;
+  gap: 2.5rem;
+}
+
+.qc-sign-sig {
+  flex: 1;
+}
+
+.qc-sign-date {
+  width: 9rem;
+}
+
+.qc-sign-blank {
+  border-bottom: 1px solid #000;
+  height: 1.5rem;
+}
+
+.qc-sign-label {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.15rem;
+}
+
 /* Field-measure verification on the phase board + job detail */
 th.fm-col,
 td.fm-col {
