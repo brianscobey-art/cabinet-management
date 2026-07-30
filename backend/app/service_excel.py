@@ -58,15 +58,16 @@ def build_blank_template() -> bytes:
 
     ws.cell(row=3, column=1, value="Job Code").font = _LABEL_FONT
     ws.cell(row=4, column=1, value="Title").font = _LABEL_FONT
-    for r in (3, 4):
-        ws.cell(row=r, column=2).border = _BORDER
+    for r in (3, 4):  # widen the fill-in blank across a few columns
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=5)
+        for col in range(2, 6):
+            ws.cell(row=r, column=col).border = _BORDER
 
     # Parts section
     _section(ws, 6, PARTS_MARKER, nparts)
     _headers(ws, 7, PART_HEADERS)
-    for i in range(PART_ROWS):
+    for i in range(PART_ROWS):  # blank rows (not pre-numbered — fill Item # by hand)
         row = 8 + i
-        ws.cell(row=row, column=1, value=i + 1)  # pre-numbered
         for col in range(1, nparts + 1):
             ws.cell(row=row, column=col).border = _BORDER
 
