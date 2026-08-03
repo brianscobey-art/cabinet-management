@@ -16,7 +16,8 @@ class ServiceRequest(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
     title: Mapped[str | None] = mapped_column(String(200), default=None)
-    status: Mapped[str] = mapped_column(String(20), default="open")  # open | scheduled | complete
+    # Installed | Warranty | Service Empty | Service Occupied
+    status: Mapped[str] = mapped_column(String(20), default="Installed")
     created_by: Mapped[str | None] = mapped_column(String(255), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

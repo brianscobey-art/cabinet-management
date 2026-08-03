@@ -15,9 +15,9 @@ import {
 import { fmtDate } from "../format";
 import { initials } from "./PhasesPage";
 
-const STATUSES = ["open", "scheduled", "complete"];
+const STATUSES = ["Installed", "Warranty", "Service Empty", "Service Occupied"];
 const BLANK_PART_ROWS = 3;
-const BLANK_SERVICE_ROWS = 4;
+const BLANK_SERVICE_ROWS = 3;
 
 const partLabel = (p: ServicePart) => `${p.part}${p.cabinet ? ` — ${p.cabinet}` : ""}`;
 
@@ -74,9 +74,10 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
 
       <div className="page-head no-print">
         <h2>Service Report — {sr.job_code ?? `#${sr.job_id}`}</h2>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
           {canWrite ? (
             <select value={sr.status} onChange={(e) => setStatus(e.target.value)}>
+              {!STATUSES.includes(sr.status) && <option value={sr.status}>{sr.status}</option>}
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -87,6 +88,7 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
             <span className="badge">{sr.status}</span>
           )}
           <button onClick={() => window.print()}>🖨 Print</button>
+          <span className="brand-tag">Carter Kitchen and Bath</span>
         </div>
       </div>
 
@@ -98,77 +100,71 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
 
       {/* ---------- interactive service report (screen only) ---------- */}
       <div className="no-print">
-        {(sr.rooms.length > 0 || sr.hardware.length > 0) && (
-          <>
-            <h3 className="kb-head">Cabinet Specifications</h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Room / Zone</th>
-                    <th>Vendor</th>
-                    <th>Series</th>
-                    <th>Door style</th>
-                    <th>Color</th>
-                    <th>Species</th>
+        <h3 className="kb-head">
+          Cabinet &amp; Hardware <span className="muted-sm">from job file</span>
+        </h3>
+        <div className="combo-grid">
+          <div className="table-wrap">
+            <table className="condensed">
+              <thead>
+                <tr>
+                  <th>Room / Zone</th>
+                  <th>Vendor</th>
+                  <th>Series</th>
+                  <th>Door style</th>
+                  <th>Color</th>
+                  <th>Species</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sr.rooms.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.room}{r.zone ? ` / ${r.zone}` : ""}</td>
+                    <td>{r.cabinet_brand ?? "—"}</td>
+                    <td>{r.series ?? "—"}</td>
+                    <td>{r.door_style ?? "—"}</td>
+                    <td>{r.finish ?? "—"}</td>
+                    <td>{r.wood_species ?? "—"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {sr.rooms.map((r) => (
-                    <tr key={r.id}>
-                      <td>
-                        {r.room}
-                        {r.zone ? ` / ${r.zone}` : ""}
-                      </td>
-                      <td>{r.cabinet_brand ?? "—"}</td>
-                      <td>{r.series ?? "—"}</td>
-                      <td>{r.door_style ?? "—"}</td>
-                      <td>{r.finish ?? "—"}</td>
-                      <td>{r.wood_species ?? "—"}</td>
-                    </tr>
-                  ))}
-                  {sr.rooms.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="muted">
-                        No cabinet selections on this job.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {sr.hardware.length > 0 && (
-              <>
-                <h3 className="kb-head">Hardware</h3>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Room</th>
-                        <th>Type</th>
-                        <th>Vendor</th>
-                        <th>Item</th>
-                        <th className="num">Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sr.hardware.map((h) => (
-                        <tr key={h.id}>
-                          <td>{h.room ?? "—"}</td>
-                          <td>{h.hardware_type ?? "—"}</td>
-                          <td>{h.vendor ?? "—"}</td>
-                          <td>{h.item}</td>
-                          <td className="num">{h.qty}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </>
-        )}
+                ))}
+                {sr.rooms.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted">No cabinet selections on this job.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-wrap">
+            <table className="condensed">
+              <thead>
+                <tr>
+                  <th>Room</th>
+                  <th>Hardware type</th>
+                  <th>Vendor</th>
+                  <th>Item</th>
+                  <th className="num">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sr.hardware.map((h) => (
+                  <tr key={h.id}>
+                    <td>{h.room ?? "—"}</td>
+                    <td>{h.hardware_type ?? "—"}</td>
+                    <td>{h.vendor ?? "—"}</td>
+                    <td>{h.item}</td>
+                    <td className="num">{h.qty}</td>
+                  </tr>
+                ))}
+                {sr.hardware.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted">No hardware on this job.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <h3 className="kb-head">Parts Needed</h3>
         <div className="table-wrap">
@@ -337,96 +333,78 @@ export function ServiceReportPrint({
   blank?: boolean;
   screen?: boolean;
 }) {
-  const partBlanks = blank ? 12 : BLANK_PART_ROWS;
-  const svcBlanks = blank ? 12 : BLANK_SERVICE_ROWS;
+  const partBlanks = BLANK_PART_ROWS;
+  const svcBlanks = BLANK_SERVICE_ROWS;
   return (
     <div className={`${screen ? "" : "print-only "}qc-report`}>
       <div className="qc-header">
-        <div>
-          <div className="qc-title">SERVICE REQUEST</div>
-          {sr.title && <div className="qc-subtitle">{sr.title}</div>}
+        <div className="qc-title">SERVICE REQUEST</div>
+        <div className="qc-brand">
+          <img src="/carter-logo.png" alt="Carter Lumber" className="qc-logo" />
+          <span className="qc-brand-name">Carter Kitchen and Bath</span>
         </div>
-        <img src="/carter-logo.png" alt="Carter Lumber" className="qc-logo" />
       </div>
 
-      <table className="qc-info">
-        <tbody>
-          <tr>
-            <th>PROJECT</th>
-            <td>{sr.community_name ?? ""}</td>
-            <th>DATE</th>
-            <td>{blank ? "" : fmtDate(sr.created_at)}</td>
-          </tr>
-          <tr>
-            <th>ADDRESS</th>
-            <td>{sr.address}</td>
-            <th>JOB CODE</th>
-            <td>{sr.job_code ?? ""}</td>
-          </tr>
-          <tr>
-            <th>LOT</th>
-            <td>{sr.lot_number ?? ""}</td>
-            <th>STATUS</th>
-            <td>{blank ? "" : sr.status}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="qc-info">
+        <span><b>PROJECT</b> {sr.community_name ?? ""}</span>
+        <span><b>ADDRESS</b> {sr.address}</span>
+        <span><b>LOT</b> {sr.lot_number ?? ""}</span>
+        <span><b>JOB CODE</b> {sr.job_code ?? ""}</span>
+        <span><b>DATE</b> {blank ? "" : fmtDate(sr.created_at)}</span>
+        <span><b>STATUS</b> {blank ? "" : sr.status}</span>
+      </div>
 
-      <div className="qc-bar">CABINET SPECIFICATIONS</div>
-      <table className="qc-table">
-        <thead>
-          <tr>
-            <th>Room / Zone</th>
-            <th>Vendor</th>
-            <th>Series</th>
-            <th>Door Style</th>
-            <th>Color</th>
-            <th>Species</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sr.rooms.map((r) => (
-            <tr key={r.id}>
-              <td>{r.room}{r.zone ? ` / ${r.zone}` : ""}</td>
-              <td>{r.cabinet_brand ?? ""}</td>
-              <td>{r.series ?? ""}</td>
-              <td>{r.door_style ?? ""}</td>
-              <td>{r.finish ?? ""}</td>
-              <td>{r.wood_species ?? ""}</td>
+      <div className="qc-bar">CABINET SPECIFICATIONS &amp; HARDWARE</div>
+      <div className="qc-combo">
+        <table className="qc-table">
+          <thead>
+            <tr>
+              <th>Room / Zone</th>
+              <th>Vendor</th>
+              <th>Series</th>
+              <th>Door Style</th>
+              <th>Color</th>
+              <th>Species</th>
             </tr>
-          ))}
-          {sr.rooms.length === 0 && blanks(blank ? 3 : 1, 6)}
-        </tbody>
-      </table>
-
-      {(sr.hardware.length > 0 || blank) && (
-        <>
-          <div className="qc-bar">HARDWARE</div>
-          <table className="qc-table">
-            <thead>
-              <tr>
-                <th>Room</th>
-                <th>Type</th>
-                <th>Vendor</th>
-                <th>Item</th>
-                <th className="num">Qty</th>
+          </thead>
+          <tbody>
+            {sr.rooms.map((r) => (
+              <tr key={r.id}>
+                <td>{r.room}{r.zone ? ` / ${r.zone}` : ""}</td>
+                <td>{r.cabinet_brand ?? ""}</td>
+                <td>{r.series ?? ""}</td>
+                <td>{r.door_style ?? ""}</td>
+                <td>{r.finish ?? ""}</td>
+                <td>{r.wood_species ?? ""}</td>
               </tr>
-            </thead>
-            <tbody>
-              {sr.hardware.map((h) => (
-                <tr key={h.id}>
-                  <td>{h.room ?? ""}</td>
-                  <td>{h.hardware_type ?? ""}</td>
-                  <td>{h.vendor ?? ""}</td>
-                  <td>{h.item}</td>
-                  <td className="num">{h.qty}</td>
-                </tr>
-              ))}
-              {sr.hardware.length === 0 && blank && blanks(3, 5)}
-            </tbody>
-          </table>
-        </>
-      )}
+            ))}
+            {sr.rooms.length === 0 && blanks(1, 6)}
+          </tbody>
+        </table>
+        <table className="qc-table">
+          <thead>
+            <tr>
+              <th>Room</th>
+              <th>Hardware Type</th>
+              <th>Vendor</th>
+              <th>Item</th>
+              <th className="num">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sr.hardware.map((h) => (
+              <tr key={h.id}>
+                <td>{h.room ?? ""}</td>
+                <td>{h.hardware_type ?? ""}</td>
+                <td>{h.vendor ?? ""}</td>
+                <td>{h.item}</td>
+                <td className="num">{h.qty}</td>
+              </tr>
+            ))}
+            {sr.hardware.length === 0 && blanks(1, 5)}
+          </tbody>
+        </table>
+      </div>
 
       <div className="qc-bar">PARTS NEEDED</div>
       <table className="qc-table qc-parts">
@@ -500,26 +478,22 @@ export function ServiceReportPrint({
         </tbody>
       </table>
 
-      <div className="qc-signoff">
-        <div className="qc-sign-row">
-          <div className="qc-sign qc-sign-sig">
-            <div className="qc-sign-blank" />
-            <div className="qc-sign-label">Service Tech — Signature</div>
-          </div>
-          <div className="qc-sign qc-sign-date">
-            <div className="qc-sign-blank" />
-            <div className="qc-sign-label">Date</div>
-          </div>
+      <div className="qc-signoff qc-sign-row">
+        <div className="qc-sign qc-sign-sig">
+          <div className="qc-sign-blank" />
+          <div className="qc-sign-label">Service Tech — Signature</div>
         </div>
-        <div className="qc-sign-row">
-          <div className="qc-sign qc-sign-sig">
-            <div className="qc-sign-blank" />
-            <div className="qc-sign-label">Customer — Signature (work completed)</div>
-          </div>
-          <div className="qc-sign qc-sign-date">
-            <div className="qc-sign-blank" />
-            <div className="qc-sign-label">Date</div>
-          </div>
+        <div className="qc-sign qc-sign-date">
+          <div className="qc-sign-blank" />
+          <div className="qc-sign-label">Date</div>
+        </div>
+        <div className="qc-sign qc-sign-sig">
+          <div className="qc-sign-blank" />
+          <div className="qc-sign-label">Customer — Signature</div>
+        </div>
+        <div className="qc-sign qc-sign-date">
+          <div className="qc-sign-blank" />
+          <div className="qc-sign-label">Date</div>
         </div>
       </div>
     </div>
