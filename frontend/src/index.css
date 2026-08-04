@@ -1115,21 +1115,22 @@ tr.line-done td:nth-child(4) {
   flex: 1;
 }
 
-/* Door / Drawer hardware as two separate stacked boxes */
+/* Door / Drawer hardware as two side-by-side boxes on one row */
 .qc-combo > .qc-hardware {
-  flex: 1.9;
+  flex: 2.4;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.3rem;
 }
 
 .qc-hw-box {
+  flex: 1;
   border: 1px solid #000;
 }
 
 .qc-hw-label {
-  background: #ededed; /* same gray as the Species / table header cells */
-  color: #000;
+  background: #125952; /* Carter dark green */
+  color: #fff;
   font-weight: 700;
   font-size: 9pt;
   text-align: center;
