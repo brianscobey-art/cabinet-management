@@ -100,8 +100,10 @@ def build_blank_template() -> bytes:
     ws = wb.active
     ws.title = "Service Request"
     ws.sheet_view.showGridLines = False
+    # Wide enough that the 60-col grid overflows the page width, so fit-to-width
+    # scales it to exactly fill the landscape sheet (width becomes the binding side).
     for i in range(1, NBASE + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 1.4
+        ws.column_dimensions[get_column_letter(i)].width = 1.9
 
     # --- row 1 (above print area): file-naming rule ----------------------
     _box(ws, 1, 1, 8, "FILE NAME", border=_GRAY_BORDER).fill = PatternFill("solid", fgColor="C00000")
@@ -206,7 +208,7 @@ def build_blank_template() -> bytes:
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
-    ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.3, bottom=0.3, header=0.15, footer=0.15)
+    ws.page_margins = PageMargins(left=0.2, right=0.2, top=0.2, bottom=0.2, header=0.1, footer=0.1)
     ws.print_area = f"A3:{get_column_letter(NBASE)}{r}"
 
     buf = io.BytesIO()
