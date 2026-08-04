@@ -1145,6 +1145,7 @@ tr.line-done td:nth-child(4) {
   font-size: 9pt;
   padding: 0.22rem 0.4rem;
   min-height: 1.15rem;
+  text-align: center;
 }
 
 /* project info cells left-aligned */
