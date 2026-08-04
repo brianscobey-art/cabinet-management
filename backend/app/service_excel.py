@@ -27,12 +27,16 @@ SPEC_ROWS = 3
 NBASE = 60  # base columns; every section's spans sum to this
 
 # (label, span) specs — each list sums to NBASE
-PART_SPEC = [("Item #", 5), ("Qty", 5), ("Part", 7), ("Cabinet", 5), ("Style", 5),
-             ("Color", 5), ("Vendor", 6), ("Order #", 5), ("Order Date", 5),
-             ("Due Date", 5), ("Notes", 7)]
-COMBO_SPEC = [("Room / Zone", 9), ("Vendor", 9), ("Series", 8), ("Door Style", 9),
-              ("Color", 8), ("Species", 8), ("Hardware Type", 9)]  # sums to 60
-SERVICE_SPEC = [("Part #", 5), ("Cabinet", 6), ("Description of Work", 34), ("Date", 8), ("Tech", 7)]
+# Parts: Item#/Qty/Part/Cabinet/Style/Color/Vendor/Vendor Order#/Order Date/Due Date/Notes/✓
+PART_SPEC = [("Item #", 5), ("Qty", 4), ("Part", 6), ("Cabinet", 5), ("Style", 4),
+             ("Color", 4), ("Vendor", 5), ("Vendor Order #", 5), ("Order Date", 6),
+             ("Due Date", 6), ("Notes", 8), ("✓", 2)]  # sums to 60
+# Cabinet specs take the left ~73%; two hardware boxes fill the right ~27%.
+CAB_SPEC = [("Room / Zone", 8), ("Vendor", 7), ("Series", 7), ("Door Style", 8),
+            ("Color", 7), ("Species", 7)]  # sums to 44
+HW_BOXES = [("Door Hardware", 45, 8), ("Drawer Hardware", 53, 8)]  # (label, start col, span) → cols 45..60
+SERVICE_SPEC = [("Part #", 5), ("Cabinet", 6), ("Description of Work", 33),
+                ("✓", 3), ("Date", 7), ("Tech", 6)]  # sums to 60
 INFO_SPEC = [("PROJECT", 6, 14), ("ADDRESS", 6, 14), ("LOT", 6, 14)]   # label span, value span
 INFO_SPEC2 = [("JOB CODE", 6, 14), ("DATE", 6, 14), ("STATUS", 6, 14)]
 SIGN_SPEC = [("Service Tech — Signature", 20), ("Date", 10),
@@ -48,17 +52,20 @@ def _starts(spec):
     return out
 
 
-PART_STARTS = _starts(PART_SPEC)          # [1,6,11,18,23,28,33,39,44,49,54]
-SERVICE_STARTS = _starts(SERVICE_SPEC)    # [1,6,12,46,54]
+PART_STARTS = _starts(PART_SPEC)          # part=col10, cabinet=16, ... notes=51
+SERVICE_STARTS = _starts(SERVICE_SPEC)    # part#=1, description=12
 
 _thin = Side(style="thin", color="000000")
 _BORDER = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 _GRAY_BORDER = Border(left=Side(style="medium", color="595959"), right=Side(style="medium", color="595959"),
                       top=Side(style="medium", color="595959"), bottom=Side(style="medium", color="595959"))
+_GREEN = "125952"  # Carter dark green
 _LABEL_FONT = Font(bold=True, size=9)
 _SECTION_FILL = PatternFill("solid", fgColor="D9D9D9")   # light gray, matches online
 _HEADER_FILL = PatternFill("solid", fgColor="EDEDED")
 _LABEL_FILL = PatternFill("solid", fgColor="EDEDED")
+_GREEN_FILL = PatternFill("solid", fgColor=_GREEN)       # Door/Drawer hardware labels
+_WHITE_BOLD = Font(bold=True, size=9, color="FFFFFF")
 _CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 _LEFT = Alignment(horizontal="left", vertical="center")
 
@@ -106,22 +113,25 @@ def build_blank_template() -> bytes:
     rule.alignment = _LEFT
 
     # --- title (left) + logo & brand (upper right) — print area starts here
-    ws.merge_cells(start_row=3, start_column=1, end_row=4, end_column=22)
+    ws.merge_cells(start_row=3, start_column=1, end_row=4, end_column=30)
     t = ws.cell(row=3, column=1, value="SERVICE REQUEST")
-    t.font = Font(size=17, bold=True)
+    t.font = Font(size=17, bold=True, color=_GREEN)
     t.alignment = Alignment(vertical="center")
     ws.row_dimensions[3].height = 18
     ws.row_dimensions[4].height = 18
     logo = Path(__file__).resolve().parent.parent.parent / "frontend" / "public" / "carter-logo.png"
     if logo.exists():
         img = XLImage(str(logo))
-        img.height = 38
-        img.width = int(38 * 946 / 228)
-        ws.add_image(img, get_column_letter(45) + "3")
-    ws.merge_cells(start_row=5, start_column=45, end_row=5, end_column=NBASE)
-    b = ws.cell(row=5, column=45, value="Carter Kitchen and Bath")
-    b.font = Font(size=11, bold=True, color="125952")
+        img.height = 34
+        img.width = int(34 * 946 / 228)
+        ws.add_image(img, get_column_letter(44) + "3")
+    ws.merge_cells(start_row=5, start_column=40, end_row=5, end_column=NBASE)
+    b = ws.cell(row=5, column=40, value="Carter Kitchen and Bath")
+    b.font = Font(size=11, bold=True, color=_GREEN)
     b.alignment = Alignment(horizontal="right", vertical="center")
+    # green rule under the header block (matches the online header underline)
+    for c in range(1, NBASE + 1):
+        ws.cell(row=5, column=c).border = Border(bottom=Side(style="medium", color=_GREEN))
 
     # --- info grid (boxed, 2 rows) ---------------------------------------
     def info_row(r, spec):
@@ -141,17 +151,36 @@ def build_blank_template() -> bytes:
         starts = _starts(spec)
         for (label, span), start in zip(spec, starts):
             _box(ws, r, start, span, label, kind="header")
+        ws.row_dimensions[r].height = 24  # room for headers that wrap to 2 lines
         r += 1
         for _ in range(blanks):
             for idx, ((_l, span), start) in enumerate(zip(spec, starts)):
                 _box(ws, r, start, span, center=idx in center_idx, datefmt=idx in date_idx)
             r += 1
 
-    section("CABINET SPECIFICATIONS & HARDWARE", COMBO_SPEC, SPEC_ROWS)
+    # --- CABINET SPECIFICATIONS & HARDWARE (specs table left, hardware boxes right) ---
+    _box(ws, r, 1, NBASE, "CABINET SPECIFICATIONS & HARDWARE", kind="section")
     r += 1
-    section(PARTS_MARKER, PART_SPEC, PART_ROWS, center_idx={0, 1, 7, 8, 9}, date_idx={8, 9})
+    cab_starts = _starts(CAB_SPEC)
+    for (label, span), start in zip(CAB_SPEC, cab_starts):      # cabinet headers (left)
+        _box(ws, r, start, span, label, kind="header")
+    for label, start, span in HW_BOXES:                        # green hardware labels (right)
+        cell = _box(ws, r, start, span, label, center=True)
+        cell.fill = _GREEN_FILL
+        cell.font = _WHITE_BOLD
+    ws.row_dimensions[r].height = 26  # fit "Drawer Hardware" without clipping
+    for i in range(SPEC_ROWS):
+        r += 1
+        for (label, span), start in zip(CAB_SPEC, cab_starts):  # blank cabinet rows
+            _box(ws, r, start, span)
+        if i == 0:                                              # SKU value under each green label
+            for label, start, span in HW_BOXES:
+                _box(ws, r, start, span, center=True)
+    r += 2
+
+    section(PARTS_MARKER, PART_SPEC, PART_ROWS, center_idx={0, 1, 7, 8, 9, 11}, date_idx={8, 9})
     r += 1
-    section(SERVICE_MARKER, SERVICE_SPEC, SERVICE_ROWS, center_idx={0, 3}, date_idx={3})
+    section(SERVICE_MARKER, SERVICE_SPEC, SERVICE_ROWS, center_idx={0, 3, 4}, date_idx={4})
 
     # --- signatures on one line ------------------------------------------
     r += 1
@@ -164,7 +193,10 @@ def build_blank_template() -> bytes:
     for (label, span), start in zip(SIGN_SPEC, starts):
         c = ws.cell(row=r, column=start, value=label)
         c.font = Font(size=8, color="555555")
+    # footer rule (matches the thin top border on the online footer)
     r += 2
+    for c in range(1, NBASE + 1):
+        ws.cell(row=r, column=c).border = Border(top=Side(style="thin", color="999999"))
     ws.cell(row=r, column=1,
             value="Fill in the Job Code and the Parts / Service tables, save, and import into "
                   "Carter Kitchen and Bath. Part # in Service refers to the Item # in Parts.").font = Font(
