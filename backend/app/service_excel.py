@@ -30,9 +30,8 @@ NBASE = 60  # base columns; every section's spans sum to this
 PART_SPEC = [("Item #", 5), ("Qty", 5), ("Part", 7), ("Cabinet", 5), ("Style", 5),
              ("Color", 5), ("Vendor", 6), ("Order #", 5), ("Order Date", 5),
              ("Due Date", 5), ("Notes", 7)]
-COMBO_SPEC = [("Room / Zone", 5), ("Vendor", 5), ("Series", 5), ("Door Style", 5),
-              ("Color", 5), ("Species", 5), ("Room", 6), ("Hardware Type", 6),
-              ("Vendor", 6), ("Item", 6), ("Qty", 6)]
+COMBO_SPEC = [("Room / Zone", 9), ("Vendor", 9), ("Series", 8), ("Door Style", 9),
+              ("Color", 8), ("Species", 8), ("Hardware Type", 9)]  # sums to 60
 SERVICE_SPEC = [("Part #", 5), ("Cabinet", 6), ("Description of Work", 34), ("Date", 8), ("Tech", 7)]
 INFO_SPEC = [("PROJECT", 6, 14), ("ADDRESS", 6, 14), ("LOT", 6, 14)]   # label span, value span
 INFO_SPEC2 = [("JOB CODE", 6, 14), ("DATE", 6, 14), ("STATUS", 6, 14)]
@@ -148,7 +147,7 @@ def build_blank_template() -> bytes:
                 _box(ws, r, start, span, center=idx in center_idx, datefmt=idx in date_idx)
             r += 1
 
-    section("CABINET SPECIFICATIONS & HARDWARE", COMBO_SPEC, SPEC_ROWS, center_idx={10})
+    section("CABINET SPECIFICATIONS & HARDWARE", COMBO_SPEC, SPEC_ROWS)
     r += 1
     section(PARTS_MARKER, PART_SPEC, PART_ROWS, center_idx={0, 1, 7, 8, 9}, date_idx={8, 9})
     r += 1

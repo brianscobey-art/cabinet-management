@@ -1092,15 +1092,25 @@ tr.line-done td:nth-child(4) {
   color: #666;
 }
 
-/* cabinet specs + hardware side by side in one block */
+/* cabinet specs (wide) + hardware type (narrow) side by side in one block */
 .qc-combo {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
 }
 
-.qc-combo > .qc-table {
-  width: 50%;
+.qc-combo > .qc-table:first-child {
+  flex: 6;
+}
+
+.qc-combo > .qc-table:last-child {
+  flex: 1;
+}
+
+/* project info cells left-aligned */
+.qc-info th,
+.qc-info td {
+  text-align: left;
 }
 
 .qc-table {

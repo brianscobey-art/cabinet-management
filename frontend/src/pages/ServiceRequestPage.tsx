@@ -157,26 +157,18 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
             <table className="condensed">
               <thead>
                 <tr>
-                  <th>Room</th>
                   <th>Hardware type</th>
-                  <th>Vendor</th>
-                  <th>Item</th>
-                  <th className="num">Qty</th>
                 </tr>
               </thead>
               <tbody>
                 {sr.hardware.map((h) => (
                   <tr key={h.id}>
-                    <td>{h.room ?? "—"}</td>
                     <td>{h.hardware_type ?? "—"}</td>
-                    <td>{h.vendor ?? "—"}</td>
-                    <td>{h.item}</td>
-                    <td className="num">{h.qty}</td>
                   </tr>
                 ))}
                 {sr.hardware.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="muted">No hardware on this job.</td>
+                    <td className="muted">No hardware on this job.</td>
                   </tr>
                 )}
               </tbody>
@@ -414,24 +406,16 @@ export function ServiceReportPrint({
         <table className="qc-table">
           <thead>
             <tr>
-              <th>Room</th>
               <th>Hardware Type</th>
-              <th>Vendor</th>
-              <th>Item</th>
-              <th className="num">Qty</th>
             </tr>
           </thead>
           <tbody>
             {sr.hardware.map((h) => (
               <tr key={h.id}>
-                <td>{h.room ?? ""}</td>
                 <td>{h.hardware_type ?? ""}</td>
-                <td>{h.vendor ?? ""}</td>
-                <td>{h.item}</td>
-                <td className="num">{h.qty}</td>
               </tr>
             ))}
-            {sr.hardware.length === 0 && blanks(1, 5)}
+            {sr.hardware.length === 0 && blanks(1, 1)}
           </tbody>
         </table>
       </div>
