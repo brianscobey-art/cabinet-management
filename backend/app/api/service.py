@@ -72,6 +72,8 @@ class ServiceRequestDetail(BaseModel):
     lot_number: str | None
     title: str | None
     status: str
+    material_status: str | None
+    scheduled_date: date | None
     created_by: str | None
     created_at: datetime
     parts: list[PartOut]
@@ -87,6 +89,8 @@ class RequestIn(BaseModel):
 class RequestPatch(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     status: str | None = Field(default=None, max_length=20)
+    material_status: str | None = Field(default=None, max_length=30)
+    scheduled_date: date | None = None
 
 
 class PartIn(BaseModel):
@@ -128,6 +132,7 @@ def _detail(sr: ServiceRequest) -> ServiceRequestDetail:
         account_name=job.account.name if job.account else None,
         community_name=job.community.name if job.community else None,
         lot_number=job.lot_number, title=sr.title, status=sr.status,
+        material_status=sr.material_status, scheduled_date=sr.scheduled_date,
         created_by=sr.created_by, created_at=sr.created_at,
         parts=[PartOut.model_validate(p) for p in sr.parts],
         lines=[LineOut.model_validate(l) for l in sr.lines],
@@ -241,6 +246,10 @@ def patch_request(sr_id: int, payload: RequestPatch, db: Session = Depends(get_d
         sr.title = data["title"]
     if "status" in data and data["status"]:
         sr.status = data["status"]
+    if "material_status" in data:
+        sr.material_status = data["material_status"] or None
+    if "scheduled_date" in data:
+        sr.scheduled_date = data["scheduled_date"]
     db.commit()
     return _detail(_get_request(db, sr_id))
 

@@ -12,6 +12,7 @@ from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_fro
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
 from app.models import (
     Account, AccountType, Community, DomoTxn, Job, JobCost, JobDocument, JobStatus, PhaseUpdate,
+    ServiceLine, ServiceRequest,
 )
 from app.phases import PHASE_LABELS
 
@@ -139,6 +140,8 @@ REPORTS = [
                description="Scheduled installs grouped by install week with PO value."),
     ReportInfo(key="unordered", name="Needs Ordering", category="Operations",
                description="Active jobs with an install date but no cabinet PO yet — the risk list."),
+    ReportInfo(key="open-service", name="Open Service Requests", category="Operations",
+               description="Every service request with work still open — job, date created, material status, and scheduled completion date."),
     ReportInfo(key="revenue-builder", name="Revenue by Builder & Community", category="Sales",
                description="Total PO revenue rolled up by builder, then community."),
     ReportInfo(key="revenue-salesperson", name="Revenue by Salesperson", category="Sales",
@@ -314,6 +317,58 @@ def needs_ordering(db: Session = Depends(get_db)):
 def _lotkey(lot):
     s = (lot or "").strip()
     return (0, int(s)) if s.isdigit() else (1, s)
+
+
+# --- Open Service Requests ------------------------------------------------
+
+class OpenServiceRow(BaseModel):
+    sr_id: int
+    job_id: int
+    job_code: str | None
+    account_name: str
+    community_name: str | None
+    lot_number: str | None
+    address: str
+    title: str | None
+    status: str
+    material_status: str | None
+    created_at: datetime
+    scheduled_date: date | None
+    open_lines: int
+    total_lines: int
+
+
+@router.get("/reports/open-service", response_model=list[OpenServiceRow], dependencies=[Depends(read_access)])
+def open_service_requests(db: Session = Depends(get_db)):
+    """Every service request with work still open (some/all lines not done),
+    with job info, date created, material status, and scheduled completion date."""
+    reqs = (
+        db.query(ServiceRequest)
+        .options(
+            joinedload(ServiceRequest.job).joinedload(Job.account),
+            joinedload(ServiceRequest.job).joinedload(Job.community),
+            joinedload(ServiceRequest.lines),
+        )
+        .all()
+    )
+    rows = []
+    for sr in reqs:
+        total = len(sr.lines)
+        done = sum(1 for ln in sr.lines if ln.done)
+        if total > 0 and done == total:
+            continue  # fully completed — not open
+        job = sr.job
+        rows.append(OpenServiceRow(
+            sr_id=sr.id, job_id=sr.job_id, job_code=job.job_code,
+            account_name=job.account.name if job.account else "—",
+            community_name=job.community.name if job.community else None,
+            lot_number=job.lot_number, address=job.address,
+            title=sr.title, status=sr.status, material_status=sr.material_status,
+            created_at=sr.created_at, scheduled_date=sr.scheduled_date,
+            open_lines=total - done, total_lines=total,
+        ))
+    rows.sort(key=lambda r: (r.scheduled_date or date.max, r.created_at))
+    return rows
 
 
 

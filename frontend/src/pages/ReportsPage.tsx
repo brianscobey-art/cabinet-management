@@ -5,6 +5,7 @@ import {
   JobPLReport,
   NeedsOrderRow,
   OpenPOReport,
+  OpenServiceRow,
   OtherLaborReport,
   PhaseReportRow,
   ReportInfo,
@@ -16,6 +17,7 @@ import {
   getJobPL,
   getNeedsOrdering,
   getOpenPO,
+  getOpenService,
   getOtherLabor,
   getPhaseReport,
   getPoStatus,
@@ -124,6 +126,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "revenue-salesperson" && <RevenueSalespersonView />}
       {key === "install-week" && <InstallWeekView />}
       {key === "unordered" && <NeedsOrderingView />}
+      {key === "open-service" && <OpenServiceView />}
       {key === "job-pl" && <JobPLView />}
       {key === "other-labor" && <OtherLaborView />}
       {key === "domo-pl" && <DomoPLView />}
@@ -966,6 +969,66 @@ function InstallWeekView() {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function OpenServiceView() {
+  const [rows, error] = useReport<OpenServiceRow[]>(getOpenService);
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+  return (
+    <>
+      <p className="report-total">
+        {rows.length} open service request{rows.length === 1 ? "" : "s"}
+      </p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job code</th>
+              <th>Builder</th>
+              <th>Community</th>
+              <th>Lot</th>
+              <th>Address</th>
+              <th>Request</th>
+              <th>Status</th>
+              <th>Material</th>
+              <th>Created</th>
+              <th>Scheduled</th>
+              <th className="num">Open / total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.sr_id}>
+                <td>
+                  <a href={`#/service/${r.sr_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                </td>
+                <td>{r.account_name}</td>
+                <td>{r.community_name ?? "—"}</td>
+                <td>{r.lot_number ?? "—"}</td>
+                <td>{r.address}</td>
+                <td>{r.title ?? "—"}</td>
+                <td>{r.status}</td>
+                <td>{r.material_status ?? "—"}</td>
+                <td>{fmtDate(r.created_at)}</td>
+                <td>{r.scheduled_date ? fmtDate(r.scheduled_date) : "—"}</td>
+                <td className="num">
+                  {r.open_lines} / {r.total_lines}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={11} className="muted">
+                  No open service requests.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

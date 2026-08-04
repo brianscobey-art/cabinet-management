@@ -11,6 +11,8 @@ const EMPTY: ServiceRequestDetail = {
   lot_number: null,
   title: null,
   status: "",
+  material_status: null,
+  scheduled_date: null,
   created_by: null,
   created_at: new Date().toISOString(),
   parts: [],

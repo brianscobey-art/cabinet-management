@@ -18,6 +18,8 @@ class ServiceRequest(Base):
     title: Mapped[str | None] = mapped_column(String(200), default=None)
     # Installed | Warranty | Service Empty | Service Occupied
     status: Mapped[str] = mapped_column(String(20), default="Installed")
+    material_status: Mapped[str | None] = mapped_column(String(30), default=None)  # Not Ordered | Ordered | Received
+    scheduled_date: Mapped[date | None] = mapped_column(Date, default=None)  # scheduled completion
     created_by: Mapped[str | None] = mapped_column(String(255), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

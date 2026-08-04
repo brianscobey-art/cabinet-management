@@ -554,6 +554,24 @@ export const getDomoBuilders = () => api<string[]>("/reports/domo-pl/builders");
 export const refreshDomoPL = () =>
   api<Record<string, unknown>>("/reports/domo-pl/refresh", { method: "POST" });
 
+export interface OpenServiceRow {
+  sr_id: number;
+  job_id: number;
+  job_code: string | null;
+  account_name: string;
+  community_name: string | null;
+  lot_number: string | null;
+  address: string;
+  title: string | null;
+  status: string;
+  material_status: string | null;
+  created_at: string;
+  scheduled_date: string | null;
+  open_lines: number;
+  total_lines: number;
+}
+export const getOpenService = () => api<OpenServiceRow[]>("/reports/open-service");
+
 export const getReportsList = () => api<ReportInfo[]>("/reports");
 export const getOpenPO = () => api<OpenPOReport>("/reports/open-po");
 export const getPoStatus = () => api<StatusSummaryRow[]>("/reports/po-status");
@@ -666,6 +684,8 @@ export interface ServiceRequestDetail {
   lot_number: string | null;
   title: string | null;
   status: string;
+  material_status: string | null;
+  scheduled_date: string | null;
   created_by: string | null;
   created_at: string;
   parts: ServicePart[];

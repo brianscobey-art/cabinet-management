@@ -16,6 +16,7 @@ import { fmtDate } from "../format";
 import { initials } from "./PhasesPage";
 
 const STATUSES = ["Installed", "Warranty", "Service Empty", "Service Occupied"];
+const MATERIAL_STATUSES = ["Not Ordered", "Ordered", "Received", "N/A"];
 const BLANK_PART_ROWS = 3;
 const BLANK_SERVICE_ROWS = 3;
 
@@ -111,9 +112,38 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
       </div>
 
       {canWrite && (
-        <p className="no-print" style={{ marginTop: 0 }}>
+        <div className="no-print service-meta">
           <TitleEditor sr={sr} onSaved={refresh} />
-        </p>
+          <label>
+            Material
+            <select
+              value={sr.material_status ?? ""}
+              onChange={async (e) => {
+                await patchServiceRequest(srId, { material_status: e.target.value || null });
+                refresh();
+              }}
+            >
+              <option value="">Material status…</option>
+              {MATERIAL_STATUSES.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Scheduled
+            <input
+              type="date"
+              className="date-input"
+              value={sr.scheduled_date ?? ""}
+              onChange={async (e) => {
+                await patchServiceRequest(srId, { scheduled_date: e.target.value || null });
+                refresh();
+              }}
+            />
+          </label>
+        </div>
       )}
 
       {/* ---------- interactive service report (screen only) ---------- */}
