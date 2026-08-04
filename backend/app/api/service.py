@@ -67,6 +67,7 @@ class ServiceRequestDetail(BaseModel):
     job_id: int
     job_code: str | None
     address: str
+    account_name: str | None
     community_name: str | None
     lot_number: str | None
     title: str | None
@@ -124,6 +125,7 @@ def _detail(sr: ServiceRequest) -> ServiceRequestDetail:
     job = sr.job
     return ServiceRequestDetail(
         id=sr.id, job_id=sr.job_id, job_code=job.job_code, address=job.address,
+        account_name=job.account.name if job.account else None,
         community_name=job.community.name if job.community else None,
         lot_number=job.lot_number, title=sr.title, status=sr.status,
         created_by=sr.created_by, created_at=sr.created_at,

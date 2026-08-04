@@ -63,6 +63,24 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
     refresh();
   }
 
+  // Print names the document (PDF filename + header): "Service Request CODE Builder MMDDYY"
+  function printReport() {
+    const d = new Date();
+    const mmddyy =
+      String(d.getMonth() + 1).padStart(2, "0") +
+      String(d.getDate()).padStart(2, "0") +
+      String(d.getFullYear()).slice(2);
+    const name = ["Service Request", sr!.job_code, sr!.account_name, mmddyy].filter(Boolean).join(" ");
+    const prev = document.title;
+    document.title = name;
+    const restore = () => {
+      document.title = prev;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+  }
+
   return (
     <div className="service-page">
       <p className="back-row no-print">
@@ -87,7 +105,7 @@ export default function ServiceRequestPage({ srId, canWrite }: { srId: number; c
           ) : (
             <span className="badge">{sr.status}</span>
           )}
-          <button onClick={() => window.print()}>🖨 Print</button>
+          <button onClick={printReport}>🖨 Print</button>
           <span className="brand-tag">Carter Kitchen and Bath</span>
         </div>
       </div>
@@ -345,14 +363,26 @@ export function ServiceReportPrint({
         </div>
       </div>
 
-      <div className="qc-info">
-        <span><b>PROJECT</b> {sr.community_name ?? ""}</span>
-        <span><b>ADDRESS</b> {sr.address}</span>
-        <span><b>LOT</b> {sr.lot_number ?? ""}</span>
-        <span><b>JOB CODE</b> {sr.job_code ?? ""}</span>
-        <span><b>DATE</b> {blank ? "" : fmtDate(sr.created_at)}</span>
-        <span><b>STATUS</b> {blank ? "" : sr.status}</span>
-      </div>
+      <table className="qc-info">
+        <tbody>
+          <tr>
+            <th>PROJECT</th>
+            <td>{sr.community_name ?? ""}</td>
+            <th>ADDRESS</th>
+            <td>{sr.address}</td>
+            <th>LOT</th>
+            <td>{sr.lot_number ?? ""}</td>
+          </tr>
+          <tr>
+            <th>JOB CODE</th>
+            <td>{sr.job_code ?? ""}</td>
+            <th>DATE</th>
+            <td>{blank ? "" : fmtDate(sr.created_at)}</td>
+            <th>STATUS</th>
+            <td>{blank ? "" : sr.status}</td>
+          </tr>
+        </tbody>
+      </table>
 
       <div className="qc-bar">CABINET SPECIFICATIONS &amp; HARDWARE</div>
       <div className="qc-combo">
@@ -495,6 +525,17 @@ export function ServiceReportPrint({
           <div className="qc-sign-blank" />
           <div className="qc-sign-label">Date</div>
         </div>
+      </div>
+
+      <div className="qc-footer">
+        {["Service Request", sr.job_code, sr.account_name].filter(Boolean).join(" · ")} ·{" "}
+        {new Date().toLocaleString("en-US", {
+          month: "numeric",
+          day: "numeric",
+          year: "2-digit",
+          hour: "numeric",
+          minute: "2-digit",
+        })}
       </div>
     </div>
   );

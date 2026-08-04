@@ -6,6 +6,7 @@ const EMPTY: ServiceRequestDetail = {
   job_id: 0,
   job_code: null,
   address: "",
+  account_name: null,
   community_name: null,
   lot_number: null,
   title: null,

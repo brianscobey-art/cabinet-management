@@ -661,6 +661,7 @@ export interface ServiceRequestDetail {
   job_id: number;
   job_code: string | null;
   address: string;
+  account_name: string | null;
   community_name: string | null;
   lot_number: string | null;
   title: string | null;
