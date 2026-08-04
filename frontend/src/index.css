@@ -1117,7 +1117,7 @@ tr.line-done td:nth-child(4) {
 
 /* Door / Drawer hardware as two separate stacked boxes */
 .qc-combo > .qc-hardware {
-  flex: 1.4;
+  flex: 1.9;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -1128,10 +1128,12 @@ tr.line-done td:nth-child(4) {
 }
 
 .qc-hw-label {
-  background: #ededed;
+  background: #ededed; /* same gray as the Species / table header cells */
+  color: #000;
   font-weight: 700;
   font-size: 9pt;
   text-align: center;
+  white-space: nowrap;
   padding: 0.22rem 0.4rem;
   border-bottom: 1px solid #000;
   -webkit-print-color-adjust: exact;

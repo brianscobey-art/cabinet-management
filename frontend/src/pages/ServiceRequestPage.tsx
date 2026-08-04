@@ -438,7 +438,7 @@ export function ServiceReportPrint({
         </table>
         <div className="qc-hardware">
           {(["door", "drawer"] as const).map((type) => {
-            const label = type === "door" ? "Door" : "Drawer";
+            const label = type === "door" ? "Door Hardware" : "Drawer Hardware";
             const items = Array.from(
               new Set(
                 sr.hardware
