@@ -378,7 +378,10 @@ export function ServiceReportPrint({
   return (
     <div className={`${screen ? "" : "print-only "}qc-report`}>
       <div className="qc-header">
-        <div className="qc-title">SERVICE REQUEST</div>
+        <div className="qc-title">
+          SERVICE REQUEST
+          {sr.job_code ? <span className="qc-title-code"> {sr.job_code}</span> : null}
+        </div>
         <div className="qc-brand">
           <img src="/carter-logo.png" alt="Carter Lumber" className="qc-logo" />
           <span className="qc-brand-name">Carter Kitchen and Bath</span>
@@ -433,21 +436,25 @@ export function ServiceReportPrint({
             {sr.rooms.length === 0 && blanks(1, 6)}
           </tbody>
         </table>
-        <table className="qc-table">
-          <thead>
-            <tr>
-              <th>Hardware Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sr.hardware.map((h) => (
-              <tr key={h.id}>
-                <td>{h.hardware_type ?? ""}</td>
-              </tr>
-            ))}
-            {sr.hardware.length === 0 && blanks(1, 1)}
-          </tbody>
-        </table>
+        <div className="qc-hardware">
+          {(["door", "drawer"] as const).map((type) => {
+            const label = type === "door" ? "Door" : "Drawer";
+            const items = Array.from(
+              new Set(
+                sr.hardware
+                  .filter((h) => h.hardware_type === type)
+                  .map((h) => h.item)
+                  .filter(Boolean),
+              ),
+            ).join(", ");
+            return (
+              <div className="qc-hw-box" key={type}>
+                <div className="qc-hw-label">{label}</div>
+                <div className="qc-hw-val">{items}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="qc-bar">PARTS NEEDED</div>
@@ -461,10 +468,10 @@ export function ServiceReportPrint({
             <th>Style</th>
             <th>Color</th>
             <th>Vendor</th>
-            <th className="ctr">Order #</th>
-            <th className="ctr">Order Date</th>
-            <th className="ctr">Due Date</th>
-            <th>Notes</th>
+            <th className="ctr">Vendor Order #</th>
+            <th className="ctr dt">Order Date</th>
+            <th className="ctr dt">Due Date</th>
+            <th className="qc-notes-col">Notes</th>
             <th style={{ width: "2rem" }}>✓</th>
           </tr>
         </thead>
@@ -479,9 +486,9 @@ export function ServiceReportPrint({
               <td>{p.color ?? ""}</td>
               <td>{p.vendor ?? ""}</td>
               <td className="ctr">{p.order_number ?? ""}</td>
-              <td className="ctr">{p.order_date ? fmtDate(p.order_date) : ""}</td>
-              <td className="ctr">{p.due_date ? fmtDate(p.due_date) : ""}</td>
-              <td>{p.notes ?? ""}</td>
+              <td className="ctr dt">{p.order_date ? fmtDate(p.order_date) : ""}</td>
+              <td className="ctr dt">{p.due_date ? fmtDate(p.due_date) : ""}</td>
+              <td className="qc-notes-col">{p.notes ?? ""}</td>
               <td className="qc-check">☐</td>
             </tr>
           ))}
@@ -542,14 +549,16 @@ export function ServiceReportPrint({
       </div>
 
       <div className="qc-footer">
-        {["Service Request", sr.job_code, sr.account_name].filter(Boolean).join(" · ")} ·{" "}
-        {new Date().toLocaleString("en-US", {
-          month: "numeric",
-          day: "numeric",
-          year: "2-digit",
-          hour: "numeric",
-          minute: "2-digit",
-        })}
+        <span>{["Service Request", sr.job_code, sr.account_name].filter(Boolean).join(" · ")}</span>
+        <span>
+          {new Date().toLocaleString("en-US", {
+            month: "numeric",
+            day: "numeric",
+            year: "2-digit",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
       </div>
     </div>
   );

@@ -1026,9 +1026,13 @@ tr.line-done td:nth-child(4) {
 
 .qc-title {
   font-size: 15pt;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: #125952;
+}
+
+.qc-title-code {
+  font-weight: 800;
 }
 
 .qc-brand {
@@ -1085,6 +1089,10 @@ tr.line-done td:nth-child(4) {
 }
 
 .qc-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
   margin-top: 0.9rem;
   padding-top: 0.3rem;
   border-top: 1px solid #999;
@@ -1105,6 +1113,35 @@ tr.line-done td:nth-child(4) {
 
 .qc-combo > .qc-table:last-child {
   flex: 1;
+}
+
+/* Door / Drawer hardware as two separate stacked boxes */
+.qc-combo > .qc-hardware {
+  flex: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.qc-hw-box {
+  border: 1px solid #000;
+}
+
+.qc-hw-label {
+  background: #ededed;
+  font-weight: 700;
+  font-size: 9pt;
+  text-align: center;
+  padding: 0.22rem 0.4rem;
+  border-bottom: 1px solid #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.qc-hw-val {
+  font-size: 9pt;
+  padding: 0.22rem 0.4rem;
+  min-height: 1.15rem;
 }
 
 /* project info cells left-aligned */
@@ -1152,14 +1189,28 @@ tr.line-done td:nth-child(4) {
   font-size: 7.5pt;
 }
 
+/* date columns just wide enough for m/d/yy; freed space goes to Notes */
+.qc-parts th.dt,
+.qc-parts td.dt {
+  width: 3.2rem;
+  white-space: nowrap;
+}
+
+.qc-parts th.qc-notes-col,
+.qc-parts td.qc-notes-col {
+  width: 22%;
+}
+
 /* The service report prints landscape so every column fits one page wide */
 .qc-report {
   page: qc-svc;
+  padding: 0.35in; /* safe area, since @page margin is 0 to drop browser headers/footers */
 }
 
+/* margin:0 removes the browser's auto date/title header and URL/page-number footer */
 @page qc-svc {
   size: landscape;
-  margin: 0.35in;
+  margin: 0;
 }
 
 /* centered headers + Item#/Qty/Part#/Order#/dates columns on the report */
