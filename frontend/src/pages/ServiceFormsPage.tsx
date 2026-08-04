@@ -2,19 +2,23 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   Account,
   Community,
+  CommunityServiceRow,
   JobListItem,
   createServiceRequest,
   downloadServiceTemplate,
   importServiceExcel,
   listAccounts,
   listCommunities,
+  listCommunityServiceRequests,
   listJobs,
+  listServiceRequests,
 } from "../api";
 
 export default function ServiceFormsPage({ canWrite }: { canWrite: boolean }) {
   const [builders, setBuilders] = useState<Account[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [jobs, setJobs] = useState<JobListItem[]>([]);
+  const [communitySRs, setCommunitySRs] = useState<CommunityServiceRow[]>([]);
   const [builderId, setBuilderId] = useState("");
   const [communityId, setCommunityId] = useState("");
   const [jobId, setJobId] = useState("");
@@ -36,9 +40,19 @@ export default function ServiceFormsPage({ canWrite }: { canWrite: boolean }) {
   }, [builderId]);
   useEffect(() => {
     setJobId("");
-    if (communityId) listJobs({ community_id: communityId }).then(setJobs).catch(() => {});
-    else setJobs([]);
+    if (communityId) {
+      listJobs({ community_id: communityId }).then(setJobs).catch(() => {});
+      listCommunityServiceRequests(Number(communityId)).then(setCommunitySRs).catch(() => {});
+    } else {
+      setJobs([]);
+      setCommunitySRs([]);
+    }
   }, [communityId]);
+
+  // the current (one-per-house) service request on the selected job, if any
+  const existingSR = jobId
+    ? communitySRs.find((r) => r.job_id === Number(jobId)) ?? null
+    : null;
 
   const selectedJob =
     jobs.find((j) => String(j.id) === jobId) || results?.find((j) => String(j.id) === jobId) || null;
@@ -57,6 +71,12 @@ export default function ServiceFormsPage({ canWrite }: { canWrite: boolean }) {
     setBusy(true);
     setError("");
     try {
+      // one request per house: if it already has one, open it rather than duplicate
+      const existing = await listServiceRequests(id);
+      if (existing.length > 0) {
+        window.location.hash = `#/service/${existing[0].id}`;
+        return;
+      }
       const sr = await createServiceRequest(id, null);
       window.location.hash = `#/service/${sr.id}`;
     } catch (e) {
@@ -124,11 +144,45 @@ export default function ServiceFormsPage({ canWrite }: { canWrite: boolean }) {
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>
                   {jobLabel(j)}
+                  {communitySRs.some((r) => r.job_id === j.id) ? "  • has request" : ""}
                 </option>
               ))}
             </select>
           )}
         </div>
+
+        {communityId && (
+          <div className="community-sr">
+            <h4>Current service requests in this community</h4>
+            {communitySRs.length === 0 ? (
+              <p className="muted">
+                None yet. Pick a lot below to open the one service request for that house.
+              </p>
+            ) : (
+              <ul className="sr-list">
+                {communitySRs.map((r) => (
+                  <li key={r.id}>
+                    <a href={`#/service/${r.id}`}>
+                      <strong>
+                        {r.lot_number ? `Lot ${r.lot_number}` : r.address}
+                        {r.job_code ? ` (${r.job_code})` : ""}
+                      </strong>
+                      <span className="sr-meta">
+                        {r.status}
+                        {" · "}
+                        {r.open_lines}/{r.total_lines} open
+                        {r.material_status ? ` · ${r.material_status}` : ""}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="muted sr-note">
+              One service request per house — add items to the existing one; completed items drop off.
+            </p>
+          </div>
+        )}
 
         <div className="filters" style={{ marginTop: "0.5rem" }}>
           <input
@@ -161,9 +215,15 @@ export default function ServiceFormsPage({ canWrite }: { canWrite: boolean }) {
           <p style={{ marginTop: "0.75rem" }}>
             <strong>{jobLabel(selectedJob)}</strong>
             <br />
-            <button disabled={!canWrite || busy} onClick={() => createFor(selectedJob.id)}>
-              Create service request on this job →
-            </button>
+            {existingSR ? (
+              <a className="report-open" href={`#/service/${existingSR.id}`}>
+                Add to this house’s service request →
+              </a>
+            ) : (
+              <button disabled={!canWrite || busy} onClick={() => createFor(selectedJob.id)}>
+                Start the service request for this house →
+              </button>
+            )}
           </p>
         )}
       </div>

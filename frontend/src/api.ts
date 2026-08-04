@@ -694,8 +694,25 @@ export interface ServiceRequestDetail {
   hardware: HardwareSelection[];
 }
 
+export interface CommunityServiceRow {
+  id: number;
+  job_id: number;
+  job_code: string | null;
+  lot_number: string | null;
+  address: string;
+  status: string;
+  material_status: string | null;
+  scheduled_date: string | null;
+  part_count: number;
+  open_lines: number;
+  total_lines: number;
+  created_at: string;
+}
+
 export const listServiceRequests = (jobId: number) =>
   api<ServiceRequestSummary[]>(`/jobs/${jobId}/service-requests`);
+export const listCommunityServiceRequests = (communityId: number) =>
+  api<CommunityServiceRow[]>(`/communities/${communityId}/service-requests`);
 export const createServiceRequest = (jobId: number, title: string | null) =>
   api<ServiceRequestDetail>(`/jobs/${jobId}/service-requests`, {
     method: "POST",

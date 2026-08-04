@@ -169,6 +169,54 @@ def list_requests(job_id: int, db: Session = Depends(get_db)):
     return [_summary(sr) for sr in reqs]
 
 
+class CommunityServiceRow(BaseModel):
+    """One service request in a community, with enough job info to pick it."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_id: int
+    job_code: str | None
+    lot_number: str | None
+    address: str
+    status: str
+    material_status: str | None
+    scheduled_date: date | None
+    part_count: int
+    open_lines: int
+    total_lines: int
+    created_at: datetime
+
+
+@router.get("/communities/{community_id}/service-requests",
+            response_model=list[CommunityServiceRow], dependencies=[Depends(read_access)])
+def list_community_requests(community_id: int, db: Session = Depends(get_db)):
+    """Every current service request for a community, so the Forms flow adds to an
+    existing house request instead of creating a duplicate (one request per house)."""
+    reqs = (
+        db.query(ServiceRequest)
+        .join(Job, ServiceRequest.job_id == Job.id)
+        .options(joinedload(ServiceRequest.job), joinedload(ServiceRequest.parts),
+                 joinedload(ServiceRequest.lines))
+        .filter(Job.community_id == community_id)
+        .all()
+    )
+    rows = [
+        CommunityServiceRow(
+            id=sr.id, job_id=sr.job_id, job_code=sr.job.job_code,
+            lot_number=sr.job.lot_number, address=sr.job.address, status=sr.status,
+            material_status=sr.material_status, scheduled_date=sr.scheduled_date,
+            part_count=len(sr.parts), total_lines=len(sr.lines),
+            open_lines=sum(1 for l in sr.lines if not l.done), created_at=sr.created_at,
+        )
+        for sr in reqs
+    ]
+    # lots sort naturally when numeric; fall back to string
+    def _lotkey(r: CommunityServiceRow):
+        lot = (r.lot_number or "").strip()
+        return (0, int(lot)) if lot.isdigit() else (1, lot)
+    rows.sort(key=_lotkey)
+    return rows
+
+
 @router.post("/jobs/{job_id}/service-requests", response_model=ServiceRequestDetail,
              status_code=status.HTTP_201_CREATED)
 def create_request(job_id: int, payload: RequestIn, db: Session = Depends(get_db),
