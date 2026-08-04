@@ -1,10 +1,11 @@
-"""Branded Service Request Excel template (matches the app's printed form) plus a
+"""Branded Service Request Excel template (matches the app's service report) plus a
 parser for round-tripping a filled sheet back into the app.
 
-The layout mirrors the on-screen / printed service report: Carter logo + title,
-a PROJECT / ADDRESS / LOT / JOB CODE info grid, then Cabinet Specifications,
-Hardware, Parts Needed, Service Needed sections and signature lines. Only the
-Job Code and the Parts / Service tables are read on import.
+One landscape page: Carter logo + "Carter Kitchen and Bath", a condensed
+PROJECT/ADDRESS/LOT + JOB CODE/DATE/STATUS block, a combined Cabinet
+Specifications & Hardware block, then Parts Needed and Service Needed (3 lines
+each) and a one-line signature row. Only the Job Code and the Parts / Service
+tables are read on import.
 """
 
 import io
@@ -20,33 +21,32 @@ from openpyxl.worksheet.properties import PageSetupProperties
 
 PARTS_MARKER = "PARTS NEEDED"
 SERVICE_MARKER = "SERVICE NEEDED"
-PART_ROWS = 15
-SERVICE_ROWS = 12
+PART_ROWS = 3
+SERVICE_ROWS = 3
+SPEC_ROWS = 3
 
-# Parts table columns (must match the on-screen / print Parts Needed table)
+CARTER_GREEN = "125952"
+NCOLS = 11
+# balanced so the Parts row AND the side-by-side Cabinet/Hardware read well
+COL_WIDTHS = [12, 12, 16, 12, 12, 12, 13, 12, 13, 13, 14]
+
 PART_HEADERS = ["Item #", "Qty", "Part", "Cabinet", "Style", "Color", "Vendor",
                 "Order #", "Order Date", "Due Date", "Notes"]
-PART_WIDTHS = [7, 5, 20, 12, 13, 13, 15, 11, 12, 12, 22]
-NCOLS = len(PART_HEADERS)  # 11 — the grid every section spans
-
-# (label, span) header specs for the narrower sections, summing to NCOLS
-CABINET_SPEC = [("Room / Zone", 2), ("Vendor", 2), ("Series", 2), ("Door Style", 2),
-                ("Color", 2), ("Species", 1)]
-HARDWARE_SPEC = [("Room", 3), ("Type", 2), ("Vendor", 2), ("Item", 3), ("Qty", 1)]
+# combined block: cabinet (cols 1-6) beside hardware (cols 7-11)
+COMBO_HEADERS = ["Room / Zone", "Vendor", "Series", "Door Style", "Color", "Species",
+                 "Room", "Hardware Type", "Vendor", "Item", "Qty"]
 SERVICE_SPEC = [("Part #", 1), ("Cabinet", 1), ("Description of Work", 7), ("Date", 1), ("Tech", 1)]
 
 _thin = Side(style="thin", color="000000")
 _BORDER = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 _LABEL_FONT = Font(bold=True, size=9)
-_SECTION_FILL = PatternFill("solid", fgColor="4A4A4A")
-_HEADER_FILL = PatternFill("solid", fgColor="EEEEEE")
-_LABEL_FILL = PatternFill("solid", fgColor="EEEEEE")
+_SECTION_FILL = PatternFill("solid", fgColor=CARTER_GREEN)
+_HEADER_FILL = PatternFill("solid", fgColor="E4EFEC")
 _CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 _LEFT = Alignment(horizontal="left", vertical="center")
 
 
 def _box(ws, row, col, span=1, value=None, *, kind="cell", center=False):
-    """Write a (possibly merged) bordered cell. kind: cell|header|section|label."""
     if span > 1:
         ws.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col + span - 1)
     cell = ws.cell(row=row, column=col, value=value)
@@ -60,31 +60,9 @@ def _box(ws, row, col, span=1, value=None, *, kind="cell", center=False):
         cell.fill = _HEADER_FILL
         cell.font = _LABEL_FONT
         cell.alignment = _CENTER
-    elif kind == "label":
-        cell.fill = _LABEL_FILL
-        cell.font = _LABEL_FONT
-        cell.alignment = _LEFT
     elif center:
         cell.alignment = _CENTER
     return cell
-
-
-def _spec_headers(ws, row, spec):
-    col = 1
-    for label, span in spec:
-        _box(ws, row, col, span, label, kind="header")
-        col += span
-
-
-def _spec_blanks(ws, start, n, spec, center_starts=(), date_starts=()):
-    for i in range(n):
-        row = start + i
-        col = 1
-        for _, span in spec:
-            cell = _box(ws, row, col, span, center=col in center_starts)
-            if col in date_starts:
-                cell.number_format = "m/d/yy"
-            col += span
 
 
 def build_blank_template() -> bytes:
@@ -92,90 +70,115 @@ def build_blank_template() -> bytes:
     ws = wb.active
     ws.title = "Service Request"
     ws.sheet_view.showGridLines = False
-    for i, w in enumerate(PART_WIDTHS, start=1):
+    for i, w in enumerate(COL_WIDTHS, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    # --- title + logo -----------------------------------------------------
+    # --- title (left) + logo & brand (upper right) ------------------------
     ws.merge_cells("A1:D2")
     t = ws.cell(row=1, column=1, value="SERVICE REQUEST")
-    t.font = Font(size=18, bold=True)
-    t.alignment = Alignment(horizontal="left", vertical="center")
-    ws.row_dimensions[1].height = 22
-    ws.row_dimensions[2].height = 22
+    t.font = Font(size=17, bold=True, color=CARTER_GREEN)
+    t.alignment = Alignment(vertical="center")
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 20
     logo = Path(__file__).resolve().parent.parent.parent / "frontend" / "public" / "carter-logo.png"
     if logo.exists():
         img = XLImage(str(logo))
-        img.height = 46
-        img.width = int(46 * 946 / 228)  # keep aspect (logo is 946x228)
-        ws.add_image(img, f"{get_column_letter(NCOLS - 2)}1")
+        img.height = 40
+        img.width = int(40 * 946 / 228)
+        ws.add_image(img, "H1")
+    ws.merge_cells("G3:K3")
+    b = ws.cell(row=3, column=7, value="Carter Kitchen and Bath")
+    b.font = Font(size=11, bold=True, color=CARTER_GREEN)
+    b.alignment = Alignment(horizontal="right", vertical="center")
 
-    # --- info grid: label | value(4) | label | value(5) -------------------
-    info = [("PROJECT", "DATE"), ("ADDRESS", "JOB CODE"), ("LOT", "STATUS")]
-    r = 4
-    for left, right in info:
-        _box(ws, r, 1, 2, left, kind="label")  # A:B — same width as the Room/Zone cell
-        _box(ws, r, 3, 3)  # left value (C:E)
-        _box(ws, r, 6, 1, right, kind="label")
-        _box(ws, r, 7, 5)  # right value
-        r += 1
+    # --- condensed info: 2 rows, left aligned ----------------------------
+    def info_row(r, trips):
+        col = 1
+        for label, span in trips:
+            lc = _box(ws, r, col, 1, label)
+            lc.font = Font(bold=True, size=9, color=CARTER_GREEN)
+            _box(ws, r, col + 1, span)
+            col += 1 + span
+    info_row(5, [("PROJECT", 3), ("ADDRESS", 3), ("LOT", 2)])   # 4+4+3 = 11
+    info_row(6, [("JOB CODE", 3), ("DATE", 3), ("STATUS", 2)])
 
-    def section(title, spec, blanks, *, center_starts=(), date_starts=()):
+    r = 8
+
+    def bar(title):
         nonlocal r
-        r += 1
         _box(ws, r, 1, NCOLS, title, kind="section")
         r += 1
-        if spec == "PARTS":
-            for i, h in enumerate(PART_HEADERS, start=1):
-                _box(ws, r, i, 1, h, kind="header")
-            r += 1
-            # center Item#, Qty, Order#, Order Date, Due Date; m/d/yy on the date cols
-            part_center = {1, 2, 8, 9, 10}
-            part_dates = {9, 10}
-            for _ in range(blanks):
-                for i in range(1, NCOLS + 1):
-                    cell = _box(ws, r, i, center=i in part_center)
-                    if i in part_dates:
-                        cell.number_format = "m/d/yy"
-                r += 1
-        else:
-            _spec_headers(ws, r, spec)
-            r += 1
-            _spec_blanks(ws, r, blanks, spec, center_starts, date_starts)
-            r += blanks
 
-    section("CABINET SPECIFICATIONS", CABINET_SPEC, 3)
-    section("HARDWARE", HARDWARE_SPEC, 3)
-    section(PARTS_MARKER, "PARTS", PART_ROWS)
-    # service: center Part # (col 1) and Date (col 10); Date col is m/d/yy
-    section(SERVICE_MARKER, SERVICE_SPEC, SERVICE_ROWS, center_starts={1, 10}, date_starts={10})
-
-    # --- signatures -------------------------------------------------------
-    r += 1
-    for who in ("SERVICE TECH — SIGNATURE", "CUSTOMER — SIGNATURE (WORK COMPLETED)"):
-        sig = ws.cell(row=r, column=1)
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=8)
-        for c in range(1, 9):
-            ws.cell(row=r, column=c).border = Border(bottom=_thin)
-        ws.merge_cells(start_row=r, start_column=9, end_row=r, end_column=NCOLS)
-        for c in range(9, NCOLS + 1):
-            ws.cell(row=r, column=c).border = Border(bottom=_thin)
+    def headers(labels):
+        nonlocal r
+        for i, h in enumerate(labels, start=1):
+            _box(ws, r, i, 1, h, kind="header")
         r += 1
-        ws.cell(row=r, column=1, value=who).font = Font(size=8, color="555555")
-        ws.cell(row=r, column=9, value="DATE").font = Font(size=8, color="555555")
-        r += 2
 
-    ws.cell(row=r + 1, column=1,
+    def blank_rows(n, *, center_cols=(), date_cols=()):
+        nonlocal r
+        for _ in range(n):
+            for i in range(1, NCOLS + 1):
+                cell = _box(ws, r, i, center=i in center_cols)
+                if i in date_cols:
+                    cell.number_format = "m/d/yy"
+            r += 1
+
+    # combined Cabinet Specifications & Hardware
+    bar("CABINET SPECIFICATIONS & HARDWARE")
+    headers(COMBO_HEADERS)
+    blank_rows(SPEC_ROWS, center_cols={11})
+
+    # parts (3 lines) — center Item#/Qty/Order#/dates, m/d/yy on the dates
+    bar(PARTS_MARKER)
+    headers(PART_HEADERS)
+    blank_rows(PART_ROWS, center_cols={1, 2, 8, 9, 10}, date_cols={9, 10})
+
+    # service (3 lines) — Part# / Cabinet / Description / Date / Tech
+    bar(SERVICE_MARKER)
+    col = 1
+    for label, span in SERVICE_SPEC:
+        _box(ws, r, col, span, label, kind="header")
+        col += span
+    r += 1
+    for _ in range(SERVICE_ROWS):
+        col = 1
+        for _lbl, span in SERVICE_SPEC:
+            cell = _box(ws, r, col, span, center=col in (1, 10))
+            if col == 10:
+                cell.number_format = "m/d/yy"
+            col += span
+        r += 1
+
+    # --- signatures: all on one line -------------------------------------
+    r += 1
+    sig_specs = [("Service Tech — Signature", 3), ("Date", 2),
+                 ("Customer — Signature", 4), ("Date", 2)]
+    col = 1
+    for _lbl, span in sig_specs:
+        ws.merge_cells(start_row=r, start_column=col, end_row=r, end_column=col + span - 1)
+        for c in range(col, col + span):
+            ws.cell(row=r, column=c).border = Border(bottom=_thin)
+        col += span
+    r += 1
+    col = 1
+    for lbl, span in sig_specs:
+        c = ws.cell(row=r, column=col, value=lbl)
+        c.font = Font(size=8, color="555555")
+        col += span
+    r += 2
+    ws.cell(row=r, column=1,
             value="Fill in the Job Code and the Parts / Service tables, save, and import into "
                   "Carter Kitchen and Bath. Part # in Service refers to the Item # in Parts.").font = Font(
         italic=True, size=8, color="888888")
 
-    # print landscape, all columns on one page wide, narrow margins
+    # print landscape, one page wide, narrow margins
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
     ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.3, bottom=0.3, header=0.15, footer=0.15)
-    ws.print_area = f"A1:{get_column_letter(NCOLS)}{r + 1}"
+    ws.print_area = f"A1:{get_column_letter(NCOLS)}{r}"
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -194,19 +197,18 @@ def _find_marker(ws, marker: str) -> int | None:
     return None
 
 
+def _cell(ws, row, col):
+    v = ws.cell(row=row, column=col).value
+    return str(v).strip() if v is not None and str(v).strip() != "" else None
+
+
 def _label_value(ws, label: str):
-    """Find a cell whose text == label (any column, near the top) and read its right neighbour."""
     for row in range(1, min(ws.max_row, 15) + 1):
         for col in range(1, min(ws.max_column, NCOLS) + 1):
             v = ws.cell(row=row, column=col).value
             if v and str(v).strip().lower() == label:
                 return _cell(ws, row, col + 1)
     return None
-
-
-def _cell(ws, row, col):
-    v = ws.cell(row=row, column=col).value
-    return str(v).strip() if v is not None and str(v).strip() != "" else None
 
 
 def _pdate(value):
@@ -243,7 +245,7 @@ def parse_import(data: bytes) -> dict:
         raise ValueError("This does not look like a Service Request template (missing section headers).")
 
     parts = []
-    for row in range(parts_head + 2, service_head):  # skip section + header row
+    for row in range(parts_head + 2, service_head):
         part = _cell(ws, row, 3)
         if not part:
             continue
