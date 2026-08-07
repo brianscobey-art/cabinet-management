@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Account,
   Community,
@@ -15,6 +15,67 @@ import { fmtDate } from "../format";
 
 export function statusLabel(s: string) {
   return s; // status values are already display-ready (1.0-Track ... 8.0-Void)
+}
+
+// A pop-open dropdown of checkboxes — closes on outside click. Empty selection
+// means "all"; the button shows the current summary.
+function MultiSelectDropdown({
+  options,
+  selected,
+  onChange,
+  allLabel,
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  allLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const summary =
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+      ? options.find((o) => o.value === selected[0])?.label ?? "1 selected"
+      : `${selected.length} selected`;
+  const toggle = (v: string) =>
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+
+  return (
+    <div className="ms" ref={ref}>
+      <button type="button" className="ms-btn" onClick={() => setOpen((o) => !o)}>
+        <span className="ms-summary">{summary}</span>
+        <span className="ms-caret">▾</span>
+      </button>
+      {open && (
+        <div className="ms-menu">
+          <label className="ms-opt">
+            <input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
+            {allLabel}
+          </label>
+          {options.map((o) => (
+            <label key={o.value} className="ms-opt">
+              <input
+                type="checkbox"
+                checked={selected.includes(o.value)}
+                onChange={() => toggle(o.value)}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const isNational = (a: Account) =>
@@ -283,21 +344,12 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
           ))}
         </select>
         {communityOptions.length > 0 && (
-          <select
-            multiple
-            className="multi-community"
-            value={communityIds}
-            onChange={(e) =>
-              setCommunityIds(Array.from(e.target.selectedOptions, (o) => o.value))
-            }
-            title="Select one or more communities (Ctrl/Cmd-click for several)"
-          >
-            {communityOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            allLabel="All communities"
+            selected={communityIds}
+            onChange={setCommunityIds}
+            options={communityOptions.map((c) => ({ value: String(c.id), label: c.name }))}
+          />
         )}
         {!archived && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
