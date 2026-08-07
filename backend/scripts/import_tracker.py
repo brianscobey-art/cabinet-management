@@ -1,11 +1,20 @@
-"""Import jobs from the 3.0 Online Sales Tracker's DATA table (Command Center sheet).
+"""Sync jobs from the 3.0 Online Sales Tracker's DATA table (Command Center sheet).
 
-Read-only against the workbook. Jobs are keyed by Job Code (column A) — rows whose
-code already exists in the database are skipped, so re-running after a tracker
-update only picks up new rows.
+Read-only against the workbook. Jobs are keyed by Job Code (column A). The tracker
+is the source of truth for status (its CONST LVL column) and the install date
+(Actual Install Date, falling back to Requested only when there's no actual yet):
+
+  * existing jobs are refreshed — status + install date always re-synced, other
+    fields filled only when blank so richer data isn't clobbered;
+  * new active rows are created;
+  * new rows that are already closed (6.0-Clsd) or void (8.0-Void) are skipped —
+    they'd only ever live on the Archive tab. Existing jobs that turn closed/void
+    are updated so they drop off the active views.
+
+Re-run after each tracker update to keep CabinetTron aligned with the latest sheet.
 
 Usage (from backend/):
-    python -m scripts.import_tracker "<path to .xlsm>" [--dry-run]
+    python -m scripts.import_tracker "<path to .xlsm>" [--dry-run] [--selections-only]
 """
 
 import re
@@ -33,7 +42,7 @@ SHEET = "Command Center"
 TABLE_NAME = "DATA"
 BLANKS = {None, 0, "0", "", "#N/A", "N/A", "NA", "TBD", "?", "NONE", "None", "none"}
 
-DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@TownsendBuildingSupply.com")
+DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@CarterLumber.com")
 
 
 def clean(value):
@@ -54,8 +63,34 @@ def money_str(value) -> str | None:
     return None
 
 
+# The tracker's "CONST LVL" column is Brian's status ladder verbatim — the same
+# strings as JobStatus values (e.g. "6.0-Clsd", "8.0-Void"). It's the authoritative
+# status, so we use it directly rather than guessing from milestone dates.
+CONST_LVL_COL = "CONST LVL"
+_CONST_LVL = {st.value: st for st in JobStatus}
+INACTIVE = (JobStatus.closed, JobStatus.void)  # closed/void → Archive only, never active views
+
+
+def status_from_row(row: dict) -> JobStatus:
+    """Status straight from the tracker's CONST LVL column; fall back to the
+    date-derived guess only when CONST LVL is blank or unrecognized."""
+    raw = clean(row.get(CONST_LVL_COL))
+    if raw is not None:
+        member = _CONST_LVL.get(str(raw).strip())
+        if member is not None:
+            return member
+    return derive_status(row)
+
+
+def install_from_row(row: dict) -> date | None:
+    """Actual Install Date is authoritative; Requested only stands in when there's
+    no actual yet (so a not-yet-installed job still lands on the calendar)."""
+    return as_date(row.get("Actual Install Date")) or as_date(row.get("Requested Install Date"))
+
+
 def derive_status(row: dict) -> JobStatus:
-    """Current workflow stage from the tracker's milestone dates.
+    """Fallback status from the tracker's milestone dates (used only when CONST
+    LVL is blank).
 
     Tracker milestone columns hold SCHEDULED dates too — a punch date in
     September doesn't mean the job is done in July. Only dates that have
@@ -131,10 +166,49 @@ def get_or_create_community(db, cache: dict, account: Account, name: str, market
     return community
 
 
+def update_existing(db, job: Job, row: dict) -> str:
+    """Refresh an existing job from the latest tracker row.
+
+    The tracker is the source of truth for status (CONST LVL) and the install
+    date (Actual Install Date); those are always synced. Other fields are only
+    filled when blank so richer data (sold-job files, manual edits) isn't lost.
+    """
+    changed = False
+    status = status_from_row(row)
+    if job.status != status:
+        job.status = status
+        changed = True
+
+    actual = as_date(row.get("Actual Install Date"))
+    requested = as_date(row.get("Requested Install Date"))
+    # Actual always wins; Requested only sets a date when the job has none yet.
+    new_install = actual or (requested if job.install_date is None else None)
+    if new_install and job.install_date != new_install:
+        job.install_date = new_install
+        if job.warranty_start_date is None:
+            job.warranty_start_date = new_install
+        changed = True
+
+    measure = as_date(row.get("Actual Measure Date"))
+    if measure and job.measure_date != measure:
+        job.measure_date = measure
+        changed = True
+
+    plan = clean(row.get("House Plan"))
+    if plan and not job.plan:
+        job.plan = str(plan)[:100]
+        changed = True
+
+    if _apply_selections(db, job, row, create_room=True):
+        changed = True
+    return "updated" if changed else "unchanged"
+
+
 def import_row(db, row: dict, caches: dict) -> str:
     job_code = str(clean(row["Job Code"])).strip()
-    if db.query(Job).filter(Job.job_code == job_code).first():
-        return "skipped"
+    existing = db.query(Job).filter(Job.job_code == job_code).first()
+    if existing is not None:
+        return update_existing(db, existing, row)
 
     builder = clean(row.get("Full Builder")) or clean(row.get("Builder"))
     community_name = clean(row.get("Community"))
@@ -160,14 +234,20 @@ def import_row(db, row: dict, caches: dict) -> str:
     lot = clean(row.get("Lot #"))
 
     # A feed sync may have created this job before the tracker knew its code —
-    # match by community + lot and adopt the code instead of duplicating.
+    # match by community + lot, adopt the code, and refresh it from the tracker.
     if community is not None and lot is not None:
-        existing = _find_job(db, community, lot)
-        if existing is not None:
-            if existing.job_code is None:
-                existing.job_code = job_code
-                return "linked"
-            return "skipped"
+        found = _find_job(db, community, lot)
+        if found is not None:
+            if found.job_code is None:
+                found.job_code = job_code
+            update_existing(db, found, row)
+            return "linked"
+
+    # Brand-new row: don't create jobs that are already closed or void — they'd
+    # never appear on an active view anyway (they live on the Archive tab).
+    status = status_from_row(row)
+    if status in INACTIVE:
+        return "skipped_inactive"
 
     address = clean(row.get("Address"))
     if not address:
@@ -198,7 +278,7 @@ def import_row(db, row: dict, caches: dict) -> str:
 
     salesperson = clean(row.get("Salesperson"))
     super_name = clean(row.get("Super"))
-    install = as_date(row.get("Actual Install Date")) or as_date(row.get("Requested Install Date"))
+    install = install_from_row(row)
 
     job = Job(
         job_code=job_code,
@@ -209,7 +289,7 @@ def import_row(db, row: dict, caches: dict) -> str:
         job_type=job_type,
         plan=str(clean(row.get("House Plan")) or "")[:100] or None,
         measure_date=as_date(row.get("Actual Measure Date")),
-        status=derive_status(row),
+        status=status,
         install_date=install,
         warranty_start_date=install,
         salesperson=resolve_salesperson(account.name, str(salesperson) if salesperson else None),
@@ -313,7 +393,8 @@ def main() -> None:
         if "--selections-only" in flags:
             counts = backfill_selections(db, rows)
         else:
-            counts = {"imported": 0, "linked": 0, "skipped": 0, "failed": 0}
+            counts = {"imported": 0, "updated": 0, "unchanged": 0, "linked": 0,
+                      "skipped_inactive": 0, "failed": 0}
             caches = {"accounts": {}, "communities": {}}
             for row in rows:
                 try:
