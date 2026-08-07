@@ -6,7 +6,7 @@ import ServiceRequestPage from "./pages/ServiceRequestPage";
 import ServiceFormsPage from "./pages/ServiceFormsPage";
 import BlankServiceForm from "./pages/BlankServiceForm";
 import FormsPage from "./pages/FormsPage";
-import JobsPage from "./pages/JobsPage";
+import JobsPage, { NAV_KEY as JOBS_NAV_KEY } from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -177,6 +177,8 @@ export default function App() {
             onClick={() => {
               setToken(null);
               setUser(null);
+              // start the Jobs tab back at the National/Local "which jobs" chooser
+              sessionStorage.removeItem(JOBS_NAV_KEY);
             }}
           >
             Sign out

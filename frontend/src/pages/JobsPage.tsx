@@ -99,7 +99,7 @@ function accountInCategory(a: Account, category: Category): boolean {
 
 // Remember where the user was in the Jobs chooser so the browser Back button
 // (from a job detail page) returns to the same community view, not the top.
-const NAV_KEY = "jobsNav";
+export const NAV_KEY = "jobsNav";
 function savedNav(): Partial<Record<string, string | boolean>> {
   try {
     return JSON.parse(sessionStorage.getItem(NAV_KEY) || "{}");
