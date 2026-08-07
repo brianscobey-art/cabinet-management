@@ -1205,6 +1205,16 @@ tr.line-done td:nth-child(4) {
   width: 22%;
 }
 
+/* Jobs filter: multi-select community picker */
+.multi-community {
+  min-width: 12rem;
+  max-width: 18rem;
+  vertical-align: top;
+}
+.multi-community option {
+  padding: 0.15rem 0.3rem;
+}
+
 /* Forms → Service Request: current requests in the selected community */
 .community-sr {
   margin-top: 0.9rem;
@@ -1684,4 +1694,42 @@ a.report-card:hover {
 
 tfoot td {
   border-top: 2px solid var(--gray);
+}
+
+/* ---------------------------------------------------------- COAST suite */
+.suite-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.9rem; height: 1.9rem; margin-right: 0.35rem; border-radius: 7px;
+  font-size: 1.15rem; line-height: 1; text-decoration: none;
+  color: #fff; background: rgba(255, 255, 255, 0.14);
+}
+.suite-btn:hover { background: rgba(255, 255, 255, 0.28); }
+.suite { max-width: 62rem; margin: 0 auto; padding: 1.5rem 0.5rem 2rem; }
+.suite-head { text-align: center; margin-bottom: 1.4rem; }
+.suite-head h2 { display: flex; gap: 0.35rem; justify-content: center; margin: 0 0 0.4rem; }
+.suite-letter {
+  background: var(--brand); color: #fff; width: 2.3rem; height: 2.3rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px; font-size: 1.35rem; letter-spacing: 0;
+}
+.suite-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 1rem;
+}
+.suite-tile {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 0.45rem; padding: 1.4rem 1rem 1.2rem; border: 1px solid #d8e4e2;
+  border-radius: 14px; background: #fff; text-decoration: none; color: inherit;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.suite-tile:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(18, 89, 82, 0.18); }
+.suite-tile svg { width: 4.2rem; height: 4.2rem; }
+.suite-tile b { font-size: 1.1rem; color: var(--brand-ink); }
+.suite-tile .muted { font-size: 0.82rem; }
+.suite-tile.soon { opacity: 0.55; cursor: default; }
+.suite-tile.soon:hover { transform: none; box-shadow: none; }
+.suite-soon {
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--teal); border: 1px solid var(--teal); border-radius: 999px;
+  padding: 0.1rem 0.55rem; margin-top: 0.2rem;
 }

@@ -197,8 +197,13 @@ export const listCommunities = (accountId: number, activeOnly = true) =>
 export const listAllCommunities = (activeOnly = true) =>
   api<Community[]>(`/communities${activeOnly ? "?active_only=true" : ""}`);
 
-export const listJobs = (params: Record<string, string> = {}) => {
-  const qs = new URLSearchParams(params).toString();
+export const listJobs = (params: Record<string, string | string[]> = {}) => {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) v.forEach((x) => x && usp.append(k, x));
+    else if (v) usp.append(k, v);
+  }
+  const qs = usp.toString();
   return api<JobListItem[]>(`/jobs${qs ? `?${qs}` : ""}`);
 };
 export const getJob = (id: number) => api<JobDetail>(`/jobs/${id}`);

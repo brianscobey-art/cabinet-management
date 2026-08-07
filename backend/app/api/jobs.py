@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -62,6 +62,8 @@ def _to_list_item(job: Job) -> JobListItem:
 def list_jobs(
     account_id: int | None = None,
     community_id: int | None = None,
+    account_ids: list[int] | None = Query(None),      # e.g. all DR Horton divisions
+    community_ids: list[int] | None = Query(None),    # multi-select communities
     status_filter: JobStatus | None = None,
     archived: bool = False,
     category: str | None = None,  # national | local | dr_horton | century | national_other
@@ -83,9 +85,13 @@ def list_jobs(
         }
         if category in conditions:
             query = query.join(Account, Job.account_id == Account.id).filter(conditions[category])
-    if account_id is not None:
+    if account_ids:
+        query = query.filter(Job.account_id.in_(account_ids))
+    elif account_id is not None:
         query = query.filter(Job.account_id == account_id)
-    if community_id is not None:
+    if community_ids:
+        query = query.filter(Job.community_id.in_(community_ids))
+    elif community_id is not None:
         query = query.filter(Job.community_id == community_id)
     # Closed and void jobs live on the Archive tab; active views never show them.
     inactive = (JobStatus.closed, JobStatus.void)

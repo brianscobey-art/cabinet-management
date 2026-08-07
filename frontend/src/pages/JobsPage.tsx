@@ -55,10 +55,12 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [nationalStep, setNationalStep] = useState(Boolean(nav.nationalStep));
   const [communityChosen, setCommunityChosen] = useState(Boolean(nav.communityChosen));
   const [allCommunities, setAllCommunities] = useState<Community[]>([]);
-  const [filterCommunities, setFilterCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState((nav.statusFilter as string) || "");
   const [accountFilter, setAccountFilter] = useState((nav.accountFilter as string) || "");
-  const [communityFilter, setCommunityFilter] = useState((nav.communityFilter as string) || "");
+  // several communities can be selected at once
+  const [communityIds, setCommunityIds] = useState<string[]>(
+    Array.isArray(nav.communityIds) ? (nav.communityIds as string[]) : []
+  );
   const [search, setSearch] = useState((nav.search as string) || "");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
@@ -68,17 +70,17 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (archived) return;
     sessionStorage.setItem(
       NAV_KEY,
-      JSON.stringify({ category, nationalStep, communityChosen, statusFilter, accountFilter, communityFilter, search })
+      JSON.stringify({ category, nationalStep, communityChosen, statusFilter, accountFilter, communityIds, search })
     );
-  }, [archived, category, nationalStep, communityChosen, statusFilter, accountFilter, communityFilter, search]);
+  }, [archived, category, nationalStep, communityChosen, statusFilter, accountFilter, communityIds, search]);
 
   async function refresh() {
-    const params: Record<string, string> = {};
+    const params: Record<string, string | string[]> = {};
     if (archived) params.archived = "true";
     else if (statusFilter) params.status_filter = statusFilter;
     if (!archived && category) params.category = category;
     if (accountFilter) params.account_id = accountFilter;
-    if (communityFilter) params.community_id = communityFilter;
+    if (communityIds.length) params.community_ids = communityIds;
     if (search) params.q = search;
     setJobs(await listJobs(params));
   }
@@ -88,7 +90,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (!archived && category !== "local" && !communityChosen) return; // waiting on community choice
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, communityFilter, search, archived, category, communityChosen]);
+  }, [statusFilter, accountFilter, communityIds, search, archived, category, communityChosen]);
 
   useEffect(() => {
     if (!archived) listAllCommunities().then(setAllCommunities).catch(() => {});
@@ -98,22 +100,6 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     listAccounts().then(setAccounts).catch(() => {});
   }, []);
 
-  // Cascading filter: picking an account loads its communities. Keep the
-  // selected community when it belongs to the new account (community chooser
-  // sets both at once).
-  useEffect(() => {
-    if (accountFilter) {
-      listCommunities(Number(accountFilter))
-        .then((cs) => {
-          setFilterCommunities(cs);
-          setCommunityFilter((cur) => (cur && cs.some((c) => String(c.id) === cur) ? cur : ""));
-        })
-        .catch(() => {});
-    } else {
-      setFilterCommunities([]);
-      setCommunityFilter("");
-    }
-  }, [accountFilter]);
 
   // Jobs opens with a National/Local choice; National drills into a builder choice.
   if (!archived && !category) {
@@ -166,6 +152,17 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   }
 
   const categoryAccounts = accounts.filter((a) => accountInCategory(a, category));
+  // DR Horton is one builder split into divisions (its per-division accounts).
+  const isDrh = category === "dr_horton";
+  const divisionLabel = (name: string) => name.replace(/^DR Horton\s*/, "") || name;
+  // communities to offer in the multi-select: for the chosen division, or across
+  // every account in the current builder/category when no single division is set.
+  const scopeAccountIds = accountFilter
+    ? [Number(accountFilter)]
+    : (archived ? accounts : categoryAccounts).map((a) => a.id);
+  const communityOptions = allCommunities
+    .filter((c) => scopeAccountIds.includes(c.account_id))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // National flow: after the builder, pick a community (or all of them).
   if (!archived && category && category !== "local" && !communityChosen) {
@@ -183,7 +180,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
             className="category-card"
             onClick={() => {
               setAccountFilter("");
-              setCommunityFilter("");
+              setCommunityIds([]);
               setCommunityChosen(true);
             }}
           >
@@ -196,7 +193,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
               className="category-card"
               onClick={() => {
                 setAccountFilter(String(c.account_id));
-                setCommunityFilter(String(c.id));
+                setCommunityIds([String(c.id)]);
                 setCommunityChosen(true);
               }}
             >
@@ -243,7 +240,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                     onClick={() => {
                       setCategory(c);
                       setAccountFilter("");
-                      setCommunityFilter("");
+                      setCommunityIds([]);
                       setCommunityChosen(false); // re-offer the community choice
                     }}
                   >
@@ -259,7 +256,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 setNationalStep(false);
                 setCommunityChosen(false);
                 setAccountFilter("");
-                setCommunityFilter("");
+                setCommunityIds([]);
               }}
             >
               switch account type
@@ -271,18 +268,31 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
-          <option value="">All accounts</option>
+        <select
+          value={accountFilter}
+          onChange={(e) => {
+            setAccountFilter(e.target.value);
+            setCommunityIds([]); // reset community picks when the division/builder changes
+          }}
+        >
+          <option value="">{isDrh ? "All divisions" : "All accounts"}</option>
           {(archived ? accounts : categoryAccounts).map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {isDrh ? divisionLabel(a.name) : a.name}
             </option>
           ))}
         </select>
-        {accountFilter && filterCommunities.length > 0 && (
-          <select value={communityFilter} onChange={(e) => setCommunityFilter(e.target.value)}>
-            <option value="">All communities</option>
-            {filterCommunities.map((c) => (
+        {communityOptions.length > 0 && (
+          <select
+            multiple
+            className="multi-community"
+            value={communityIds}
+            onChange={(e) =>
+              setCommunityIds(Array.from(e.target.selectedOptions, (o) => o.value))
+            }
+            title="Select one or more communities (Ctrl/Cmd-click for several)"
+          >
+            {communityOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
