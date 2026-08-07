@@ -36,7 +36,8 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
 
   useEffect(() => {
     getPhaseDefs().then(setPhases).catch((e) => setError(e.message));
-    listAccounts().then((all) => setBuilders(all.filter((a) => a.type === "builder"))).catch(() => {});
+    // only builders with active (non-closed/void) jobs — no empty names in the picker
+    listAccounts(true).then((all) => setBuilders(all.filter((a) => a.type === "builder"))).catch(() => {});
   }, []);
 
   useEffect(() => {

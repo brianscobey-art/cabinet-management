@@ -24,8 +24,15 @@ def get_account_or_404(account_id: int, db: Session) -> Account:
 
 
 @router.get("/accounts", response_model=list[AccountOut], dependencies=[Depends(read_access)])
-def list_accounts(db: Session = Depends(get_db)):
-    return db.query(Account).order_by(Account.name).all()
+def list_accounts(active_only: bool = False, db: Session = Depends(get_db)):
+    q = db.query(Account)
+    if active_only:
+        # only accounts that currently have live (non-closed/void) jobs
+        live = db.query(Job.account_id).filter(
+            Job.status.notin_((JobStatus.closed, JobStatus.void)),
+        )
+        q = q.filter(Account.id.in_(live))
+    return q.order_by(Account.name).all()
 
 
 @router.post(

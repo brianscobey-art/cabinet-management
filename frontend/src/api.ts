@@ -185,7 +185,8 @@ export const listJobNotes = (jobId: number) => api<JobNote[]>(`/jobs/${jobId}/no
 export const addJobNote = (jobId: number, body: string) =>
   api<JobNote>(`/jobs/${jobId}/notes`, { method: "POST", body: JSON.stringify({ body }) });
 
-export const listAccounts = () => api<Account[]>("/accounts");
+export const listAccounts = (activeOnly = false) =>
+  api<Account[]>(`/accounts${activeOnly ? "?active_only=true" : ""}`);
 export const getAccount = (id: number) => api<AccountDetail>(`/accounts/${id}`);
 export const createAccount = (data: { name: string; type: string }) =>
   api<Account>("/accounts", { method: "POST", body: JSON.stringify(data) });
