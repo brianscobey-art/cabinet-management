@@ -11,6 +11,7 @@ import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
+import SuitePage from "./pages/SuitePage";
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/jobs");
@@ -94,6 +95,7 @@ export default function App() {
   else if (hash.startsWith("#/service-blank")) page = <BlankServiceForm />;
   else if (hash.startsWith("#/forms/service")) page = <ServiceFormsPage canWrite={canWritePhases} />;
   else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
+  else if (hash.startsWith("#/suite")) page = <SuitePage />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
@@ -107,6 +109,9 @@ export default function App() {
     <div className="shell">
       <header>
         <h1>
+          <a className="suite-btn" href="#/suite" title="COAST suite — all five apps">
+            ⠿
+          </a>
           <img src="/carter-logo.png" alt="Carter Lumber" className="logo" />
           <span>Carter Kitchen and Bath</span>
         </h1>
@@ -115,7 +120,7 @@ export default function App() {
             className="update-btn"
             onClick={handleUpdate}
             disabled={syncing}
-            title="Pull the latest stored reports (VS Combined, Century, New Orders) into the app"
+            title="Sync the app from the latest 3.0 Sales Tracker (status + install dates) plus the stored VS Combined, Century and New Orders reports"
           >
             {syncing ? "⟳ Updating…" : "⟳ Update"}
           </button>
@@ -124,6 +129,7 @@ export default function App() {
           <a
             href="#/jobs"
             className={
+              !hash.startsWith("#/suite") &&
               !hash.startsWith("#/accounts") &&
               !hash.startsWith("#/ordering") &&
               !hash.startsWith("#/schedule") &&
@@ -196,6 +202,7 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
     try {
       // pasted addresses often carry Outlook's mailto: prefix or whitespace
       await login(email.trim().replace(/^mailto:/i, ""), password.trim());
+      window.location.hash = "#/suite"; // land on the COAST launcher
       onLogin(await fetchMe());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

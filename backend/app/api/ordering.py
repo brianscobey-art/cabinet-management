@@ -144,6 +144,7 @@ def ordering_board(
         .filter(
             Account.type == AccountType.builder,
             or_(*[Account.name.like(f"{p}%") for p in NATIONAL_BUILDER_PREFIXES]),
+            Job.status.notin_((JobStatus.closed, JobStatus.void)),  # archived never on the board
         )
     )
     if account_id is not None:

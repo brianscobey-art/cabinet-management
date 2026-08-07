@@ -18,7 +18,10 @@ from app.phases import PHASE_LABELS
 
 router = APIRouter(tags=["reports"])
 
+# Operational reports drop closed AND void; financial ($) reports keep closed
+# (that's where realized revenue/margin lives) but still drop void (cancelled).
 ACTIVE = Job.status.notin_((JobStatus.closed, JobStatus.void))
+NOT_VOID = Job.status != JobStatus.void
 
 
 def _d(value) -> float:
@@ -210,7 +213,7 @@ class StatusSummaryRow(BaseModel):
 def po_status_summary(db: Session = Depends(get_db)):
     rows = (
         db.query(Job.po_status, func.count(Job.id), func.sum(Job.po_amount))
-        .filter(Job.po_status.isnot(None))
+        .filter(Job.po_status.isnot(None), NOT_VOID)
         .group_by(Job.po_status)
         .order_by(func.sum(Job.po_amount).desc())
         .all()
@@ -233,7 +236,7 @@ def revenue_by_builder(db: Session = Depends(get_db)):
         db.query(Account.name, Community.name, func.count(Job.id), func.sum(Job.po_amount))
         .join(Job, Job.account_id == Account.id)
         .outerjoin(Community, Job.community_id == Community.id)
-        .filter(Job.po_amount.isnot(None))
+        .filter(Job.po_amount.isnot(None), NOT_VOID)
         .group_by(Account.name, Community.name)
         .order_by(Account.name, func.sum(Job.po_amount).desc())
         .all()
@@ -248,7 +251,7 @@ def revenue_by_builder(db: Session = Depends(get_db)):
 def revenue_by_salesperson(db: Session = Depends(get_db)):
     rows = (
         db.query(Job.salesperson, func.count(Job.id), func.sum(Job.po_amount))
-        .filter(Job.po_amount.isnot(None))
+        .filter(Job.po_amount.isnot(None), NOT_VOID)
         .group_by(Job.salesperson)
         .order_by(func.sum(Job.po_amount).desc())
         .all()
@@ -353,11 +356,13 @@ def open_service_requests(db: Session = Depends(get_db)):
     )
     rows = []
     for sr in reqs:
+        job = sr.job
+        if job.status in (JobStatus.closed, JobStatus.void):
+            continue  # archived job — its service requests stay off active reports
         total = len(sr.lines)
         done = sum(1 for ln in sr.lines if ln.done)
         if total > 0 and done == total:
             continue  # fully completed — not open
-        job = sr.job
         rows.append(OpenServiceRow(
             sr_id=sr.id, job_id=sr.job_id, job_code=job.job_code,
             account_name=job.account.name if job.account else "—",
@@ -438,6 +443,7 @@ def job_pl_report(db: Session = Depends(get_db)):
         db.query(Job, JobCost)
         .join(JobCost, JobCost.job_id == Job.id)
         .options(joinedload(Job.account), joinedload(Job.community))
+        .filter(NOT_VOID)
         .all()
     )
     rows: list[JobPLRow] = []
@@ -506,7 +512,7 @@ def other_labor_report(db: Session = Depends(get_db)):
         db.query(Job, JobCost)
         .join(JobCost, JobCost.job_id == Job.id)
         .options(joinedload(Job.account), joinedload(Job.community))
-        .filter(JobCost.other_labor_codes.isnot(None))
+        .filter(JobCost.other_labor_codes.isnot(None), NOT_VOID)
         .all()
     )
     rows: list[OtherLaborRow] = []

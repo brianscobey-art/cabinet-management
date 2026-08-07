@@ -27,7 +27,7 @@ from app.config import get_settings
 from app.models import Account, AccountType, Community, Job, JobStatus, JobType
 from app.sales import resolve_salesperson
 
-DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@TownsendBuildingSupply.com")
+DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@CarterLumber.com")
 
 VS_REGION_ACCOUNTS = {
     "Mont": "DR Horton Montgomery",
@@ -504,10 +504,31 @@ def _by_mtime(directory: Path, pattern: str) -> list[Path]:
     )
 
 
+def sync_tracker(db: Session) -> dict:
+    """Sync jobs from the newest readable 3.0 Online Sales Tracker .xlsm — status
+    (CONST LVL) + install dates. Falls back to the next copy if one is open in Excel."""
+    from scripts.import_tracker import sync_tracker_file  # app→scripts: reuse the CLI logic
+
+    settings = get_settings()
+    files = _by_mtime(Path(settings.tracker_dir), "3.0 Online Sales Tracker *.xlsm")
+    if not files:
+        return {"error": "no tracker file found"}
+    skipped = []
+    for f in files[:5]:
+        try:
+            result = sync_tracker_file(db, f)
+            db.commit()  # sibling feed syncs each commit their own work
+            return {"skipped_locked": skipped, **result}
+        except PermissionError:
+            skipped.append(f.name)
+    return {"error": "all recent tracker files locked", "skipped_locked": skipped}
+
+
 def sync_all(db: Session) -> dict:
     """Run all feeds against the newest readable file in each OneDrive location."""
     settings = get_settings()
     result = {
+        "tracker": sync_tracker(db),
         "vendorsuite": _sync_newest_readable(
             db, _by_mtime(Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx"), sync_vendorsuite
         ),

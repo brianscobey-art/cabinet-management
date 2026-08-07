@@ -13,7 +13,7 @@ from app.api.deps import read_access
 from app.api.schemas import HardwareSelectionOut, RoomSelectionOut
 from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import Job, Role, ServiceLine, ServicePart, ServiceRequest, User
+from app.models import Job, JobStatus, Role, ServiceLine, ServicePart, ServiceRequest, User
 from app.service_excel import build_blank_template, parse_import
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -37,6 +37,8 @@ class PartOut(BaseModel):
     due_date: date | None
     qty: int
     notes: str | None
+    trade_blocking: bool
+    received: bool
 
 
 class LineOut(BaseModel):
@@ -104,6 +106,16 @@ class PartIn(BaseModel):
     due_date: date | None = None
     qty: int = Field(default=1, ge=1)
     notes: str | None = Field(default=None, max_length=300)
+    trade_blocking: bool = False
+    received: bool = False
+
+
+class PartPatch(BaseModel):
+    order_number: str | None = Field(default=None, max_length=60)
+    order_date: date | None = None
+    due_date: date | None = None
+    trade_blocking: bool | None = None
+    received: bool | None = None
 
 
 class LineIn(BaseModel):
@@ -196,7 +208,8 @@ def list_community_requests(community_id: int, db: Session = Depends(get_db)):
         .join(Job, ServiceRequest.job_id == Job.id)
         .options(joinedload(ServiceRequest.job), joinedload(ServiceRequest.parts),
                  joinedload(ServiceRequest.lines))
-        .filter(Job.community_id == community_id)
+        .filter(Job.community_id == community_id,
+                Job.status.notin_((JobStatus.closed, JobStatus.void)))
         .all()
     )
     rows = [
@@ -320,8 +333,22 @@ def add_part(sr_id: int, payload: PartIn, db: Session = Depends(get_db),
         color=(payload.color or None), vendor=(payload.vendor or None),
         order_number=(payload.order_number or None), order_date=payload.order_date,
         due_date=payload.due_date, qty=payload.qty, notes=(payload.notes or None),
+        trade_blocking=payload.trade_blocking, received=payload.received,
     )
     db.add(part)
+    db.commit()
+    db.refresh(part)
+    return part
+
+
+@router.patch("/service-parts/{part_id}", response_model=PartOut)
+def patch_part(part_id: int, payload: PartPatch, db: Session = Depends(get_db),
+               user: User = Depends(service_write)):
+    part = db.get(ServicePart, part_id)
+    if part is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Part not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(part, key, value)
     db.commit()
     db.refresh(part)
     return part

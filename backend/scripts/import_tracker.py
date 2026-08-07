@@ -377,6 +377,27 @@ def backfill_selections(db, rows: list[dict]) -> dict:
     return counts
 
 
+def run_sync(db, rows: list[dict], *, on_error=None) -> dict:
+    """Upsert every tracker row into the db (caller commits). Returns outcome counts."""
+    counts = {"imported": 0, "updated": 0, "unchanged": 0, "linked": 0,
+              "skipped_inactive": 0, "failed": 0}
+    caches = {"accounts": {}, "communities": {}}
+    for row in rows:
+        try:
+            counts[import_row(db, row, caches)] += 1
+        except Exception as exc:  # noqa: BLE001 - one bad row shouldn't kill the sync
+            counts["failed"] += 1
+            if on_error:
+                on_error(clean(row.get("Job Code")), exc)
+    return counts
+
+
+def sync_tracker_file(db, path: Path, *, on_error=None) -> dict:
+    """Load the tracker workbook and sync every row (caller commits)."""
+    rows = load_rows(path)
+    return {"file": path.name, "rows": len(rows), **run_sync(db, rows, on_error=on_error)}
+
+
 def main() -> None:
     flags = {a for a in sys.argv[1:] if a.startswith("--")}
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -393,15 +414,7 @@ def main() -> None:
         if "--selections-only" in flags:
             counts = backfill_selections(db, rows)
         else:
-            counts = {"imported": 0, "updated": 0, "unchanged": 0, "linked": 0,
-                      "skipped_inactive": 0, "failed": 0}
-            caches = {"accounts": {}, "communities": {}}
-            for row in rows:
-                try:
-                    counts[import_row(db, row, caches)] += 1
-                except Exception as exc:
-                    counts["failed"] += 1
-                    print(f"! {clean(row.get('Job Code'))}: {exc}")
+            counts = run_sync(db, rows, on_error=lambda code, exc: print(f"! {code}: {exc}"))
         if dry_run:
             db.rollback()
             print("(dry run — rolled back)")

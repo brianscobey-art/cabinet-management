@@ -20,12 +20,13 @@ class Settings(BaseSettings):
     # Where generated order/export files land (gitignored).
     generated_dir: str = str(_BACKEND_DIR / "generated")
 
-    # Dealer identity + default ship-to for supplier order forms (override in .env).
-    dealer_name: str = "Townsend Dothan"
+    # Dealer identity + default ship-to for supplier order forms (override in .env —
+    # if Everluxe still has the account under the old Townsend name, set it there).
+    dealer_name: str = "Carter Lumber Dothan"
     dealer_contact: str = "Brian Scobey"
     dealer_phone: str = "850-890-0482"
-    dealer_email: str = "Brian.Scobey@TownsendBuildingSupply.com"
-    ship_to_name: str = "Townsend Dothan"
+    dealer_email: str = "Brian.Scobey@CarterLumber.com"
+    ship_to_name: str = "Carter Lumber Dothan"
     ship_to_address: str = "868 Murray Rd"
     ship_to_city_st_zip: str = "Dothan, AL 36303"
 
@@ -40,6 +41,13 @@ class Settings(BaseSettings):
     )
     feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
     feed_sync_enabled: bool = True
+    # Folder holding the 3.0 Online Sales Tracker .xlsm versions; the newest readable
+    # one is the source of truth for job status (CONST LVL) + install dates.
+    tracker_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
+        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Trackers"
+        r"\3.0 Online Sales Tracker 010726 Backup"
+    )
     domo_export_dir: str = r"C:\Users\Brian SE6\Downloads\domo-kb-tool"  # Domo cost JSON exports land here
     domo_instance: str = "carterlumber.domo.com"
     domo_dataset_id: str = "c9b70636-b093-4bcd-90e4-8f4b99e12df5"  # Sales Details PDP dataset
@@ -48,6 +56,17 @@ class Settings(BaseSettings):
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"
     )
+
+    # Autobot — the service tech's home base (868 Murray Rd, Dothan) and workday,
+    # minutes since midnight. Override in .env if the shop or hours change.
+    autobot_depot_lat: float = 31.2571037
+    autobot_depot_lon: float = -85.4034831
+    autobot_day_start_min: int = 7 * 60      # leave the shop at 7:00 AM
+    autobot_day_end_min: int = 17 * 60       # back at the shop by 5:00 PM
+    autobot_sync_minutes: int = 10           # auto-spawn visits from job statuses; 0 = off
+    # Google Maps Platform key (Geocoding API). Set it and every address lookup
+    # uses Google; empty = OpenStreetMap/Nominatim fallback. Free tier ~10k/mo.
+    google_maps_api_key: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
