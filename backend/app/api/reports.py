@@ -14,7 +14,7 @@ from app.models import (
     Account, AccountType, Community, DomoTxn, Job, JobCost, JobDocument, JobStatus, PhaseUpdate,
     ServiceLine, ServiceRequest,
 )
-from app.phases import PHASE_LABELS
+from app.phases import PHASE_HIDDEN_STATUSES, PHASE_LABELS
 
 router = APIRouter(tags=["reports"])
 
@@ -59,7 +59,7 @@ def phase_report(db: Session = Depends(get_db)):
         db.query(Job)
         .join(Account, Job.account_id == Account.id)
         .options(joinedload(Job.account), joinedload(Job.community))
-        .filter(Account.type == AccountType.builder, Job.status.notin_((JobStatus.closed, JobStatus.void)))
+        .filter(Account.type == AccountType.builder, Job.status.notin_(PHASE_HIDDEN_STATUSES))
         .all()
     )
 

@@ -12,7 +12,7 @@ from app.models import (
     FieldMeasure, FieldMeasureNote, Job, JobDocument, JobStatus, OrderingChecklist,
     PhaseUpdate, Role, User,
 )
-from app.phases import PHASE_CODES, PHASE_LABELS, PHASES
+from app.phases import PHASE_CODES, PHASE_HIDDEN_STATUSES, PHASE_LABELS, PHASES
 
 router = APIRouter(tags=["phases"])
 
@@ -77,7 +77,8 @@ def phase_board(community_id: int, include_closed: bool = False, db: Session = D
     """Active houses in a community with each one's current phase."""
     query = db.query(Job).filter(Job.community_id == community_id)
     if not include_closed:
-        query = query.filter(Job.status.notin_((JobStatus.closed, JobStatus.void)))
+        # phase tracking stops at punch — hide punch and everything after it
+        query = query.filter(Job.status.notin_(PHASE_HIDDEN_STATUSES))
     jobs = query.all()
 
     latest: dict[int, PhaseUpdate] = {}
