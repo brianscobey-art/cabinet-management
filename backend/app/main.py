@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.accounts import router as accounts_router
+from app.api.autobot import router as autobot_router
 from app.api.documents import router as documents_router
 from app.api.fieldmeasure import router as fieldmeasure_router
 from app.api.jobs import router as jobs_router
@@ -39,17 +40,48 @@ def _run_feed_sync() -> None:
         logger.exception("Daily feed sync failed")
 
 
+def _run_autobot_sync() -> None:
+    from datetime import date
+
+    from app.autobot import auto_assign, generate_visits, geocode_missing_job_pins
+    from app.database import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            created = generate_visits(db, date.today(), created_by="auto-sync")
+            assigned = auto_assign(db)
+            pinned = geocode_missing_job_pins(db, limit=25)
+        if created or assigned or pinned:
+            logger.info(
+                "Autobot auto-sync spawned=%s assigned=%s house-pins=%s", created, assigned, pinned
+            )
+    except Exception:
+        logger.exception("Autobot auto-sync failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    # Cloud disks (e.g. Render's /data) mount empty — make sure the generated-files
+    # directory exists before any order/export tries to write into it.
+    Path(settings.generated_dir).mkdir(parents=True, exist_ok=True)
     scheduler = None
+    jobs = []
     if settings.feed_sync_enabled and Path(settings.vendorsuite_dir).is_dir():
+        jobs.append(lambda s: s.add_job(_run_feed_sync, "cron", hour=settings.feed_sync_hour, minute=0))
+        logger.info("Feed sync scheduled daily at %02d:00", settings.feed_sync_hour)
+    if settings.autobot_sync_minutes > 0:
+        jobs.append(lambda s: s.add_job(
+            _run_autobot_sync, "interval", minutes=settings.autobot_sync_minutes
+        ))
+        logger.info("Autobot auto-sync every %d min", settings.autobot_sync_minutes)
+    if jobs:
         from apscheduler.schedulers.background import BackgroundScheduler
 
         scheduler = BackgroundScheduler()
-        scheduler.add_job(_run_feed_sync, "cron", hour=settings.feed_sync_hour, minute=0)
+        for add in jobs:
+            add(scheduler)
         scheduler.start()
-        logger.info("Feed sync scheduled daily at %02d:00", settings.feed_sync_hour)
     yield
     if scheduler:
         scheduler.shutdown(wait=False)
@@ -102,6 +134,7 @@ app.include_router(reports_router)
 app.include_router(notes_router)
 app.include_router(fieldmeasure_router)
 app.include_router(service_router)
+app.include_router(autobot_router)
 
 
 @app.get("/health", tags=["system"])
@@ -119,6 +152,33 @@ def ordering_platform_page():
     from fastapi.responses import FileResponse
 
     return FileResponse(_static / "ordering_platform.html")
+
+
+# Autobot is the service tech's standalone app — its own login, its own PWA
+# install, none of the office UI. Same backend, same database.
+@app.get("/autobot", include_in_schema=False)
+def autobot_page():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_static / "autobot.html")
+
+
+@app.get("/autobot/manifest.webmanifest", include_in_schema=False)
+def autobot_manifest():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_static / "autobot.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/autobot/icon-{size}.png", include_in_schema=False)
+def autobot_icon(size: int):
+    from fastapi.responses import FileResponse
+
+    if size not in (180, 192, 512):
+        from fastapi import HTTPException
+
+        raise HTTPException(404)
+    return FileResponse(_static / f"autobot-icon-{size}.png")
 
 
 # Serve the built frontend (frontend/dist) when present — single-port deployment.
