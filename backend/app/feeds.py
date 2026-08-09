@@ -527,7 +527,17 @@ def sync_tracker(db: Session) -> dict:
 def sync_all(db: Session) -> dict:
     """Run all feeds against the newest readable file in each OneDrive location."""
     settings = get_settings()
-    result = {
+    result = {}
+    # In the cloud, pull the latest feed files from R2 into the local feed dirs
+    # first (no-op when R2 isn't configured). A hiccup here must not block sync.
+    if settings.r2_enabled:
+        try:
+            from app.storage import hydrate_feeds
+
+            result["hydrate"] = hydrate_feeds(settings)
+        except Exception as exc:  # noqa: BLE001
+            result["hydrate"] = {"error": str(exc)}
+    result.update({
         "tracker": sync_tracker(db),
         "vendorsuite": _sync_newest_readable(
             db, _by_mtime(Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx"), sync_vendorsuite
@@ -535,7 +545,7 @@ def sync_all(db: Session) -> dict:
         "century": _sync_newest_readable(
             db, century_candidates(Path(settings.century_dir)), sync_century
         ),
-    }
+    })
     new_orders = Path(settings.new_orders_file)
     if new_orders.is_file():
         try:

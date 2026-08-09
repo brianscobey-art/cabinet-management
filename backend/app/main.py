@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     Path(settings.generated_dir).mkdir(parents=True, exist_ok=True)
     scheduler = None
     jobs = []
-    if settings.feed_sync_enabled and Path(settings.vendorsuite_dir).is_dir():
+    if settings.feed_sync_enabled and (Path(settings.vendorsuite_dir).is_dir() or settings.r2_enabled):
         jobs.append(lambda s: s.add_job(_run_feed_sync, "cron", hour=settings.feed_sync_hour, minute=0))
         logger.info("Feed sync scheduled daily at %02d:00", settings.feed_sync_hour)
     if settings.autobot_sync_minutes > 0:

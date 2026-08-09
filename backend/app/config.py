@@ -68,6 +68,20 @@ class Settings(BaseSettings):
     # uses Google; empty = OpenStreetMap/Nominatim fallback. Free tier ~10k/mo.
     google_maps_api_key: str = ""
 
+    # Cloudflare R2 (S3-compatible) object storage — the bridge that lets the
+    # cloud app read the tracker/VS/Century feeds. The on-prem uploader pushes
+    # OneDrive files here; the cloud app pulls the newest into its feed dirs.
+    # All four empty = R2 disabled (local dev reads OneDrive directly).
+    r2_endpoint: str = ""        # https://<accountid>.r2.cloudflarestorage.com
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+
+    @property
+    def r2_enabled(self) -> bool:
+        return bool(self.r2_endpoint and self.r2_bucket
+                    and self.r2_access_key_id and self.r2_secret_access_key)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -87,18 +87,43 @@ Funnel and the `run-server.bat` watchdog on the PC.
 
 ---
 
-## Phase 2 — Files to R2, so the feeds keep working (next)
+## Phase 2 — Files to R2, so the feeds keep working (built ✓)
 
-The tracker `.xlsm`, the VS Combined / Century reports, and job-document PDFs
-live in OneDrive. To feed them to the cloud app **without corporate IT**:
+The tracker `.xlsm`, the VS Combined / Century reports, and the New Orders file
+live in OneDrive, which the cloud app can't see. The bridge is now in the code:
+an on-prem uploader pushes those files to **Cloudflare R2**, and the cloud app
+pulls the newest of each into its feed dirs before every sync. Setup:
 
-1. **Cloudflare R2** bucket (S3-compatible, cheap, no egress fees).
-2. A tiny **on-prem uploader** — a scheduled task on the PC (or a cheap always-on
-   mini-PC) that watches those OneDrive folders and pushes changed files to R2.
-3. Point the app's file reads at R2 instead of local paths (a small storage
-   adapter; job documents/photos move the same way).
+### 1. Create the R2 bucket + API token
+Cloudflare dashboard → **R2** → create a bucket (e.g. `carter-kb-feeds`) → **Manage
+R2 API Tokens** → create a token with **Object Read & Write**. Note the endpoint
+`https://<accountid>.r2.cloudflarestorage.com`, the access key id, and the secret.
 
-Everything else already left the PC — only this uploader stays behind.
+### 2. Set the R2 env vars in Render
+On the web service → **Environment**, add (see `backend/.env.example`):
+`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Also point
+the feed dirs at the persistent disk so the pulled files land somewhere writable:
+`TRACKER_DIR=/data/feeds/tracker`, `VENDORSUITE_DIR=/data/feeds/vendorsuite`,
+`CENTURY_DIR=/data/feeds/century`, `NEW_ORDERS_FILE=/data/feeds/new-orders/New Orders Status.xlsx`.
+Once R2 is set, the daily sync (and the **Update** button) hydrate from R2 first,
+then run exactly as before.
+
+### 3. Run the uploader on the PC
+On the machine with OneDrive synced, set the same four `R2_*` vars (in
+`backend/.env` or the Task Scheduler action), then:
+
+```bash
+cd backend && python -m scripts.upload_feeds_to_r2
+```
+
+Schedule it in **Windows Task Scheduler** — every 30 min, or once after the cloud
+reports land (~6 AM). It pushes only the newest few files per feed and skips
+anything already in R2 with the same size. This tiny uploader is the only piece
+that stays on the PC; everything else runs in the cloud.
+
+> Job-document PDFs/photos (served on the job page) still read local OneDrive
+> paths — moving those to R2 is a small follow-on using the same `app/storage.py`
+> helpers; do it when you need documents accessible from the cloud.
 
 ---
 
