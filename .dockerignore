@@ -1,0 +1,38 @@
+# Keep the Docker build context lean and correct. Without this, `COPY backend/ .`
+# and `COPY frontend/ .` would drag in the host's Windows venv, node_modules,
+# dev.db, and .git — bloating the image and breaking the frontend build.
+
+# Python
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+**/*.egg-info
+
+# Local database + generated artifacts (Postgres + a mounted disk are used in the cloud)
+*.db
+*.sqlite3
+backend/dev.db
+backend/generated/
+
+# Node / frontend build output (the image rebuilds these itself)
+**/node_modules
+frontend/dist
+frontend/dev-dist
+**/*.tsbuildinfo
+
+# Secrets & local env
+.env
+.env.*
+
+# VCS, editors, OS, logs
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
