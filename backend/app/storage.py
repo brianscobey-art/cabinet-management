@@ -10,6 +10,7 @@ boto3 is imported lazily so this module (and the app) load fine without it and
 without R2 configured; it's only needed when R2 is actually enabled.
 """
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -128,3 +129,66 @@ def upload_feeds(settings: Settings | None = None) -> dict:
         _push(getattr(s, attr), prefix, pattern, keep)
     _push(s.new_orders_file, NEW_ORDERS_PREFIX, None, 1)
     return result
+
+
+# --------------------------------------------------------------------------
+# Job documents (PDFs/photos attached by path) — same R2 bridge.
+# The key is derived from the stored file_path, so the uploader and the serving
+# endpoint agree without adding a column to the table.
+# --------------------------------------------------------------------------
+DOC_PREFIX = "doc-files/"
+
+
+def document_key(file_path: str) -> str:
+    h = hashlib.sha1(file_path.encode("utf-8")).hexdigest()[:16]
+    return f"{DOC_PREFIX}{h}{Path(file_path).suffix.lower()}"
+
+
+def object_exists(key: str, settings: Settings | None = None) -> bool:
+    s = settings or get_settings()
+    if not s.r2_enabled:
+        return False
+    try:
+        _client(s).head_object(Bucket=s.r2_bucket, Key=key)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def stream_document(key: str, settings: Settings | None = None):
+    """boto3 get_object response for a document key (has Body/ContentType), or None."""
+    s = settings or get_settings()
+    if not s.r2_enabled:
+        return None
+    try:
+        return _client(s).get_object(Bucket=s.r2_bucket, Key=key)
+    except Exception:  # noqa: BLE001 - missing key / auth issue → treat as not found
+        return None
+
+
+def upload_documents(db, settings: Settings | None = None) -> dict:
+    """Push every JobDocument's local file up to R2 under document_key(path).
+    Skips files already present with the same size; reports any missing locally."""
+    s = settings or get_settings()
+    if not s.r2_enabled:
+        raise RuntimeError("R2 not configured — set R2_ENDPOINT / R2_BUCKET / keys.")
+    from app.models import JobDocument  # local import to avoid a cycle at module load
+
+    client = _client(s)
+    pushed = skipped = missing = 0
+    for doc in db.query(JobDocument).all():
+        p = Path(doc.file_path)
+        if not p.is_file():
+            missing += 1
+            continue
+        key = document_key(doc.file_path)
+        try:
+            head = client.head_object(Bucket=s.r2_bucket, Key=key)
+            if head["ContentLength"] == p.stat().st_size:
+                skipped += 1
+                continue
+        except Exception:  # noqa: BLE001 - not present → upload
+            pass
+        client.upload_file(str(p), s.r2_bucket, key)
+        pushed += 1
+    return {"uploaded": pushed, "skipped": skipped, "missing_local": missing}

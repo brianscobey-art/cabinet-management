@@ -121,9 +121,18 @@ reports land (~6 AM). It pushes only the newest few files per feed and skips
 anything already in R2 with the same size. This tiny uploader is the only piece
 that stays on the PC; everything else runs in the cloud.
 
-> Job-document PDFs/photos (served on the job page) still read local OneDrive
-> paths — moving those to R2 is a small follow-on using the same `app/storage.py`
-> helpers; do it when you need documents accessible from the cloud.
+### 4. Push job documents too (PDFs/photos on the job page)
+Job documents are stored by their OneDrive path, which the cloud can't resolve —
+so they go to R2 the same way. The serving endpoint already falls back to R2 when
+the local file isn't present. To seed them, run on the PC (with `DATABASE_URL`
+pointed at the cloud Postgres so it uploads exactly the docs the app knows about):
+
+```bash
+cd backend && python -m scripts.upload_documents_to_r2
+```
+
+Re-run it (or schedule it) whenever new documents are attached. Skips anything
+already in R2 with the same size.
 
 ---
 
