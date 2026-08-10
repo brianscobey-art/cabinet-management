@@ -73,10 +73,43 @@ foreign-key order, and resets Postgres sequences so new inserts don't collide.
 If you already created the admin user in Step 3, either do the data copy first
 (into a truly empty DB) or create the admin user *after* migrating.
 
-### 5. Custom domain + TLS (optional)
-Buy a domain (~$12/yr) and add it under the Render service → **Settings →
-Custom Domains**; Render issues TLS automatically. Then retire the Tailscale
-Funnel and the `run-server.bat` watchdog on the PC.
+### 5. Custom domain + TLS
+Gives everyone a clean, memorable URL (e.g. `https://app.carterkb.com`) instead
+of the `onrender.com` address, with automatic HTTPS. **Requires the Render
+service from steps 1–2 to be live first** — a domain needs a running host to
+point at.
+
+**A. Buy a domain (~$10–12/yr).** Any registrar works; **Cloudflare Registrar**
+is at-cost and pairs nicely if you also use Cloudflare R2 (one account for DNS +
+storage). Namecheap / Porkbun are fine too. Pick a name — a couple of options:
+`carterkb.com` / `carterkandb.com` (brand), or something suite-neutral like
+`coastsuite.app`. A **subdomain** of a domain you already own also works and
+costs nothing extra.
+
+**B. Add the domain in Render.** Service → **Settings → Custom Domains → Add**.
+Enter the hostname you want (e.g. `app.carterkb.com`). Render immediately shows
+the exact DNS record to create and starts watching for it.
+
+**C. Create that record at your registrar's DNS.**
+- **Subdomain** (simplest, recommended) — add a **CNAME**:
+  `app`  →  `carter-kitchen-and-bath.onrender.com`
+- **Apex / root** (`carterkb.com` with no prefix) — apex can't be a plain CNAME.
+  Use your registrar's **ALIAS/ANAME** record (or Cloudflare's automatic CNAME
+  flattening) pointing at the same `…onrender.com` host, **or** the **A records**
+  Render lists for the apex. Add `www` as a CNAME to the apex and set a redirect
+  if you want both to work.
+
+**D. Wait for verification + TLS.** DNS takes a few minutes to a couple hours to
+propagate; Render then auto-issues a Let's Encrypt certificate. Once it shows
+"Verified / Certificate issued", the app is live on your domain over HTTPS.
+
+**E. Retire the old access path.** With the domain working, you can stop the
+Tailscale Funnel and the `run-server.bat` watchdog on the PC — nothing but the
+feed/document uploaders needs to run there anymore.
+
+> The app serves the frontend and API from the same origin, so no CORS or API
+> base-URL change is needed when the domain changes. Just share the new URL and
+> re-add it to phones' home screens (it's an installable PWA).
 
 ### What works vs. what waits
 - ✅ Everything users touch in the browser — Jobs, Ordering, Schedule, Phases,
