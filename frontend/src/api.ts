@@ -159,6 +159,42 @@ export async function login(email: string, password: string): Promise<void> {
 
 export const fetchMe = () => api<User>("/auth/me");
 
+// --- User management (admin only) ------------------------------------------
+export interface ManagedUser extends User {
+  created_at: string;
+}
+export const ROLES: { value: string; label: string; blurb: string }[] = [
+  { value: "admin", label: "Admin", blurb: "Full access, including managing users" },
+  { value: "sales", label: "Sales", blurb: "Create & edit jobs, quotes, orders, accounts" },
+  { value: "field", label: "Field", blurb: "View everything; log phase updates" },
+  {
+    value: "installer_coordinator",
+    label: "Installer coordinator",
+    blurb: "View everything; log phase updates",
+  },
+  { value: "inspector", label: "Inspector", blurb: "View-only across the office app" },
+  { value: "service_tech", label: "Service tech", blurb: "Autobot only — nothing else" },
+];
+export const roleLabel = (value: string) =>
+  ROLES.find((r) => r.value === value)?.label ?? value;
+
+export const listUsers = () => api<ManagedUser[]>("/auth/users");
+export const createUser = (data: {
+  email: string;
+  full_name: string;
+  password: string;
+  role: string;
+}) => api<ManagedUser>("/auth/users", { method: "POST", body: JSON.stringify(data) });
+export const updateUser = (
+  id: number,
+  data: { full_name?: string; role?: string; is_active?: boolean },
+) => api<ManagedUser>(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const resetUserPassword = (id: number, password: string) =>
+  api<ManagedUser>(`/auth/users/${id}/password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+
 export interface FeedResult {
   file?: string;
   created?: number;

@@ -12,6 +12,7 @@ import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
 import SuitePage from "./pages/SuitePage";
+import UsersPage from "./pages/UsersPage";
 
 function useHashRoute() {
   // Default landing is the COAST suite launcher — both on fresh login and when
@@ -98,6 +99,7 @@ export default function App() {
   else if (hash.startsWith("#/forms/service")) page = <ServiceFormsPage canWrite={canWritePhases} />;
   else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
   else if (hash.startsWith("#/suite")) page = <SuitePage />;
+  else if (hash.startsWith("#/users") && user.role === "admin") page = <UsersPage me={user} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
@@ -140,7 +142,8 @@ export default function App() {
               !hash.startsWith("#/phases") &&
               !hash.startsWith("#/reports") &&
               !hash.startsWith("#/forms") &&
-              !hash.startsWith("#/archive")
+              !hash.startsWith("#/archive") &&
+              !hash.startsWith("#/users")
                 ? "active"
                 : ""
             }
@@ -169,6 +172,11 @@ export default function App() {
           <a href="#/archive" className={hash.startsWith("#/archive") ? "active" : ""}>
             Archive
           </a>
+          {user.role === "admin" && (
+            <a href="#/users" className={hash.startsWith("#/users") ? "active" : ""}>
+              Users
+            </a>
+          )}
         </nav>
         <div className="header-right">
           <a className="cal-btn" href="#/schedule" title="Open the install calendar">
