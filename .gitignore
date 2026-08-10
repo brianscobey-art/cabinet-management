@@ -33,3 +33,4 @@ Thumbs.db
 app-server.log
 watchdog.log
 *.tsbuildinfo
+/upload_feeds_to_r2.bat

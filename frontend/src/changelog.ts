@@ -9,6 +9,12 @@ export interface ChangeEntry {
 export const CHANGELOG: ChangeEntry[] = [
   {
     date: "8/10/26",
+    title: "Data now refreshes twice a day",
+    detail:
+      "The app auto-updates from the 3.0 Tracker and the Vendor Suite / Century reports at 5:00 AM and 12:00 PM (Central) — no need to hit Update. (You still can anytime.)",
+  },
+  {
+    date: "8/10/26",
     title: "Help & Training page added",
     detail:
       "This page — a running list of changes plus how-to guides for each part of the app.",
