@@ -30,3 +30,23 @@ def decode_access_token(token: str) -> dict:
     """Raises jwt.PyJWTError on invalid/expired tokens."""
     settings = get_settings()
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+
+
+INVITE_PURPOSE = "invite"
+
+
+def create_invite_token(email: str) -> str:
+    """A short-lived, single-purpose token emailed in the set-password link."""
+    settings = get_settings()
+    expire = datetime.now(timezone.utc) + timedelta(hours=settings.invite_expire_hours)
+    payload = {"sub": email, "purpose": INVITE_PURPOSE, "exp": expire}
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+
+
+def decode_invite_token(token: str) -> str:
+    """Returns the email from a valid invite token; raises jwt.PyJWTError otherwise."""
+    settings = get_settings()
+    payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+    if payload.get("purpose") != INVITE_PURPOSE:
+        raise jwt.InvalidTokenError("not an invite token")
+    return payload["sub"]

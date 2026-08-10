@@ -17,6 +17,19 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 720
     cors_origins: str = "http://localhost:5173"
 
+    # Email invites (SendGrid). Set SENDGRID_API_KEY + a verified INVITE_FROM_EMAIL
+    # to turn on "send invite" when adding a user. app_base_url is where the
+    # set-password link points (the live site). Empty key = invites disabled.
+    sendgrid_api_key: str = ""
+    invite_from_email: str = ""
+    invite_from_name: str = "Carter Kitchen and Bath"
+    app_base_url: str = "https://cabinettron.com"
+    invite_expire_hours: int = 168  # set-password link good for 7 days
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.sendgrid_api_key and self.invite_from_email)
+
     # Where generated order/export files land (gitignored).
     generated_dir: str = str(_BACKEND_DIR / "generated")
 

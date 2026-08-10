@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   createUser,
+  getInviteStatus,
   listUsers,
   ManagedUser,
+  resendInvite,
   resetUserPassword,
   ROLES,
   updateUser,
@@ -12,7 +14,9 @@ import {
 export default function UsersPage({ me }: { me: User }) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
 
   // add-user form
   const [fullName, setFullName] = useState("");
@@ -24,14 +28,31 @@ export default function UsersPage({ me }: { me: User }) {
 
   useEffect(() => {
     refresh();
+    getInviteStatus().then((s) => setEmailEnabled(s.email_enabled)).catch(() => setEmailEnabled(false));
   }, []);
 
   async function addUser(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setNotice("");
     setBusy(true);
     try {
-      await createUser({ email, full_name: fullName, password, role });
+      const res = await createUser({
+        email,
+        full_name: fullName,
+        role,
+        // With email on, send an invite (no password). Without, set a temp one.
+        ...(emailEnabled ? { send_invite: true } : { password }),
+      });
+      if (emailEnabled) {
+        setNotice(
+          res.invite_sent
+            ? `Invite emailed to ${res.user.email}.`
+            : `User added, but the invite email failed: ${res.invite_error ?? "unknown error"}. Use "resend invite".`,
+        );
+      } else {
+        setNotice(`User added. Give them their email and the temporary password to sign in.`);
+      }
       setFullName("");
       setEmail("");
       setPassword("");
@@ -41,6 +62,17 @@ export default function UsersPage({ me }: { me: User }) {
       setError(err instanceof Error ? err.message : "Failed to add user");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function invite(u: ManagedUser) {
+    setError("");
+    setNotice("");
+    try {
+      await resendInvite(u.id);
+      setNotice(`Invite re-sent to ${u.email}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send invite");
     }
   }
 
@@ -101,14 +133,16 @@ export default function UsersPage({ me }: { me: User }) {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <input
-          type="text"
-          placeholder="Temp password (8+ chars) *"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={8}
-          required
-        />
+        {!emailEnabled && (
+          <input
+            type="text"
+            placeholder="Temp password (8+ chars) *"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            required
+          />
+        )}
         <select value={role} onChange={(e) => setRole(e.target.value)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>
@@ -117,12 +151,16 @@ export default function UsersPage({ me }: { me: User }) {
           ))}
         </select>
         <button type="submit" disabled={busy}>
-          {busy ? "Adding…" : "Add user"}
+          {busy ? "Adding…" : emailEnabled ? "Add & send invite" : "Add user"}
         </button>
       </form>
       <p className="muted" style={{ marginTop: "-0.4rem" }}>
         {ROLES.find((r) => r.value === role)?.blurb}
+        {emailEnabled
+          ? " · They'll get an email to set their own password."
+          : " · Email invites aren't set up — you'll set a temporary password and share it."}
       </p>
+      {notice && <p style={{ color: "var(--green, #125952)" }}>{notice}</p>}
       {error && <p className="error">{error}</p>}
 
       <div className="table-wrap">
@@ -162,6 +200,14 @@ export default function UsersPage({ me }: { me: User }) {
                   </td>
                   <td>{u.is_active ? "Active" : "Disabled"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
+                    {emailEnabled && (
+                      <>
+                        <button className="link-btn" onClick={() => invite(u)}>
+                          resend invite
+                        </button>
+                        {" · "}
+                      </>
+                    )}
                     <button className="link-btn" onClick={() => resetPw(u)}>
                       reset password
                     </button>

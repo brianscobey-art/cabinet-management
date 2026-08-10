@@ -11,6 +11,8 @@ import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
+import HelpPage from "./pages/HelpPage";
+import SetPasswordPage from "./pages/SetPasswordPage";
 import SuitePage from "./pages/SuitePage";
 import UsersPage from "./pages/UsersPage";
 
@@ -83,6 +85,9 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  // The emailed invite link must work before (and instead of) signing in.
+  if (hash.startsWith("#/set-password")) return <SetPasswordPage />;
+
   if (loading) return <div className="center">Loading…</div>;
   if (!user) return <Login onLogin={setUser} />;
 
@@ -100,6 +105,7 @@ export default function App() {
   else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
   else if (hash.startsWith("#/suite")) page = <SuitePage />;
   else if (hash.startsWith("#/users") && user.role === "admin") page = <UsersPage me={user} />;
+  else if (hash.startsWith("#/help")) page = <HelpPage me={user} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
@@ -143,7 +149,8 @@ export default function App() {
               !hash.startsWith("#/reports") &&
               !hash.startsWith("#/forms") &&
               !hash.startsWith("#/archive") &&
-              !hash.startsWith("#/users")
+              !hash.startsWith("#/users") &&
+              !hash.startsWith("#/help")
                 ? "active"
                 : ""
             }
@@ -177,6 +184,9 @@ export default function App() {
               Users
             </a>
           )}
+          <a href="#/help" className={hash.startsWith("#/help") ? "active" : ""}>
+            Help
+          </a>
         </nav>
         <div className="header-right">
           <a className="cal-btn" href="#/schedule" title="Open the install calendar">

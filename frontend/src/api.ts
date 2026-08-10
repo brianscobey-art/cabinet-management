@@ -178,13 +178,36 @@ export const ROLES: { value: string; label: string; blurb: string }[] = [
 export const roleLabel = (value: string) =>
   ROLES.find((r) => r.value === value)?.label ?? value;
 
+export interface UserCreatedResult {
+  user: ManagedUser;
+  invite_sent: boolean;
+  invite_error: string | null;
+}
 export const listUsers = () => api<ManagedUser[]>("/auth/users");
+export const getInviteStatus = () => api<{ email_enabled: boolean }>("/auth/invite-status");
 export const createUser = (data: {
   email: string;
   full_name: string;
-  password: string;
   role: string;
-}) => api<ManagedUser>("/auth/users", { method: "POST", body: JSON.stringify(data) });
+  password?: string;
+  send_invite?: boolean;
+}) => api<UserCreatedResult>("/auth/users", { method: "POST", body: JSON.stringify(data) });
+export const resendInvite = (id: number) =>
+  api<{ invite_sent: boolean; email: string }>(`/auth/users/${id}/invite`, { method: "POST" });
+
+/** Public — set a password from an emailed invite token; returns a login token. */
+export async function setPasswordWithToken(token: string, password: string): Promise<void> {
+  const resp = await fetch("/api/auth/set-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null))?.detail;
+    throw new Error(typeof detail === "string" ? detail : "Could not set password");
+  }
+  setToken((await resp.json()).access_token);
+}
 export const updateUser = (
   id: number,
   data: { full_name?: string; role?: string; is_active?: boolean },
