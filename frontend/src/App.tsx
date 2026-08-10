@@ -14,9 +14,11 @@ import SchedulePage from "./pages/SchedulePage";
 import SuitePage from "./pages/SuitePage";
 
 function useHashRoute() {
-  const [hash, setHash] = useState(window.location.hash || "#/jobs");
+  // Default landing is the COAST suite launcher — both on fresh login and when
+  // reopening the app with a stored session (no hash in the URL).
+  const [hash, setHash] = useState(window.location.hash || "#/suite");
   useEffect(() => {
-    const onChange = () => setHash(window.location.hash || "#/jobs");
+    const onChange = () => setHash(window.location.hash || "#/suite");
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
