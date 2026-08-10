@@ -52,8 +52,20 @@ class Settings(BaseSettings):
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
         r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
     )
-    feed_sync_hour: int = 7  # daily local-time hour; cloud reports land ~3:45 and ~6:00
+    feed_sync_hour: int = 7  # legacy single-hour fallback (kept for compatibility)
+    # Hours (in feed_sync_tz) to run the feed sync. Comma-separated for multiple
+    # runs a day. Default 5 AM + noon Central. Cloud runs on UTC, so the tz matters.
+    feed_sync_hours: str = "5,12"
+    feed_sync_tz: str = "America/Chicago"  # Central — FL Panhandle / Alabama
     feed_sync_enabled: bool = True
+
+    @property
+    def feed_sync_hour_list(self) -> list[int]:
+        hours = [
+            int(p) for p in self.feed_sync_hours.split(",")
+            if p.strip().isdigit() and 0 <= int(p.strip()) <= 23
+        ]
+        return hours or [self.feed_sync_hour]
     # Folder holding the 3.0 Online Sales Tracker .xlsm versions; the newest readable
     # one is the source of truth for job status (CONST LVL) + install dates.
     tracker_dir: str = (

@@ -68,17 +68,29 @@ async def lifespan(app: FastAPI):
     scheduler = None
     jobs = []
     if settings.feed_sync_enabled and (Path(settings.vendorsuite_dir).is_dir() or settings.r2_enabled):
-        jobs.append(lambda s: s.add_job(_run_feed_sync, "cron", hour=settings.feed_sync_hour, minute=0))
-        logger.info("Feed sync scheduled daily at %02d:00", settings.feed_sync_hour)
+        for hr in settings.feed_sync_hour_list:
+            jobs.append(lambda s, h=hr: s.add_job(_run_feed_sync, "cron", hour=h, minute=0))
+        logger.info(
+            "Feed sync scheduled at %s (%s)",
+            ", ".join(f"{h:02d}:00" for h in settings.feed_sync_hour_list),
+            settings.feed_sync_tz,
+        )
     if settings.autobot_sync_minutes > 0:
         jobs.append(lambda s: s.add_job(
             _run_autobot_sync, "interval", minutes=settings.autobot_sync_minutes
         ))
         logger.info("Autobot auto-sync every %d min", settings.autobot_sync_minutes)
     if jobs:
+        from zoneinfo import ZoneInfo
+
         from apscheduler.schedulers.background import BackgroundScheduler
 
-        scheduler = BackgroundScheduler()
+        try:
+            tz = ZoneInfo(settings.feed_sync_tz)
+        except Exception:  # noqa: BLE001 — bad tz name shouldn't crash startup
+            logger.warning("Unknown feed_sync_tz %r; using UTC", settings.feed_sync_tz)
+            tz = ZoneInfo("UTC")
+        scheduler = BackgroundScheduler(timezone=tz)
         for add in jobs:
             add(scheduler)
         scheduler.start()
