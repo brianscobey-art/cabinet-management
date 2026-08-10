@@ -89,7 +89,17 @@ export default function App() {
   if (hash.startsWith("#/set-password")) return <SetPasswordPage />;
 
   if (loading) return <div className="center">Loading…</div>;
-  if (!user) return <Login onLogin={setUser} />;
+  if (!user) {
+    // The Help / User Guide is public — reachable from the login page so anyone
+    // can read how to use the app before signing in. Admin-only topics stay hidden.
+    if (hash.startsWith("#/help"))
+      return (
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: 16 }}>
+          <HelpPage />
+        </div>
+      );
+    return <Login onLogin={setUser} />;
+  }
 
   const canWrite = WRITE_ROLES.includes(user.role);
   // field crews log phases from the community, so they get write access there
@@ -266,6 +276,15 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
         <button type="submit" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        <a
+          className="login-help"
+          href="#/help"
+          onClick={() => {
+            window.location.hash = "#/help";
+          }}
+        >
+          📘 Help &amp; User Guide
+        </a>
       </form>
     </div>
   );

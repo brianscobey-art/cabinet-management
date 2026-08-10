@@ -210,6 +210,17 @@ button:disabled {
   padding-left: 0.7rem;
 }
 
+.login-help {
+  text-align: center;
+  color: #125952;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: -0.3rem;
+}
+.login-help:hover {
+  text-decoration: underline;
+}
+
 .login-brand {
   background: var(--brand);
   border-radius: 8px;
