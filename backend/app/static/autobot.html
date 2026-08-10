@@ -46,6 +46,8 @@
     padding-top: calc(0.7rem + env(safe-area-inset-top));
     display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   }
+  .suitebtn { flex: none; display: none; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 7px; background: rgba(255,255,255,0.16); color: #fff; text-decoration: none; font-size: 18px; line-height: 1; }
+  .suitebtn:hover { background: rgba(255,255,255,0.28); }
   .wordmark { display: flex; align-items: center; gap: 0.6rem; }
   .wordmark svg { flex: none; }
   .wordmark b { font-size: 1.25rem; letter-spacing: 0.04em; }
@@ -241,6 +243,7 @@
 
 <div id="app" hidden>
   <header>
+    <a id="suitebtn" class="suitebtn" href="/#/suite" title="COAST suite — all apps" aria-label="All apps">⠿</a>
     <div class="wordmark" id="wordmark" title="Home — all COAST apps">
       <svg width="34" height="34" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#194039"/><path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/><rect x="27" y="40" width="10" height="8" fill="#fff"/><circle cx="14" cy="40" r="4" fill="#568c8c"/><circle cx="50" cy="40" r="4" fill="#568c8c"/><circle cx="32" cy="28" r="4" fill="#568c8c"/></svg>
       <div>
@@ -381,9 +384,11 @@ async function boot() {
   document.getElementById("login").hidden = true;
   document.getElementById("app").hidden = false;
   document.getElementById("who").textContent = me.full_name;
-  // Admins can jump home to the COAST suite by clicking the wordmark; service
-  // techs have no office access, so it stays a plain label for them.
+  // The ⠿ launcher + clickable wordmark only appear for users who can actually
+  // use the office suite. Service techs have Autobot and nothing else, so they
+  // never see a way out of it.
   if (me.role === "admin") {
+    document.getElementById("suitebtn").style.display = "flex";
     const wm = document.getElementById("wordmark");
     wm.style.cursor = "pointer";
     wm.onclick = () => { location.href = "/#/suite"; };
