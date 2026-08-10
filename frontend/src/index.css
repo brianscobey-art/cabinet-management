@@ -188,6 +188,18 @@ button:disabled {
   font-weight: 500;
 }
 
+.shell header h1 .logo-home {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 4px;
+  transition: background 0.15s;
+}
+
+.shell header h1 .logo-home:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .shell header h1 .logo {
   height: 26px;
   display: block;

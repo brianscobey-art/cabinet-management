@@ -112,7 +112,9 @@ export default function App() {
           <a className="suite-btn" href="#/suite" title="COAST suite — all five apps">
             ⠿
           </a>
-          <img src="/carter-logo.png" alt="Carter Lumber" className="logo" />
+          <a className="logo-home" href="#/suite" title="Home — all COAST apps">
+            <img src="/carter-logo.png" alt="Carter Lumber — home" className="logo" />
+          </a>
           <span>Carter Kitchen and Bath</span>
         </h1>
         {canWrite && (
