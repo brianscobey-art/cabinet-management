@@ -10,7 +10,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 alembic upgrade head                      # creates dev.db (SQLite) by default
-python -m scripts.create_user you@townsendbuildingsupply.com "Your Name" admin
+python -m scripts.create_user you@carterlumber.com "Your Name" admin
 uvicorn app.main:app --reload             # http://localhost:8000, docs at /docs
 ```
 

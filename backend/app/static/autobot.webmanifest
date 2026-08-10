@@ -1,0 +1,14 @@
+{
+  "name": "Autobot — Carter Kitchen and Bath",
+  "short_name": "Autobot",
+  "description": "Service tech scheduling and routing. Part of the COAST suite.",
+  "start_url": "/autobot",
+  "scope": "/autobot",
+  "display": "standalone",
+  "background_color": "#125952",
+  "theme_color": "#125952",
+  "icons": [
+    { "src": "/autobot/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/autobot/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

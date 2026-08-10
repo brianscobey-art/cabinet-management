@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Autobot</title>
+<link rel="manifest" href="/autobot/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/autobot/icon-180.png" />
+<link rel="icon" href="/autobot/icon-192.png" />
+<meta name="theme-color" content="#125952" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Autobot" />
+<style>
+  :root {
+    --green: #125952;      /* Carter green — anchor */
+    --green-dark: #194039;
+    --green-light: #568c8c;
+    --red: #de2020;        /* sparingly */
+    --ink: #1d2b28;
+    --line: #d8e4e2;
+    --wash: #f2f7f6;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; } /* .center's flex must not beat the hidden attr */
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink); background: #fff;
+  }
+  button {
+    font: inherit; border: 1px solid var(--green); background: var(--green); color: #fff;
+    border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer;
+  }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.ghost { background: #fff; color: var(--green); }
+  input, select {
+    font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--line); border-radius: 6px;
+  }
+  a { color: var(--green); }
+  .muted { color: #62726e; }
+  .error { color: var(--red); }
+
+  /* header */
+  header {
+    background: var(--green); color: #fff; padding: 0.7rem 1rem;
+    padding-top: calc(0.7rem + env(safe-area-inset-top));
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .wordmark { display: flex; align-items: center; gap: 0.6rem; }
+  .wordmark svg { flex: none; }
+  .wordmark b { font-size: 1.25rem; letter-spacing: 0.04em; }
+  .wordmark small { display: block; font-size: 0.68rem; opacity: 0.85; letter-spacing: 0.02em; }
+  header .who { margin-left: auto; font-size: 0.85rem; display: flex; gap: 0.6rem; align-items: center; }
+  header .who button { background: var(--green-dark); border-color: var(--green-dark); font-size: 0.8rem; }
+
+  nav.tabs {
+    display: flex; background: var(--green-dark); position: sticky; top: 0; z-index: 5;
+  }
+  nav.tabs button {
+    flex: 1; background: none; border: none; border-radius: 0; color: #cfe0dc;
+    padding: 0.65rem 0.4rem; font-weight: 600; border-bottom: 3px solid transparent;
+  }
+  nav.tabs button.active { color: #fff; border-bottom-color: #fff; }
+
+  main { padding: 0.9rem; max-width: 1100px; margin: 0 auto; }
+  .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.7rem; }
+  .gmaps {
+    background: #fff; color: var(--green); font-weight: 700; text-decoration: none;
+    border: 1px solid var(--green); border-radius: 8px; padding: 0.4rem 0.8rem;
+  }
+
+  .summary {
+    display: flex; gap: 1rem 1.4rem; flex-wrap: wrap; background: var(--wash);
+    border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.9rem;
+    margin-bottom: 0.8rem; font-size: 0.95rem;
+  }
+  .overflow {
+    background: #fdecea; border: 1px solid var(--red); color: #8f1717; font-weight: 600;
+    border-radius: 10px; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem;
+  }
+
+  .layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+  ol.stops { list-style: none; margin: 0; padding: 0; flex: 1 1 360px; min-width: 290px; }
+  .stop {
+    border: 1px solid var(--line); border-left: 5px solid var(--green-light);
+    border-radius: 10px; padding: 0.55rem 0.8rem; margin-bottom: 0.55rem; background: #fff;
+  }
+  .stop.anchor { border-left-color: var(--red); }
+  .stop-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .num {
+    background: var(--green); color: #fff; border-radius: 50%; width: 1.6rem; height: 1.6rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 700; flex: none;
+  }
+  .times { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .due {
+    background: var(--red); color: #fff; font-size: 0.68rem; font-weight: 800;
+    padding: 0.12rem 0.4rem; border-radius: 4px;
+  }
+  .stop-body { margin: 0.3rem 0 0.2rem; font-size: 1rem; }
+  .stop-foot { font-size: 0.85rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .stop-foot button { margin-left: auto; padding: 0.3rem 0.7rem; }
+
+  .stop-open { font-size: 0.8rem; color: var(--green-light); }
+  .car-btn { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
+  .stop-detail {
+    border-top: 1px dashed var(--line); margin-top: 0.5rem; padding-top: 0.45rem;
+    cursor: default;
+  }
+  .stop-section { margin-bottom: 0.6rem; font-size: 0.88rem; }
+  .stop-tasks, .house-list { list-style: none; margin: 0.3rem 0 0; padding: 0; }
+  .stop-tasks li { display: flex; gap: 0.5rem; align-items: center; padding: 0.18rem 0; flex-wrap: wrap; }
+  .house-row {
+    display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;
+    padding: 0.28rem 0; border-top: 1px dashed #eef2f1;
+  }
+  .house-lot { font-weight: 700; min-width: 4.2rem; }
+  .house-addr { flex: 1 1 10rem; font-size: 0.82rem; }
+  .house-row select { max-width: 15rem; font-size: 0.85rem; }
+  .stop { cursor: pointer; }
+  .chip {
+    display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 0.14rem 0.5rem;
+    border-radius: 999px; color: #fff; background: var(--green-light); white-space: nowrap;
+  }
+  .t-field-measure { background: #b4461a; }
+  .t-post-walk { background: #8f1717; }
+  .t-punch-out { background: var(--green); }
+  .t-blue-tape { background: #2563a8; }
+  .t-phase-check { background: #2bb99f; }
+  .t-warranty-t1, .t-warranty-t2-eval, .t-warranty-t2-complete { background: #6b4c9a; }
+
+  svg.map {
+    flex: 0 1 430px; min-width: 280px; width: 100%; max-width: 470px; height: auto;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--wash);
+  }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid #e8efee; }
+  th { background: var(--wash); color: var(--green-dark); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .late { color: var(--red); font-weight: 700; }
+  .ok-chip, .hold-chip {
+    font-size: 0.75rem; font-weight: 800; padding: 0.1rem 0.45rem; border-radius: 4px;
+  }
+  .ok-chip { background: #e5f4ee; color: #0f6b45; }
+  .hold-chip { background: #fdecea; color: #8f1717; }
+
+  .addform {
+    display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    background: var(--wash); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;
+  }
+  .addform label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; }
+
+  .skipped { margin-top: 1.1rem; }
+  .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #e2e9e8; list-style: none; }
+  .skipped ul { padding: 0; margin: 0.4rem 0 0; }
+
+  /* forecast */
+  .fc-day {
+    border: 1px solid var(--line); border-radius: 10px; margin-bottom: 0.7rem;
+    padding: 0.55rem 0.8rem; background: #fff;
+  }
+  .fc-day.over { border-color: var(--red); }
+  .fc-head { display: flex; gap: 0.9rem; align-items: baseline; flex-wrap: wrap; font-size: 0.92rem; }
+  .fc-head b { color: var(--green-dark); font-size: 1.02rem; }
+  .fc-body { display: flex; gap: 0.9rem; align-items: flex-start; flex-wrap: wrap; }
+  .fc-stops { list-style: none; margin: 0.45rem 0 0; padding: 0; flex: 1 1 300px; min-width: 260px; }
+  svg.fc-map { flex: 0 1 260px; min-width: 220px; max-width: 300px; margin-top: 0.45rem; }
+  .fc-stops li {
+    display: flex; gap: 0.5rem; align-items: center; padding: 0.22rem 0;
+    border-top: 1px dashed #e8efee; font-size: 0.88rem; flex-wrap: wrap;
+  }
+  .fc-time { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 4.6rem; }
+  .fc-label { flex: 1; min-width: 10rem; }
+  .fc-empty { margin: 0.4rem 0 0; }
+
+  /* duty chart: its own scroll area so the column headers stay pinned */
+  .duty-wrap { max-height: calc(100vh - 240px); overflow: auto; }
+  .duty-wrap thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--wash);
+    box-shadow: 0 1px 0 var(--line);
+  }
+  .duty-wrap td:first-child, .duty-wrap th:first-child {
+    position: sticky; left: 0; background: #fff; z-index: 1;
+  }
+  .duty-wrap thead th:first-child { z-index: 3; background: var(--wash); }
+  .duty-unset { background: #fff3c4; }  /* light yellow until someone owns it */
+  .duty-name { display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
+  .duty-tech-btn { padding: 0.15rem 0.5rem; font-size: 0.78rem; flex: none; }
+
+  /* team time-off */
+  .team-off-row td {
+    background: #fbf8f2; font-size: 0.85rem; padding-top: 0.35rem; padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--line);
+  }
+  /* pinned to the visible edge so it never disappears when the table scrolls sideways */
+  .team-off-inner {
+    position: sticky; left: 0.6rem; display: inline-flex; align-items: center;
+    gap: 0.4rem; flex-wrap: wrap; max-width: min(60rem, calc(100vw - 4rem));
+  }
+  .team-off-add { white-space: nowrap; margin-left: 0.4rem; }
+  .team-off-add input[type=date] { padding: 0.2rem 0.3rem; font-size: 0.82rem; }
+  .off-chip {
+    display: inline-flex; align-items: center; gap: 0.25rem; background: #fff4e5;
+    border: 1px solid #e0a960; color: #7a4d00; border-radius: 999px;
+    padding: 0.08rem 0.5rem; font-size: 0.78rem; margin: 0 0.3rem 0.25rem 0; white-space: nowrap;
+  }
+  .off-x { background: none; border: none; color: #7a4d00; padding: 0; font-size: 0.8rem; }
+
+  /* login */
+  .center { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--green); }
+  form.login {
+    background: #fff; border-radius: 14px; padding: 2rem 1.8rem; width: min(92vw, 24rem);
+    display: flex; flex-direction: column; gap: 0.8rem;
+  }
+  form.login h1 { margin: 0; color: var(--green); letter-spacing: 0.04em; }
+  form.login .sub { margin: -0.5rem 0 0.3rem; font-size: 0.8rem; }
+  form.login label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
+  .loginmark { display: flex; align-items: center; gap: 0.7rem; }
+</style>
+</head>
+<body>
+
+<div id="login" class="center" hidden>
+  <form class="login" onsubmit="return doLogin(event)">
+    <div class="loginmark">
+      <svg width="46" height="46" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#125952"/><path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/><rect x="27" y="40" width="10" height="8" fill="#fff"/><circle cx="14" cy="40" r="4" fill="#568c8c"/><circle cx="50" cy="40" r="4" fill="#568c8c"/><circle cx="32" cy="28" r="4" fill="#568c8c"/></svg>
+      <div>
+        <h1>AUTOBOT</h1>
+        <div class="sub muted">Carter Kitchen and Bath · part of the COAST suite</div>
+      </div>
+    </div>
+    <label>Email <input id="email" type="email" autocomplete="username" required /></label>
+    <label>Password <input id="password" type="password" autocomplete="current-password" required /></label>
+    <p id="login-error" class="error" hidden></p>
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="wordmark">
+      <svg width="34" height="34" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#194039"/><path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/><rect x="27" y="40" width="10" height="8" fill="#fff"/><circle cx="14" cy="40" r="4" fill="#568c8c"/><circle cx="50" cy="40" r="4" fill="#568c8c"/><circle cx="32" cy="28" r="4" fill="#568c8c"/></svg>
+      <div>
+        <b>AUTOBOT</b>
+        <small>Carter Kitchen and Bath</small>
+      </div>
+    </div>
+    <div class="who">
+      <span id="who"></span>
+      <button onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button id="tab-route" class="active" onclick="showTab('route')">Today's Route</button>
+    <button id="tab-forecast" onclick="showTab('forecast')">Forecast</button>
+    <button id="tab-board" onclick="showTab('board')">Visit Board</button>
+    <button id="tab-places" onclick="showTab('places')">Places</button>
+    <button id="tab-duties" onclick="showTab('duties')">Duties</button>
+    <button id="tab-team" onclick="showTab('team')">Team</button>
+  </nav>
+  <main>
+    <section id="view-route"></section>
+    <section id="view-forecast" hidden></section>
+    <section id="view-board" hidden></section>
+    <section id="view-places" hidden></section>
+    <section id="view-duties" hidden></section>
+    <section id="view-team" hidden></section>
+  </main>
+</div>
+
+<script>
+"use strict";
+const TOKEN_KEY = "autobot_token";
+const TYPE_LABELS = {
+  field_measure: "Field Measure", post_walk: "Post-Walk", punch_out: "Punch-Out",
+  blue_tape: "Blue-Tape", phase_check: "Phase Check",
+  service_t1: "Service T1", service_t2: "Service T2", service_t3: "Service T3",
+  warranty_t1: "Warranty T1", warranty_t2_eval: "Warranty T2 Eval",
+  warranty_t2_complete: "Warranty T2 Complete",
+};
+let me = null;
+let jobsCache = null;
+let workers = [];
+let workerId = "";  // whose route the Route/Forecast tabs plan; "" = default tech
+
+function setWorker(v) {
+  workerId = v;
+  if (!document.getElementById("view-route").hidden) renderRoute();
+  else if (!document.getElementById("view-forecast").hidden) renderForecast();
+}
+
+function workerSelect() {
+  const tech = workers.find((w) => w.is_tech);
+  const tag = (w) => (w.off_today ? " — OFF" : "");
+  return `<select onchange="setWorker(this.value)" title="Whose route to plan">
+    <option value="">${esc(tech ? tech.name : "Service Tech")} (truck)${tech && tech.off_today ? " — OFF" : ""}</option>
+    ${workers.filter((w) => !w.is_tech).map((w) =>
+      `<option value="${w.id}" ${String(w.id) === String(workerId) ? "selected" : ""}>${esc(w.name)}${tag(w)}</option>`).join("")}
+  </select>`;
+}
+
+const workerParam = () => (workerId ? "&worker_id=" + workerId : "");
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
+const fmtDate = (iso) => {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  return m && d ? `${m}/${d}/${String(y).slice(2)}` : iso;
+};
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const hrs = (min) => `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
+const slug = (t) => t.replace(/_/g, "-");
+
+async function api(path, options = {}) {
+  const resp = await fetch("/api" + path, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: "Bearer " + localStorage.getItem(TOKEN_KEY),
+      ...(options.headers || {}),
+    },
+  });
+  if (resp.status === 401) { signOut(); throw new Error("Session expired"); }
+  if (!resp.ok) {
+    let detail = null;
+    try { detail = (await resp.json()).detail; } catch (e) { /* not json */ }
+    throw new Error(typeof detail === "string" ? detail : "Request failed (" + resp.status + ")");
+  }
+  return resp.status === 204 ? undefined : resp.json();
+}
+
+// ---------------------------------------------------------------- auth
+
+async function doLogin(e) {
+  e.preventDefault();
+  const err = document.getElementById("login-error");
+  err.hidden = true;
+  try {
+    const body = new URLSearchParams({
+      username: document.getElementById("email").value.trim().replace(/^mailto:/i, ""),
+      password: document.getElementById("password").value.trim(),
+    });
+    const resp = await fetch("/api/auth/token", { method: "POST", body });
+    if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || "Login failed");
+    localStorage.setItem(TOKEN_KEY, (await resp.json()).access_token);
+    await boot();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.hidden = false;
+  }
+  return false;
+}
+
+function signOut() {
+  localStorage.removeItem(TOKEN_KEY);
+  me = null;
+  document.getElementById("app").hidden = true;
+  document.getElementById("login").hidden = false;
+}
+
+async function boot() {
+  if (!localStorage.getItem(TOKEN_KEY)) { signOut(); return; }
+  try {
+    me = await api("/auth/me");
+  } catch (e) { signOut(); return; }
+  if (me.role !== "service_tech" && me.role !== "admin") {
+    signOut();
+    const err = document.getElementById("login-error");
+    err.textContent = "This account doesn't have Autobot access.";
+    err.hidden = false;
+    return;
+  }
+  document.getElementById("login").hidden = true;
+  document.getElementById("app").hidden = false;
+  document.getElementById("who").textContent = me.full_name;
+  try { workers = await api("/autobot/workers"); } catch (e) { workers = []; }
+  showTab("route");
+}
+
+function showTab(tab) {
+  for (const t of ["route", "forecast", "board", "places", "duties", "team"]) {
+    document.getElementById("tab-" + t).classList.toggle("active", t === tab);
+    document.getElementById("view-" + t).hidden = t !== tab;
+  }
+  if (tab === "route") renderRoute();
+  if (tab === "forecast") renderForecast();
+  if (tab === "board") renderBoard();
+  if (tab === "places") renderPlaces();
+  if (tab === "duties") renderDuties();
+  if (tab === "team") renderTeam();
+}
+
+// ---------------------------------------------------------------- route
+
+let routeDay = todayIso();
+
+async function renderRoute(genFirst = false) {
+  const el = document.getElementById("view-route");
+  el.innerHTML = `
+    <div class="row">
+      <input type="date" id="route-day" value="${routeDay}" onchange="routeDay=this.value;renderRoute()" />
+      ${workerSelect()}
+      <button onclick="renderRoute()">Rebuild Route</button>
+      <button class="ghost" onclick="renderRoute(true)" title="Pull new visits out of CabinetTron job statuses, then route">⟳ Sync from CabinetTron</button>
+    </div>
+    <p class="muted">Building the loop…</p>`;
+  let note = "";
+  try {
+    if (genFirst) {
+      const gen = await api("/autobot/generate", { method: "POST" });
+      note = gen.total
+        ? "Pulled " + gen.total + " new visits: " +
+          Object.entries(gen.created).map(([t, n]) => n + " " + (TYPE_LABELS[t] || t)).join(", ")
+        : "No new visits — the board already matches CabinetTron.";
+    }
+    const plan = await api("/autobot/plan?day=" + routeDay + "&real_drive=true" + workerParam());
+    if (plan.time_off) {
+      el.innerHTML = `
+        <div class="row">
+          <input type="date" value="${plan.day}" onchange="routeDay=this.value;renderRoute()" />
+          ${workerSelect()}
+          <button onclick="renderRoute()">Rebuild Route</button>
+        </div>
+        <div class="overflow">🏖 ${esc(plan.worker)} is off ${fmtDate(plan.day)} — nothing planned.
+        Hard deadlines assigned to them ride the truck; see the Team tab for dates.</div>`;
+      return;
+    }
+    el.innerHTML = routeHtml(plan, note);
+  } catch (ex) {
+    el.innerHTML = `<div class="row">
+      <input type="date" value="${routeDay}" onchange="routeDay=this.value;renderRoute()" />
+      ${workerSelect()}
+      <button onclick="renderRoute()">Rebuild Route</button>
+    </div><p class="error">${esc(ex.message)}</p>`;
+  }
+}
+
+function routeHtml(plan, note) {
+  const pts = [
+    plan.depot.lat + "," + plan.depot.lon,
+    ...plan.stops.map((s) => s.lat + "," + s.lon),
+    plan.depot.lat + "," + plan.depot.lon,
+  ];
+  const gmaps = "https://www.google.com/maps/dir/" + pts.join("/");
+  const stops = plan.stops.map((s) => `
+    <li class="stop ${s.anchor ? "anchor" : ""}" onclick="toggleStop(event, ${s.visit_id}, ${s.community_id ?? "null"}, '${s.visit_type}')">
+      <div class="stop-head">
+        <span class="num">${s.order}</span>
+        <span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+        ${s.due_today ? `<span class="due">DUE ${fmtDate(s.close_date)}</span>` : ""}
+        <span class="times">${s.arrive} – ${s.depart}</span>
+      </div>
+      <div class="stop-body">${esc(s.label)}${s.houses ? ` <span class="muted">· ${s.houses} active houses</span>` : ""}</div>
+      <div class="stop-foot muted">
+        ${s.drive_min} min drive · ${s.duration_min} min on-site${s.notes ? " · " + esc(s.notes) : ""}
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}" target="_blank" rel="noreferrer">navigate</a>
+        <button class="ghost car-btn" onclick="sendToCar(${s.lat}, ${s.lon}, '${esc(s.label).replace(/'/g, "\\'")}')"
+          title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
+        <span class="stop-open">▸ tap for details</span>
+        <button onclick="doneVisit(${s.visit_id})">✓ Done</button>
+      </div>
+      <div id="stop-detail-${s.visit_id}" class="stop-detail" hidden></div>
+    </li>`).join("");
+  const skipped = plan.skipped.map((s) => `
+    <li><span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+      ${esc(s.label)} — <span class="muted">${esc(s.reason)}</span></li>`).join("");
+  return `
+    <div class="row">
+      <input type="date" value="${plan.day}" onchange="routeDay=this.value;renderRoute()" />
+      ${workerSelect()}
+      <button onclick="renderRoute()">Rebuild Route</button>
+      <button class="ghost" onclick="renderRoute(true)">⟳ Sync from CabinetTron</button>
+      ${plan.stops.length ? `<a class="gmaps" href="${gmaps}" target="_blank" rel="noreferrer">🧭 Google Maps</a>` : ""}
+    </div>
+    <p class="muted">${esc(plan.worker)}'s loop${workerId ? " — starts and ends at their place" : " — starts and ends at the shop"}</p>
+    ${note ? `<p class="muted">${esc(note)}</p>` : ""}
+    ${plan.overflow ? `<div class="overflow">⚠ This day doesn't fit — it runs past ${plan.workday_end} (back at ${plan.back}). Move something, or it's a two-truck day.</div>` : ""}
+    <div class="summary">
+      <span><b>${plan.stops.length}</b> stops</span>
+      <span>drive <b>${hrs(plan.drive_min)}</b></span>
+      <span>on-site <b>${hrs(plan.onsite_min)}</b></span>
+      <span>leave <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
+      <span class="muted">drive times: ${plan.drive_source === "osrm" ? "real" : "estimated"}</span>
+    </div>
+    <div class="layout">
+      <ol class="stops">${stops || '<p class="muted">Nothing schedulable for ' + fmtDate(plan.day) + ".</p>"}</ol>
+      ${mapSvg(plan)}
+    </div>
+    ${plan.skipped.length ? `<div class="skipped"><b>Not on this loop</b><ul>${skipped}</ul></div>` : ""}`;
+}
+
+function mapSvg(plan, mini = false) {
+  if (!plan.stops.length) return "";
+  const pts = [{ lat: plan.depot.lat, lon: plan.depot.lon },
+    ...plan.stops.map((s) => ({ lat: s.lat, lon: s.lon }))];
+  const midLat = (Math.min(...pts.map(p => p.lat)) + Math.max(...pts.map(p => p.lat))) / 2;
+  const k = Math.cos(midLat * Math.PI / 180);
+  const xs = pts.map(p => p.lon * k), ys = pts.map(p => p.lat);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const span = Math.max(maxX - minX, maxY - minY, 0.02);
+  const W = mini ? 280 : 430, H = mini ? 210 : 330, pad = mini ? 20 : 28;
+  const sx = (lon) => pad + ((lon * k - minX) + (span - (maxX - minX)) / 2) / span * (W - 2 * pad);
+  const sy = (lat) => H - pad - ((lat - minY) + (span - (maxY - minY)) / 2) / span * (H - 2 * pad);
+  const poly = [...pts, pts[0]].map((p) => sx(p.lon).toFixed(1) + "," + sy(p.lat).toFixed(1)).join(" ");
+  const r = mini ? 8 : 10, sq = mini ? 5 : 6, fs = mini ? 9 : 10;
+  const dots = plan.stops.map((s) => `
+    <circle cx="${sx(s.lon).toFixed(1)}" cy="${sy(s.lat).toFixed(1)}" r="${r}" fill="${s.anchor ? "#de2020" : "#568c8c"}"/>
+    <text x="${sx(s.lon).toFixed(1)}" y="${(sy(s.lat) + fs * 0.36).toFixed(1)}" text-anchor="middle" fill="#fff" font-size="${fs}" font-weight="700">${s.order}</text>`).join("");
+  return `<svg class="map ${mini ? "fc-map" : ""}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Route map">
+    <polyline points="${poly}" fill="none" stroke="#568c8c" stroke-width="2" stroke-dasharray="5 4"/>
+    <rect x="${(sx(plan.depot.lon) - sq).toFixed(1)}" y="${(sy(plan.depot.lat) - sq).toFixed(1)}" width="${sq * 2}" height="${sq * 2}" fill="#125952"/>
+    <text x="${(sx(plan.depot.lon) + sq + 3).toFixed(1)}" y="${(sy(plan.depot.lat) + 4).toFixed(1)}" fill="#194039" font-size="${mini ? 10 : 11}" font-weight="600">${plan.worker_id ? "Home" : "Shop"}</text>
+    ${dots}</svg>`;
+}
+
+const fmtStamp = (iso) => {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const suffix = h < 12 ? "AM" : "PM";
+  h = h % 12 || 12;
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)} ${h}:${String(d.getMinutes()).padStart(2, "0")} ${suffix}`;
+};
+
+async function toggleStop(event, visitId, communityId, visitType) {
+  if (event.target.closest("button, a, select, input")) return;  // controls do their own thing
+  const slot = document.getElementById("stop-detail-" + visitId);
+  if (!slot.hidden) { slot.hidden = true; return; }
+  if (communityId == null) { slot.innerHTML = '<p class="muted">No community on this stop.</p>'; slot.hidden = false; return; }
+  slot.hidden = false;
+  if (slot.dataset.loaded) return;
+  slot.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const d = await api("/autobot/communities/" + communityId + "/detail");
+    const tasks = d.tasks.map((t) => `
+      <li>
+        <span class="chip t-${slug(t.visit_type)}">${TYPE_LABELS[t.visit_type] || t.visit_type}</span>
+        <span class="fc-label">${esc(t.label)}</span>
+        ${t.close_date ? `<span class="muted">due ${fmtDate(t.close_date)}</span>` : ""}
+        ${t.id === visitId ? '<span class="ok-chip">this stop</span>' : ""}
+      </li>`).join("");
+    const phaseOpts = (current) => `
+      ${current ? "" : '<option value="" selected>— no phase yet —</option>'}
+      ${d.phases.map((p) => `<option value="${p.code}" ${p.code === current ? "selected" : ""}>${esc(p.label)}</option>`).join("")}`;
+    const houses = d.houses.map((h) => `
+      <li class="house-row">
+        <span class="house-lot">Lot ${esc(h.lot_number || "—")}</span>
+        <span class="muted house-addr">${esc(h.address)}${h.plan ? " · " + esc(h.plan) : ""}</span>
+        <select id="ph-${h.job_id}" onchange="logPhase(${h.job_id})">${phaseOpts(h.phase)}</select>
+        <button class="ghost" onclick="logPhase(${h.job_id})" title="Log this phase as checked today — even if unchanged">✓</button>
+        <span id="ph-msg-${h.job_id}" class="muted">${h.phase_at ? "last: " + fmtStamp(h.phase_at) : "never logged"}</span>
+      </li>`).join("");
+    slot.innerHTML = `
+      ${visitType === "phase_check" ? (d.houses.length ? `
+        <div class="stop-section"><b>Houses to phase-check</b> <span class="muted">— pick the phase (or ✓ to confirm unchanged); every click logs who + when</span>
+          <ul class="house-list">${houses}</ul>
+        </div>` : `
+        <p class="muted">No houses left to phase-check here — everything's past
+        cabinet install. This sweep will auto-cancel on the next sync.</p>`) : ""}
+      <div class="stop-section"><b>All work pending in ${esc(d.community)}</b>
+        <ul class="stop-tasks">${tasks || '<li class="muted">nothing else pending here</li>'}</ul>
+      </div>
+      ${visitType !== "phase_check" && d.houses.length ? `
+        <details class="stop-section"><summary>Phase board (${d.houses.length} houses)</summary>
+          <ul class="house-list">${houses}</ul>
+        </details>` : ""}`;
+    slot.dataset.loaded = "1";
+  } catch (ex) {
+    slot.innerHTML = `<p class="error">${esc(ex.message)}</p>`;
+  }
+}
+
+async function logPhase(jobId) {
+  const sel = document.getElementById("ph-" + jobId);
+  const msg = document.getElementById("ph-msg-" + jobId);
+  if (!sel.value) { msg.textContent = "pick a phase first"; return; }
+  msg.textContent = "logging…";
+  try {
+    const r = await api("/autobot/jobs/" + jobId + "/phase", {
+      method: "POST", body: JSON.stringify({ phase: sel.value }),
+    });
+    msg.innerHTML = `<span class="ok-chip">logged ${fmtStamp(r.noted_at)}</span>`;
+  } catch (ex) { msg.textContent = ex.message; }
+}
+
+async function sendToCar(lat, lon, label) {
+  // The Tesla app is a share target: share the pin, pick Tesla, the car navigates.
+  const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: label, text: label, url });
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return; // user closed the sheet
+    }
+  }
+  // No share sheet (desktop): copy the link so it can be pasted into the Tesla app.
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("Link copied — paste it into the Tesla app (or use your phone, where the share sheet sends it straight to the car).");
+  } catch (e) {
+    window.open(url, "_blank");
+  }
+}
+
+async function doneVisit(id) {
+  try {
+    await api("/autobot/visits/" + id, { method: "PATCH", body: JSON.stringify({ status: "done" }) });
+    renderRoute();
+  } catch (ex) { alert(ex.message); }
+}
+
+// ---------------------------------------------------------------- forecast
+
+async function renderForecast() {
+  const el = document.getElementById("view-forecast");
+  el.innerHTML = `<div class="row">${workerSelect()}</div>
+    <p class="muted">Planning the days ahead — each day assumes the
+    day before got done, so this is what the rest of the schedule looks like…</p>`;
+  try {
+    const fc = await api("/autobot/forecast?days=10&real_drive=true" + workerParam());
+    const dayName = (iso) => {
+      const [y, m, d] = iso.split("-").map(Number);
+      return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(y, m - 1, d).getDay()];
+    };
+    const days = fc.days.map((p) => `
+      <div class="fc-day ${p.overflow ? "over" : ""}">
+        <div class="fc-head">
+          <b>${dayName(p.day)} ${fmtDate(p.day)}</b>
+          <span>${p.stops.length} stop${p.stops.length === 1 ? "" : "s"}</span>
+          <span>drive ${hrs(p.drive_min)}</span>
+          <span>on-site ${hrs(p.onsite_min)}</span>
+          <span>back ${p.back}</span>
+          ${p.overflow ? '<span class="due">OVER</span>' : ""}
+        </div>
+        ${p.time_off ? '<p class="muted fc-empty">🏖 Off this day.</p>'
+        : p.stops.length ? `<div class="fc-body">
+          <ol class="fc-stops">${p.stops.map((s) => `
+          <li>
+            <span class="fc-time">${s.arrive}</span>
+            <span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+            <span class="fc-label">${esc(s.label)}</span>
+            ${s.due_today ? `<span class="due">DUE</span>` : ""}
+          </li>`).join("")}</ol>
+          ${mapSvg(p, true)}
+        </div>` : '<p class="muted fc-empty">Nothing schedulable this day.</p>'}
+      </div>`).join("");
+    const leftover = fc.leftover.length ? `
+      <div class="skipped"><b>Still not scheduled after ${fc.days.length} workdays</b>
+      <ul>${fc.leftover.map((s) => `
+        <li><span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+        ${esc(s.label)} — <span class="muted">${esc(s.reason)}</span></li>`).join("")}</ul></div>` : "";
+    const who = fc.days.length ? fc.days[0].worker : "Service Tech";
+    el.innerHTML = `
+      <div class="row">${workerSelect()}</div>
+      <div class="summary">
+        <span><b>${esc(who)}</b>: <b>${fc.total_stops}</b> visits across <b>${fc.days.length}</b> workday${fc.days.length === 1 ? "" : "s"}</span>
+        <span class="muted">weekends skipped · each day assumes the previous day got done</span>
+      </div>
+      ${days}${leftover}`;
+  } catch (ex) {
+    el.innerHTML = `<p class="error">${esc(ex.message)}</p>
+      <button onclick="renderForecast()">Retry</button>`;
+  }
+}
+
+// ---------------------------------------------------------------- board
+
+let boardStatus = "pending", boardType = "";
+
+async function renderBoard() {
+  const el = document.getElementById("view-board");
+  const typeOpts = Object.entries(TYPE_LABELS)
+    .map(([k, v]) => `<option value="${k}" ${k === boardType ? "selected" : ""}>${v}</option>`).join("");
+  el.innerHTML = `
+    <div class="row">
+      <select onchange="boardStatus=this.value;renderBoard()">
+        ${["pending", "done", "canceled", "all"].map((s) =>
+          `<option value="${s}" ${s === boardStatus ? "selected" : ""}>${s[0].toUpperCase() + s.slice(1)}</option>`).join("")}
+      </select>
+      <select onchange="boardType=this.value;renderBoard()">
+        <option value="">All types</option>${typeOpts}
+      </select>
+      <button class="ghost" onclick="toggleAdd()">+ Add Visit</button>
+      <span id="board-count" class="muted"></span>
+    </div>
+    <div id="addform-slot"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th>Job / Community</th><th>Open</th><th>Due</th><th>Min</th><th>Parts</th><th>Pin</th><th>Who</th><th></th></tr></thead>
+      <tbody id="board-rows"><tr><td colspan="9" class="muted">Loading…</td></tr></tbody>
+    </table></div>`;
+  try {
+    const params = new URLSearchParams({ status_filter: boardStatus });
+    if (boardType) params.set("visit_type", boardType);
+    const visits = await api("/autobot/visits?" + params);
+    document.getElementById("board-count").textContent = visits.length + " visits";
+    document.getElementById("board-rows").innerHTML = visits.map((v) => `
+      <tr>
+        <td><span class="chip t-${slug(v.visit_type)}">${TYPE_LABELS[v.visit_type] || v.visit_type}</span></td>
+        <td>${esc(v.label)}</td>
+        <td>${fmtDate(v.open_date)}</td>
+        <td class="${v.close_date && v.close_date <= todayIso() && v.status === "pending" ? "late" : ""}">${fmtDate(v.close_date)}</td>
+        <td>${v.duration_min}</td>
+        <td title="${esc(v.parts_note || "")}">${v.service_request_id
+          ? `<span class="${v.parts_ready ? "ok-chip" : "hold-chip"}">${v.parts_ready ? "ready" : "hold"}</span>` : "—"}</td>
+        <td>${v.has_location ? "📍" : '<span class="late">no pin</span>'}</td>
+        <td><select onchange="assignVisit(${v.id}, this.value)" title="Reassign — e.g. when the tech can't get there">
+          <option value="">Tech</option>
+          ${workers.filter((w) => !w.is_tech).map((w) =>
+            `<option value="${w.id}" ${v.assigned_to === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}
+        </select></td>
+        <td>${v.status === "pending"
+          ? `<button onclick="actVisit(${v.id},'done')" title="Mark completed">✓</button>
+             <button class="ghost" onclick="actVisit(${v.id},'canceled')" title="Cancel">✕</button>`
+          : `<button class="ghost" onclick="actVisit(${v.id},'pending')" title="Reopen">↩</button>`}</td>
+      </tr>`).join("") || '<tr><td colspan="9" class="muted">No visits — hit Sync on the Route tab.</td></tr>';
+  } catch (ex) {
+    document.getElementById("board-rows").innerHTML =
+      `<tr><td colspan="9" class="error">${esc(ex.message)}</td></tr>`;
+  }
+}
+
+async function assignVisit(id, workerVal) {
+  try {
+    await api("/autobot/visits/" + id, {
+      method: "PATCH",
+      body: JSON.stringify({ assigned_to: workerVal ? Number(workerVal) : null }),
+    });
+  } catch (ex) { alert(ex.message); renderBoard(); }
+}
+
+async function actVisit(id, status) {
+  try {
+    await api("/autobot/visits/" + id, { method: "PATCH", body: JSON.stringify({ status }) });
+    renderBoard();
+  } catch (ex) { alert(ex.message); }
+}
+
+async function toggleAdd() {
+  const slot = document.getElementById("addform-slot");
+  if (slot.innerHTML) { slot.innerHTML = ""; return; }
+  if (!jobsCache) jobsCache = await api("/autobot/jobs");
+  const typeOpts = Object.entries(TYPE_LABELS)
+    .map(([k, v]) => `<option value="${k}" ${k === "service_t1" ? "selected" : ""}>${v}</option>`).join("");
+  slot.innerHTML = `
+    <form class="addform" onsubmit="return addVisit(event)">
+      <select id="add-type">${typeOpts}</select>
+      <input id="add-job" list="job-codes" placeholder="Job code" required />
+      <datalist id="job-codes">${jobsCache.filter((j) => j.job_code)
+        .map((j) => `<option value="${esc(j.job_code)}">${esc(j.address)}</option>`).join("")}</datalist>
+      <label>open <input id="add-open" type="date" value="${todayIso()}" /></label>
+      <label>due <input id="add-close" type="date" /></label>
+      <input id="add-min" type="number" min="1" placeholder="min" style="width:4.5rem" />
+      <input id="add-notes" placeholder="notes" />
+      <button type="submit">Add</button>
+      <span id="add-error" class="error"></span>
+    </form>`;
+}
+
+async function addVisit(e) {
+  e.preventDefault();
+  const code = document.getElementById("add-job").value.trim().toLowerCase();
+  const job = jobsCache.find((j) => (j.job_code || "").toLowerCase() === code);
+  const err = document.getElementById("add-error");
+  if (!job) { err.textContent = "Pick a job by its code"; return false; }
+  try {
+    await api("/autobot/visits", { method: "POST", body: JSON.stringify({
+      visit_type: document.getElementById("add-type").value,
+      job_id: job.id,
+      open_date: document.getElementById("add-open").value || null,
+      close_date: document.getElementById("add-close").value || null,
+      duration_min: document.getElementById("add-min").value ? Number(document.getElementById("add-min").value) : null,
+      notes: document.getElementById("add-notes").value || null,
+    })});
+    document.getElementById("addform-slot").innerHTML = "";
+    renderBoard();
+  } catch (ex) { err.textContent = ex.message; }
+  return false;
+}
+
+// ---------------------------------------------------------------- places
+
+async function renderPlaces() {
+  const el = document.getElementById("view-places");
+  el.innerHTML = `
+    <p class="muted">Every community needs a pin — one pin covers every lot in it.
+    “Find” looks it up; check the 📍 link, then Save. Paste exact coordinates from
+    Google Maps (right-click a spot → the numbers) to tighten any pin.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Community</th><th>Builder</th><th>Houses</th><th>Sweep due</th><th>Pin</th><th></th></tr></thead>
+      <tbody id="place-rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+    </table></div>`;
+  try {
+    const places = await api("/autobot/places");
+    document.getElementById("place-rows").innerHTML = places.map((p, i) => `
+      <tr data-cid="${p.community_id}">
+        <td>${esc(p.name)}<div class="muted" style="font-size:0.8rem">${esc(p.market || "")}</div></td>
+        <td>${esc(p.account_name)}</td>
+        <td>${p.active_houses}</td>
+        <td class="${p.phase_check_due && p.phase_check_due <= todayIso() ? "late" : ""}">${fmtDate(p.phase_check_due)}</td>
+        <td style="white-space:nowrap">
+          <input id="lat-${p.community_id}" value="${p.lat ?? ""}" placeholder="lat" style="width:6.2rem" />
+          <input id="lon-${p.community_id}" value="${p.lon ?? ""}" placeholder="lon" style="width:6.8rem" />
+          <a id="pin-${p.community_id}" href="${p.lat != null ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}` : "#"}" target="_blank" rel="noreferrer">📍</a>
+        </td>
+        <td style="white-space:nowrap">
+          <button class="ghost" onclick="findPlace(${p.community_id}, '${esc(p.name).replace(/'/g, "\\'")}', '${esc(p.market || "").replace(/'/g, "\\'")}')">Find</button>
+          <button onclick="savePlace(${p.community_id})">Save</button>
+          <span id="msg-${p.community_id}" class="muted"></span>
+        </td>
+      </tr>`).join("");
+  } catch (ex) {
+    document.getElementById("place-rows").innerHTML =
+      `<tr><td colspan="6" class="error">${esc(ex.message)}</td></tr>`;
+  }
+}
+
+async function findPlace(cid, name, market) {
+  const msg = document.getElementById("msg-" + cid);
+  msg.textContent = "…";
+  try {
+    let found = await geocodeAddress(name + ", " + (market || "Alabama"));
+    if (!found && market) found = await geocodeAddress(market);
+    if (!found) { msg.textContent = "not found — paste coords from Google Maps"; return; }
+    document.getElementById("lat-" + cid).value = Number(found.lat).toFixed(6);
+    document.getElementById("lon-" + cid).value = Number(found.lon).toFixed(6);
+    msg.textContent = found.level === "city" ? "city-level — tighten if needed" : "";
+  } catch (e) { msg.textContent = "lookup failed"; }
+}
+
+async function savePlace(cid) {
+  const msg = document.getElementById("msg-" + cid);
+  const lat = Number(document.getElementById("lat-" + cid).value);
+  const lon = Number(document.getElementById("lon-" + cid).value);
+  if (!lat || !lon) { msg.textContent = "need both numbers"; return; }
+  try {
+    await api("/autobot/communities/" + cid + "/location", {
+      method: "PATCH", body: JSON.stringify({ lat, lon }),
+    });
+    msg.textContent = "saved";
+    document.getElementById("pin-" + cid).href = "https://www.google.com/maps/search/?api=1&query=" + lat + "," + lon;
+  } catch (ex) { msg.textContent = ex.message; }
+}
+
+// ---------------------------------------------------------------- duties
+
+const DUTY_LABELS = {
+  field_measure: "Measure", post_walk: "Post-Walk", punch_out: "Punch",
+  blue_tape: "Blue-Tape", phase_check: "Phase", service: "Service",
+};
+
+let dutyList = [];
+
+async function renderDuties() {
+  const el = document.getElementById("view-duties");
+  el.innerHTML = `
+    <p class="muted">Who owns each task, community by community — this is how the
+    national-account territory really splits. A <span class="duty-unset" style="padding:0 0.4rem">yellow</span>
+    cell is unassigned (the automatic rules run it); pick a name — or hit a community's
+    <b>Tech</b> button to give the truck everything there. Assignments reassign the
+    community's pending visits right away. Only communities with jobs tracking
+    through blue-tape are listed.</p>
+    <div class="table-wrap duty-wrap"><table id="duty-table">
+      <tbody><tr><td class="muted">Loading…</td></tr></tbody>
+    </table></div>`;
+  try {
+    const chart = await api("/autobot/duties");
+    dutyList = chart.duties;
+    // National builders only offer people cleared for national work.
+    const opts = (current, national) => `
+      <option value="rules" ${current === "rules" ? "selected" : ""}></option>
+      <option value="" ${current === null ? "selected" : ""}>Tech</option>
+      ${workers.filter((w) => !w.is_tech && (!national || w.national_ok || w.id === current)).map((w) =>
+        `<option value="${w.id}" ${current === w.id ? "selected" : ""}>${esc(w.name)}${w.off_today ? " (off)" : ""}</option>`).join("")}`;
+    document.getElementById("duty-table").innerHTML = `
+      <thead><tr><th>Community</th><th>Houses</th>${chart.duties.map((d) =>
+        `<th>${DUTY_LABELS[d] || d}</th>`).join("")}</tr></thead>
+      <tbody>${chart.rows.map((r) => `
+        <tr>
+          <td>
+            <div class="duty-name">
+              <span>${esc(r.name)}<div class="muted" style="font-size:0.78rem">${esc(r.account_name)}</div></span>
+              <button class="ghost duty-tech-btn" onclick="techAll(${r.community_id}, this)"
+                title="Assign every task in ${esc(r.name)} to the tech">Tech</button>
+            </div>
+          </td>
+          <td>${r.active_houses}</td>
+          ${chart.duties.map((d) => `
+            <td><select class="${r.duties[d] === "rules" ? "duty-unset" : ""}"
+              onchange="setDuty(${r.community_id}, '${d}', this)">
+              ${opts(r.duties[d], r.national)}
+            </select></td>`).join("")}
+        </tr>`).join("")}</tbody>`;
+  } catch (ex) {
+    el.innerHTML += `<p class="error">${esc(ex.message)}</p>`;
+  }
+}
+
+async function techAll(communityId, btn) {
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    for (const d of dutyList) {
+      await api("/autobot/duties", { method: "PUT", body: JSON.stringify({
+        community_id: communityId, duty: d, worker_id: null, clear: false,
+      })});
+    }
+    const row = btn.closest("tr");
+    row.querySelectorAll("select").forEach((s) => {
+      s.value = "";
+      s.classList.remove("duty-unset");
+    });
+    btn.textContent = "✓";
+    setTimeout(() => { btn.textContent = "Tech"; btn.disabled = false; }, 1200);
+  } catch (ex) {
+    alert(ex.message);
+    renderDuties();
+  }
+}
+
+async function setDuty(communityId, duty, sel) {
+  const v = sel.value;
+  try {
+    const result = await api("/autobot/duties", { method: "PUT", body: JSON.stringify({
+      community_id: communityId,
+      duty,
+      worker_id: v && v !== "rules" ? Number(v) : null,
+      clear: v === "rules",
+    })});
+    sel.classList.toggle("duty-unset", v === "rules");
+    sel.style.background = "#e5f4ee";
+    setTimeout(() => { sel.style.background = ""; }, 900);
+    if (result.reassigned) console.log(duty, "reassigned", result.reassigned);
+  } catch (ex) {
+    alert(ex.message);
+    renderDuties();
+  }
+}
+
+// ---------------------------------------------------------------- team
+
+async function renderTeam() {
+  const el = document.getElementById("view-team");
+  el.innerHTML = `
+    <p class="muted">Who can be sent where. <b>Sold-it rule:</b> on local jobs, whoever
+    matches "sales match" gets the measure and post-walk. <b>Territory rule:</b> visits
+    inside someone's radius go to them. Everything else rides the truck, and any visit
+    can be handed off on the Visit Board.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Truck</th><th>Sales match</th><th>Home address</th><th>Radius mi</th><th title="Can take DR Horton / Century work">Nationals</th><th>Active</th><th></th></tr></thead>
+      <tbody id="team-rows"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+    </table></div>
+    <form class="addform" onsubmit="return addWorker(event)">
+      <input id="tw-name" placeholder="Name" required />
+      <input id="tw-town" placeholder="Home address (e.g. 123 Main St, Chipley, FL)" style="width:18rem" />
+      <input id="tw-match" placeholder="Sales match (optional)" />
+      <button type="submit">Add person</button>
+      <span id="tw-error" class="error"></span>
+    </form>`;
+  try {
+    const team = await api("/autobot/workers?include_inactive=true");
+    const enterSaves = (id) =>
+      `onkeydown="if(event.key==='Enter'){event.preventDefault();saveWorker(${id})}"`;
+    document.getElementById("team-rows").innerHTML = team.map((w) => `
+      <tr>
+        <td><input id="w-name-${w.id}" value="${esc(w.name)}" style="width:9rem" ${enterSaves(w.id)} />
+          ${w.off_today ? '<span class="due">OFF</span>' : ""}</td>
+        <td>${w.is_tech ? "🚚" : ""}</td>
+        <td><input id="w-match-${w.id}" value="${esc(w.sales_match || "")}" style="width:5.5rem" ${enterSaves(w.id)} /></td>
+        <td>
+          <input id="w-town-${w.id}" value="${esc(w.home_town || "")}" data-orig="${esc(w.home_town || "")}"
+            placeholder="street address or town" style="width:15rem" ${enterSaves(w.id)} />
+          <input id="w-lat-${w.id}" type="hidden" value="${w.lat ?? ""}" />
+          <input id="w-lon-${w.id}" type="hidden" value="${w.lon ?? ""}" />
+          <a id="w-pin-${w.id}" ${w.lat != null ? `href="https://www.google.com/maps/search/?api=1&query=${w.lat},${w.lon}"` : "hidden"}
+            target="_blank" rel="noreferrer" title="Check the pin on Google Maps">📍</a>
+        </td>
+        <td><input id="w-rad-${w.id}" value="${w.radius_miles}" style="width:4rem" ${enterSaves(w.id)} /></td>
+        <td><input id="w-nat-${w.id}" type="checkbox" ${w.national_ok ? "checked" : ""} onchange="saveWorker(${w.id})" /></td>
+        <td><input id="w-act-${w.id}" type="checkbox" ${w.active ? "checked" : ""} onchange="saveWorker(${w.id})" /></td>
+        <td style="white-space:nowrap">
+          <button class="ghost" onclick="findWorker(${w.id})" type="button">Find</button>
+          <button onclick="saveWorker(${w.id})" type="button">Save</button>
+          <span id="w-msg-${w.id}" class="muted"></span>
+        </td>
+      </tr>
+      <tr class="team-off-row">
+        <td colspan="8">
+          <div class="team-off-inner">
+            <span>🏖 <b>${esc(w.name.split(" ")[0])} time off:</b></span>
+            ${w.time_off.map((t) => `
+              <span class="off-chip">${fmtDate(t.start_date)}–${fmtDate(t.end_date)}${t.note ? " · " + esc(t.note) : ""}
+                <button class="off-x" onclick="dropTimeOff(${t.id})" title="Remove" type="button">✕</button>
+              </span>`).join("") || '<span class="muted">none scheduled</span>'}
+            <span class="team-off-add">
+              <input id="w-off1-${w.id}" type="date" title="First day off" />
+              <input id="w-off2-${w.id}" type="date" title="Last day off (blank = one day)" />
+              <button class="ghost" onclick="addTimeOff(${w.id})" type="button">+ Off</button>
+            </span>
+          </div>
+        </td>
+      </tr>`).join("");
+  } catch (ex) {
+    document.getElementById("team-rows").innerHTML =
+      `<tr><td colspan="8" class="error">${esc(ex.message)}</td></tr>`;
+  }
+}
+
+async function addTimeOff(workerId) {
+  const start = document.getElementById("w-off1-" + workerId).value;
+  const end = document.getElementById("w-off2-" + workerId).value || start;
+  if (!start) { alert("Pick at least a start date"); return; }
+  try {
+    await api("/autobot/timeoff", { method: "POST", body: JSON.stringify({
+      worker_id: workerId, start_date: start, end_date: end,
+    })});
+    workers = await api("/autobot/workers");
+    renderTeam();
+  } catch (ex) { alert(ex.message); }
+}
+
+async function dropTimeOff(id) {
+  try {
+    await api("/autobot/timeoff/" + id, { method: "DELETE" });
+    workers = await api("/autobot/workers");
+    renderTeam();
+  } catch (ex) { alert(ex.message); }
+}
+
+// Server-side lookup: Google Maps when the key is configured, OSM fallback.
+async function geocodeAddress(q) {
+  try {
+    return await api("/autobot/geocode?q=" + encodeURIComponent(q));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function findWorker(id) {
+  const msg = document.getElementById("w-msg-" + id);
+  const town = document.getElementById("w-town-" + id).value.trim();
+  if (!town) { msg.textContent = "enter an address first"; return; }
+  msg.textContent = "…";
+  try {
+    const found = await geocodeAddress(town);
+    if (!found) { msg.textContent = "not found"; return; }
+    document.getElementById("w-lat-" + id).value = Number(found.lat).toFixed(6);
+    document.getElementById("w-lon-" + id).value = Number(found.lon).toFixed(6);
+    msg.textContent = found.level === "city" ? "city-level pin" : "";
+  } catch (e) { msg.textContent = "lookup failed"; }
+}
+
+async function saveWorker(id) {
+  const msg = document.getElementById("w-msg-" + id);
+  const val = (f) => document.getElementById("w-" + f + "-" + id).value.trim();
+  const townEl = document.getElementById("w-town-" + id);
+  const town = townEl.value.trim();
+  const latEl = document.getElementById("w-lat-" + id);
+  const lonEl = document.getElementById("w-lon-" + id);
+  let pinNote = "";
+  try {
+    // Address changed (or no pin yet) → recalculate lat/lon before saving.
+    const changed = town !== (townEl.dataset.orig || "").trim();
+    if (town && (changed || !latEl.value.trim() || !lonEl.value.trim())) {
+      msg.textContent = "locating…";
+      const found = await geocodeAddress(town);
+      if (found) {
+        latEl.value = Number(found.lat).toFixed(6);
+        lonEl.value = Number(found.lon).toFixed(6);
+        pinNote = found.level === "city" ? " · city-level pin" : " · pin updated";
+      } else {
+        pinNote = " · address not found, pin unchanged";
+      }
+    }
+    await api("/autobot/workers/" + id, { method: "PATCH", body: JSON.stringify({
+      name: val("name"),
+      sales_match: val("match") || null,
+      home_town: town || null,
+      lat: val("lat") ? Number(val("lat")) : null,
+      lon: val("lon") ? Number(val("lon")) : null,
+      radius_miles: Number(val("rad")) || 30,
+      national_ok: document.getElementById("w-nat-" + id).checked,
+      active: document.getElementById("w-act-" + id).checked,
+    })});
+    townEl.dataset.orig = town;
+    const pinLink = document.getElementById("w-pin-" + id);
+    if (pinLink && latEl.value && lonEl.value) {
+      pinLink.href = "https://www.google.com/maps/search/?api=1&query=" + latEl.value + "," + lonEl.value;
+      pinLink.hidden = false;
+    }
+    workers = await api("/autobot/workers");
+    msg.textContent = "saved" + pinNote;
+    setTimeout(() => { if (msg.textContent.startsWith("saved")) msg.textContent = ""; }, 4000);
+  } catch (ex) { msg.textContent = ex.message; }
+}
+
+async function addWorker(e) {
+  e.preventDefault();
+  const err = document.getElementById("tw-error");
+  const town = document.getElementById("tw-town").value.trim();
+  try {
+    let lat = null, lon = null;
+    if (town) {
+      err.textContent = "";
+      const found = await geocodeAddress(town);
+      if (found) { lat = Number(found.lat); lon = Number(found.lon); }
+    }
+    await api("/autobot/workers", { method: "POST", body: JSON.stringify({
+      name: document.getElementById("tw-name").value.trim(),
+      home_town: town || null,
+      sales_match: document.getElementById("tw-match").value.trim() || null,
+      lat, lon,
+    })});
+    workers = await api("/autobot/workers");
+    renderTeam();
+  } catch (ex) { err.textContent = ex.message; }
+  return false;
+}
+
+// ---------------------------------------------------------------- start
+
+// The server auto-syncs new visits from CabinetTron every 10 minutes; keep the
+// route view current on the same cadence (only the passive view — never a form).
+setInterval(() => {
+  if (me && !document.getElementById("view-route").hidden) renderRoute();
+}, 10 * 60 * 1000);
+
+if (localStorage.getItem(TOKEN_KEY)) boot();
+else document.getElementById("login").hidden = false;
+</script>
+</body>
+</html>

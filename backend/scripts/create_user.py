@@ -1,7 +1,7 @@
 """Create a user from the command line (bootstrap the first admin).
 
 Usage (from backend/):
-    python -m scripts.create_user admin@townsendbuildingsupply.com "Brian Scobey" admin
+    python -m scripts.create_user admin@carterlumber.com "Brian Scobey" admin
 Prompts for the password so it never lands in shell history.
 """
 

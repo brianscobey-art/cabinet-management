@@ -65,7 +65,7 @@ def test_generate_everluxe_order(client, db, tmp_path):
     path = next(Path(tmp_path).glob("*.xlsx"))
     ws = load_workbook(path).active
     assert ws["B3"].value == "PO-1001"
-    assert ws["B9"].value == "Townsend Dothan"
+    assert ws["B9"].value == "Carter Lumber Dothan"
     assert ws["E14"].value == "Shaker"      # door style pulled from room selection
     assert ws["E15"].value == "Chestnut"    # door/color from finish
     # line row: qty, sku, net each (461.75*0.217=100.20), total (200.40)

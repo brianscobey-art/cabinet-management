@@ -1,9 +1,15 @@
-"""Shared API dependencies: read = any active user, write = sales/admin for Phase 1."""
+"""Shared API dependencies: read = any office user, write = sales/admin for Phase 1.
 
-from app.auth.deps import get_current_user, require_roles
+The service_tech role is Autobot-only: it never passes read_access, so the whole
+office API stays closed to it. Autobot's router carries its own role guards.
+"""
+
+from app.auth.deps import require_roles
 from app.models import Role
 
-read_access = get_current_user
+read_access = require_roles(
+    Role.sales, Role.field, Role.installer_coordinator, Role.inspector, Role.admin
+)
 write_access = require_roles(Role.sales, Role.admin)
 
 # National builders (DR Horton divisions, Century); everything else is local/retail.

@@ -1,6 +1,6 @@
 # Carter Kitchen and Bath
 
-One system for the entire cabinet lifecycle at Carter Lumber (formerly Townsend Building Supply):
+One system for the entire cabinet lifecycle at Carter Lumber:
 **quote → field measure → order → delivery → install → quality → punch → warranty/service**,
 plus community phase tracking and a management dashboard.
 
@@ -23,7 +23,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 alembic upgrade head
-python -m scripts.create_user you@townsendbuildingsupply.com "Your Name" admin
+python -m scripts.create_user you@carterlumber.com "Your Name" admin
 uvicorn app.main:app --reload
 
 # 2. Frontend (second terminal)

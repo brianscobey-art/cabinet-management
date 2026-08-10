@@ -35,7 +35,7 @@ from app.models import (
     RoomSelection,
 )
 
-DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@TownsendBuildingSupply.com")
+DEFAULT_SALES_CONTACT = ("Brian Scobey", "850-890-0482", "Brian.Scobey@CarterLumber.com")
 
 CODE = re.compile(r"^[A-Z]{2,}[A-Z0-9]*(-[A-Z0-9.]+)?$")
 PLACEHOLDER_CONTACTS = {"TBD", "DRH Superintendent", "Century Superintendent"}

@@ -13,6 +13,9 @@ class Role(str, enum.Enum):
     installer_coordinator = "installer_coordinator"
     inspector = "inspector"
     admin = "admin"
+    # Autobot-only: the cabinet service tech. Sees the standalone /autobot app
+    # and nothing else — no CabinetTron pages, no office API.
+    service_tech = "service_tech"
 
 
 class User(Base):

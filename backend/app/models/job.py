@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -50,6 +50,9 @@ class Job(Base):
     )
     lot_number: Mapped[str | None] = mapped_column(String(32), default=None)
     address: Mapped[str] = mapped_column(String(500))
+    # House pin for Autobot routing — beats the community pin when set.
+    lat: Mapped[float | None] = mapped_column(Float, default=None)
+    lon: Mapped[float | None] = mapped_column(Float, default=None)
     job_type: Mapped[JobType] = mapped_column(Enum(JobType, native_enum=False, length=16))
     plan: Mapped[str | None] = mapped_column(String(100), default=None)  # house plan, e.g. "DRH1 Madison STD"
     status: Mapped[JobStatus] = mapped_column(

@@ -53,6 +53,10 @@ class ServicePart(Base):
     due_date: Mapped[date | None] = mapped_column(Date, default=None)
     qty: Mapped[int] = mapped_column(Integer, default=1)
     notes: Mapped[str | None] = mapped_column(String(300), default=None)
+    # Autobot parts gating: a trade-blocking part (missing cabinet holding up counters)
+    # dispatches the visit the moment it's in; cosmetic leftovers spawn a follow-up.
+    trade_blocking: Mapped[bool] = mapped_column(Boolean, default=False)
+    received: Mapped[bool] = mapped_column(Boolean, default=False)
 
     request: Mapped["ServiceRequest"] = relationship(back_populates="parts")
 
