@@ -1,6 +1,6 @@
 /** The COAST suite launcher — lands here after login. Five apps, one operation:
  * Cabinetron (jobs), Optimus (ordering), Autobot (service routing), Sterling
- * (pricing, coming), Tailgate (installer scheduling, coming). */
+ * (pricing — the standalone Sterling app on :8010), Tailgate (coming). */
 
 const TILE = 64; // icon design space
 
@@ -87,11 +87,13 @@ const APPS = [
     live: true,
   },
   {
+    // Sterling runs as its own service (Excel-backed pricing app) on :8010 —
+    // same host as CabinetTron, so the tile works on localhost and Tailscale.
     name: "Sterling",
     tag: "Pricing",
-    href: null,
+    href: `http://${window.location.hostname}:8010`,
     icon: <SterlingIcon />,
-    live: false,
+    live: true,
   },
   {
     name: "Tailgate",
