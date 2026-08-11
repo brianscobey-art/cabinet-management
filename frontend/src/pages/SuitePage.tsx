@@ -87,11 +87,14 @@ const APPS = [
     live: true,
   },
   {
-    // Sterling runs as its own service (Excel-backed pricing app) on :8010 —
-    // same host as CabinetTron, so the tile works on localhost and Tailscale.
+    // Sterling runs as its own service (Excel-backed pricing app): the Render
+    // app when CabinetTron itself is on Render, else same host on :8010
+    // (localhost / Tailscale pilot).
     name: "Sterling",
     tag: "Pricing",
-    href: `http://${window.location.hostname}:8010`,
+    href: window.location.hostname.endsWith("onrender.com")
+      ? "https://carter-sterling.onrender.com"
+      : `http://${window.location.hostname}:8010`,
     icon: <SterlingIcon />,
     live: true,
   },
