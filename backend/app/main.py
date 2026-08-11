@@ -148,6 +148,11 @@ app.include_router(fieldmeasure_router)
 app.include_router(service_router)
 app.include_router(autobot_router)
 
+# Sterling (COAST pricing) — self-contained app at /sterling, own Excel-backed store
+from app.sterling_app import mount as _mount_sterling  # noqa: E402
+
+_mount_sterling(app)
+
 
 @app.get("/health", tags=["system"])
 def health():

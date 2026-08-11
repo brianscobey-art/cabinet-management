@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       workbox: {
         // Server-rendered pages outside the SPA — never fall back to index.html
-        navigateFallbackDenylist: [/^\/ordering-platform/, /^\/autobot/, /^\/api\//, /^\/docs/],
+        navigateFallbackDenylist: [/^\/ordering-platform/, /^\/autobot/, /^\/sterling/, /^\/api\//, /^\/docs/],
       },
       manifest: {
         name: "Carter Kitchen and Bath",
