@@ -38,12 +38,12 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "The five apps (what COAST means)",
-        a: "Cabinetron — the cabinet database (jobs, POs, houses, communities, reports). Optimus — ordering, trims a priced job to exactly what a house needs. Autobot — service-tech scheduling & routing. Sterling (pricing) and Tailgate (installer scheduling) are coming soon.",
+        a: "CabinetTron — the cabinet database (jobs, POs, houses, communities, reports). Optimus — ordering, trims a priced job to exactly what a house needs. Autobot — service-tech scheduling & routing. Sterling (pricing) and Tailgate (installer scheduling) are coming soon.",
       },
     ],
   },
   {
-    title: "Jobs (Cabinetron)",
+    title: "Jobs (CabinetTron)",
     topics: [
       {
         q: "Find a job",
@@ -77,7 +77,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Optimus (the Platform tab)",
-        a: "Optimus opens the Ordering Platform — it takes a priced job and trims it to exactly what a house needs. Statuses sync both ways with Cabinetron, so a change in one shows up in the other.",
+        a: "Optimus opens the Ordering Platform — it takes a priced job and trims it to exactly what a house needs. Statuses sync both ways with CabinetTron, so a change in one shows up in the other.",
       },
     ],
   },

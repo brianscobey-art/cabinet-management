@@ -35,7 +35,7 @@ export const CHANGELOG: ChangeEntry[] = [
     date: "8/10/26",
     title: "All-apps launcher everywhere",
     detail:
-      "The ⠿ launcher and the Carter logo now take you back to the COAST menu from Cabinetron, Optimus, and Autobot. The COAST menu is your landing page when you sign in.",
+      "The ⠿ launcher and the Carter logo now take you back to the COAST menu from CabinetTron, Optimus, and Autobot. The COAST menu is your landing page when you sign in.",
   },
   {
     date: "8/10/26",

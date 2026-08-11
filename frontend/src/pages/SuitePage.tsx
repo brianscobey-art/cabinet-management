@@ -1,10 +1,10 @@
 /** The COAST suite launcher — lands here after login. Five apps, one operation:
- * Cabinetron (jobs), Optimus (ordering), Autobot (service routing), Sterling
+ * CabinetTron (jobs), Optimus (ordering), Autobot (service routing), Sterling
  * (pricing — the standalone Sterling app on :8010), Tailgate (coming). */
 
 const TILE = 64; // icon design space
 
-function CabinetronIcon() {
+function CabinetTronIcon() {
   return (
     <svg viewBox={`0 0 ${TILE} ${TILE}`}>
       <rect width="64" height="64" rx="14" fill="#125952" />
@@ -66,10 +66,10 @@ function TailgateIcon() {
 
 const APPS = [
   {
-    name: "Cabinetron",
+    name: "CabinetTron",
     tag: "The cabinet database — jobs, POs, houses, communities",
     href: "#/jobs",
-    icon: <CabinetronIcon />,
+    icon: <CabinetTronIcon />,
     live: true,
   },
   {
