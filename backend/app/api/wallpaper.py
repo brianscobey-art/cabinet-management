@@ -19,6 +19,36 @@ router = APIRouter(prefix="/wallpaper", tags=["wallpaper"])
 FEED_KEY = os.getenv("WALLPAPER_FEED_KEY", "ckb-wall-4e19c7d2a6")
 
 
+@router.get("/upcoming")
+def wallpaper_upcoming(key: str = Query(...), db: Session = Depends(get_db)):
+    """Upcoming installs, today through +30 days (active jobs only)."""
+    if key != FEED_KEY:
+        raise HTTPException(status_code=403, detail="bad key")
+    today = date.today()
+    rows = (
+        db.query(Job)
+        .options(joinedload(Job.community))
+        .filter(Job.install_date >= today,
+                Job.install_date <= today + timedelta(days=30),
+                Job.status.notin_((JobStatus.void, JobStatus.closed)))
+        .order_by(Job.install_date)
+        .all()
+    )
+    return {
+        "installs": [
+            {
+                "date": j.install_date.isoformat(),
+                "job": j.job_code or "",
+                "community": j.community.name if j.community else "",
+                "lot": j.lot_number or "",
+                "plan": j.plan or "",
+                "status": j.status.value if j.status else "",
+            }
+            for j in rows
+        ],
+    }
+
+
 @router.get("/installs")
 def wallpaper_installs(key: str = Query(...), db: Session = Depends(get_db)):
     """This week's installs (Sunday..Saturday containing today)."""
