@@ -28,8 +28,13 @@ MONEY = '"$"#,##0.00;;""'          # blank instead of $0.00
 MONEY_HARD = '"$"#,##0.00'
 PCT = '0.0%;;""'
 
-COLS = 40          # 40 x 19px = 760px = 7.9in = full printable width
-COL_W = 2.0
+COLS = 40          # base grid; the three columns below are widened
+# N/Z/AM sit inside the Sale, Job-Info and Customer value fields (and inside the
+# PO Vendor/Type/Total columns), so widening them stretches every typing field
+# on the sheet. The base grid is narrowed to pay for it, which keeps the total
+# at ~7.9in — the sheet still prints at 100%, no fit-to-page shrink.
+COL_W = 1.42                                    # ~15px
+WIDE_COLS = {14: 9.29, 26: 9.29, 39: 9.29}      # N, Z, AM -> 70px
 ROW_ENTRY = 18     # typing rows — roomy enough to read and click
 ROW_TABLE = 16
 ROW_BAND = 19
@@ -86,7 +91,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     ws = wb.active
     ws.title = "Sales Order Cover Sheet"
     for c in range(1, COLS + 1):
-        ws.column_dimensions[get_column_letter(c)].width = COL_W
+        ws.column_dimensions[get_column_letter(c)].width = WIDE_COLS.get(c, COL_W)
 
     r = 1
     ws.row_dimensions[r].height = 24
@@ -154,7 +159,9 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
 
     # PO columns sized to content: PO number 19ch, vendor 27ch, code 13ch,
     # type 16ch, money 10ch each.
-    PO_SPANS = [6, 11, 5, 6, 4, 4, 4]           # = 40 (vendor is the long one)
+    # = 40. Spans chosen so the wide columns (14, 26, 39) land inside Vendor,
+    # Type and Total; Cost gets a 5th column so a full figure isn't squeezed.
+    PO_SPANS = [5, 11, 5, 6, 5, 4, 4]
     MONEY_COL_1 = 1 + sum(PO_SPANS[:4])          # first money column
     MONEY_COL_2 = MONEY_COL_1 + PO_SPANS[4]
     TOTAL_COL = MONEY_COL_2 + PO_SPANS[5]
@@ -167,7 +174,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         for label, span, align in zip(
             ("Job / PO Number", "Vendor", "Vendor Code", "Type", c1, c2, "Total"),
             PO_SPANS,
-            ("left", "left", "left", "left", "right", "right", "right"),
+            ("center",) * 7,          # column headers centered across their span
         ):
             col = _cell(ws, hr, col, span, label, bold=True, fill=GREEN, align=align, size=9, shrink=True)
         first = hr + 1
