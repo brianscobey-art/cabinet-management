@@ -380,7 +380,7 @@ class CoverSheet(Base):
     super_phone: Mapped[str | None] = mapped_column(String(40), default=None)
     super_email: Mapped[str | None] = mapped_column(String(160), default=None)
 
-    tax_pct: Mapped[Decimal] = mapped_column(Numeric(6, 3), default=Decimal("9"))  # materials tax
+    tax_pct: Mapped[Decimal] = mapped_column(Numeric(6, 3), default=Decimal("7"))  # materials tax, always 7%
     sale_cabinets: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     sale_countertops: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     sale_other: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))

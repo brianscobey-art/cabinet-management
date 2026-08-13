@@ -246,7 +246,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
               fmt=MONEY_HARD, bold=(i == 3), size=10, shrink=True)
     ws.row_dimensions[tax_row].height = ROW_TABLE
     _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9, shrink=True)
-    _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 9) / 100,
+    _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 7) / 100,
           align="right", fmt="0.0%", size=10)
 
     contract_val_col = contract_c + CONTRACT_L

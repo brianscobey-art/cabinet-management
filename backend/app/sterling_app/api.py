@@ -1386,7 +1386,7 @@ class CoverSheetIn(BaseModel):
     super_phone: str | None = None
     super_email: str | None = None
     notes: str | None = None
-    tax_pct: Decimal = Field(default=Decimal("9"), ge=0, lt=100)
+    tax_pct: Decimal = Field(default=Decimal("7"), ge=0, lt=100)   # sales tax is always 7%
     sale_cabinets: Decimal = Field(default=Decimal("0"), ge=0)
     sale_countertops: Decimal = Field(default=Decimal("0"), ge=0)
     sale_other: Decimal = Field(default=Decimal("0"), ge=0)

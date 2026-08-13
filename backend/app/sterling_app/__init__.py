@@ -45,6 +45,24 @@ def _seed_cover_refs(SessionLocal) -> None:
             for name, phone, email in SUPERS:
                 db.add(Superintendent(name=name, phone=phone, email=email))
         db.commit()
+        _fix_cover_tax(db)
+
+
+def _fix_cover_tax(db) -> None:
+    """One-time: sales tax is always 7%. Early cover sheets were seeded at 9%
+    (read off Brian's sample workbook) — correct them, once."""
+    from decimal import Decimal
+
+    from app.sterling_app.models import CoverSheet, Setting
+
+    flag = db.get(Setting, "cover_tax_7_applied")
+    if flag:
+        return
+    db.query(CoverSheet).filter(CoverSheet.tax_pct == Decimal("9")).update(
+        {CoverSheet.tax_pct: Decimal("7")}, synchronize_session=False
+    )
+    db.add(Setting(key="cover_tax_7_applied", value="1"))
+    db.commit()
 
 
 
