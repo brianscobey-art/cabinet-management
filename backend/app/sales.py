@@ -28,3 +28,28 @@ def resolve_salesperson(account_name: str | None, raw: str | None = None) -> str
     if raw:
         return CANONICAL.get(raw.strip().lower(), raw.strip())
     return None
+
+
+# --- KSR (Kitchen Sales Rep) attribution for the manager sales report ---------
+# Unlike `salesperson` above (Brian is deliberately excluded), the KSR roster is
+# the real selling team — Brian sells too. Attribution: job.ksr override, else
+# the account's default ksr. Paula & Laurie are new in Q2 2026.
+KSR_ROSTER = ["Alex Talley", "Paula Cook", "Laurie Reel", "Brian Scobey"]
+
+_KSR_CANON = {
+    "alex t.": "Alex Talley", "alex talley": "Alex Talley", "alex": "Alex Talley",
+    "paula c.": "Paula Cook", "paula cook": "Paula Cook", "paula": "Paula Cook",
+    "laurie r.": "Laurie Reel", "laurie reel": "Laurie Reel", "laurie": "Laurie Reel",
+    "brian s.": "Brian Scobey", "brian scobey": "Brian Scobey", "brian": "Brian Scobey",
+}
+
+
+def canonical_ksr(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    return _KSR_CANON.get(raw.strip().lower(), raw.strip())
+
+
+def effective_ksr(job) -> str | None:
+    """The KSR credited for a job: its own override, else the account default."""
+    return job.ksr or (job.account.ksr if job.account is not None else None)

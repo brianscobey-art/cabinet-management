@@ -194,6 +194,13 @@ def update_existing(db, job: Job, row: dict) -> str:
         job.measure_date = measure
         changed = True
 
+    # Seed the sale date from the Cabinet Order Date, but only when blank — a
+    # KSR's manually-set sale date (Laurie/Paula) must never be overwritten.
+    order_date = as_date(row.get("Cabinet Order Date"))
+    if order_date and job.sale_date is None:
+        job.sale_date = order_date
+        changed = True
+
     plan = clean(row.get("House Plan"))
     if plan and not job.plan:
         job.plan = str(plan)[:100]
@@ -289,6 +296,7 @@ def import_row(db, row: dict, caches: dict) -> str:
         job_type=job_type,
         plan=str(clean(row.get("House Plan")) or "")[:100] or None,
         measure_date=as_date(row.get("Actual Measure Date")),
+        sale_date=as_date(row.get("Cabinet Order Date")),
         status=status,
         install_date=install,
         warranty_start_date=install,

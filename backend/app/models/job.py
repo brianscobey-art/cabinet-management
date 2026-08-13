@@ -73,6 +73,13 @@ class Job(Base):
     field_contact_email: Mapped[str | None] = mapped_column(String(255), default=None)
 
     salesperson: Mapped[str | None] = mapped_column(String(120), default=None)  # rep (Brian = mgr, excluded)
+    # KSR who sold this job (overrides the account's default KSR); sale_date is
+    # when it was sold — both feed the manager sales report. sale_date seeds from
+    # the tracker's Cabinet Order Date and is editable per job.
+    ksr: Mapped[str | None] = mapped_column(String(120), default=None)
+    sale_date: Mapped[date | None] = mapped_column(Date, default=None)
+    # Cached driving miles from the Chipley store (manager report travel section).
+    base_drive_miles: Mapped[float | None] = mapped_column(Float, default=None)
     g_code: Mapped[str | None] = mapped_column(String(40), default=None)  # Domo goods/product job code
     i_code: Mapped[str | None] = mapped_column(String(40), default=None)  # Domo install/labor job code
 

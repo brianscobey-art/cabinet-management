@@ -93,6 +93,22 @@ class Settings(BaseSettings):
     # uses Google; empty = OpenStreetMap/Nominatim fallback. Free tier ~10k/mo.
     google_maps_api_key: str = ""
 
+    # Manager sales report ----------------------------------------------------
+    # Folder holding the monthly K&B P&L workbooks (newest is read for NET SALES).
+    pl_reports_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"\Operations\P&L Reports"
+    )
+    # The Chipley, FL store — base point for KSR travel-mile calculations.
+    chipley_lat: float = 30.7819
+    chipley_lon: float = -85.5386
+    ksr_houses_per_year: int = 350   # national benchmark a field person can cover
+    ksr_trips_per_job: int = 3       # site visits per job (× 2 for the round trip)
+    coverage_sq_miles: int = 23000
+    # A long random token unlocks the public read-only manager report link
+    # (no login). Empty = the public link is disabled. Set on Render to enable.
+    manager_report_token: str = ""
+
     # Cloudflare R2 (S3-compatible) object storage — the bridge that lets the
     # cloud app read the tracker/VS/Century feeds. The on-prem uploader pushes
     # OneDrive files here; the cloud app pulls the newest into its feed dirs.

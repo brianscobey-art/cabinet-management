@@ -19,6 +19,9 @@ class Account(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     type: Mapped[AccountType] = mapped_column(Enum(AccountType, native_enum=False, length=16))
     notes: Mapped[str | None] = mapped_column(Text, default=None)
+    # Default KSR (Kitchen Sales Rep) for this account — every job inherits it
+    # unless the job carries its own ksr override. Powers the manager sales report.
+    ksr: Mapped[str | None] = mapped_column(String(120), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

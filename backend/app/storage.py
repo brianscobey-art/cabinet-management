@@ -24,6 +24,7 @@ FEED_SOURCES = [
     ("tracker_dir", "tracker/", "3.0 Online Sales Tracker *.xlsm", 5),
     ("vendorsuite_dir", "vendorsuite/", "DRH_Cabinets_Combined_*.xlsx", 5),
     ("century_dir", "century/", "Century Cabinet Jobs - SupplyPro*.xlsx", 5),
+    ("pl_reports_dir", "pl-reports/", "*.xlsx", 3),  # monthly K&B P&L (manager report)
 ]
 NEW_ORDERS_PREFIX = "new-orders/"  # single fixed file (New Orders Status.xlsx)
 

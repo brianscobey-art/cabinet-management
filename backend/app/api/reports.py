@@ -1,13 +1,17 @@
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import read_access, write_access
+from app.config import get_settings
 from app.database import get_db
+from app.manager_report import build as build_manager_report
 from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_from_file
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
 from app.models import (
@@ -151,12 +155,30 @@ REPORTS = [
                description="PO revenue and job count per salesperson."),
     ReportInfo(key="open-po", name="Open PO Report", category="Sales",
                description="Every job with an open builder PO, its amount, and totals by builder and community."),
+    ReportInfo(key="manager", name="Manager Sales Report", category="Sales",
+               description="Executive summary for upper management: houses installed by period, open "
+                           "pipeline, YTD sales by KSR, P&L net sales, and field-capacity / travel miles. "
+                           "Printable and shareable by link."),
 ]
 
 
 @router.get("/reports", response_model=list[ReportInfo], dependencies=[Depends(read_access)])
 def list_reports():
     return REPORTS
+
+
+@router.get("/reports/manager", dependencies=[Depends(read_access)])
+def manager_report(db: Session = Depends(get_db)):
+    return build_manager_report(db)
+
+
+@router.get("/reports/manager/public")
+def manager_report_public(token: str = Query(...), db: Session = Depends(get_db)):
+    """Read-only, no login — for upper management. Gated by the share token."""
+    configured = get_settings().manager_report_token
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return build_manager_report(db)
 
 
 # --- Open PO report -------------------------------------------------------
