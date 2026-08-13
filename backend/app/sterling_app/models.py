@@ -354,7 +354,7 @@ class CoverSheet(Base):
     customer_account: Mapped[str | None] = mapped_column(String(40), default=None)
     job_number: Mapped[str | None] = mapped_column(String(40), default=None)   # G-code
     install_code: Mapped[str | None] = mapped_column(String(40), default=None)  # I-code
-    scope: Mapped[str | None] = mapped_column(String(200), default="Kitchens and Bath Cabinets")
+    scope: Mapped[str | None] = mapped_column(String(200), default=None)  # typed per job
 
     # Job Information (the house)
     ji_name: Mapped[str | None] = mapped_column(String(120), default=None)
@@ -412,3 +412,4 @@ class CoverSheetPO(Base):
     total_override: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
 
     sheet: Mapped[CoverSheet] = relationship(back_populates="pos")
+

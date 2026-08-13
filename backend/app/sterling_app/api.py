@@ -1449,18 +1449,54 @@ def list_cover_sheets(db: Session = Depends(get_db)):
 
 
 @router.get("/cover-sheets/refs")
-def cover_refs(db: Session = Depends(get_db)):
+def cover_refs(customer: str | None = None, db: Session = Depends(get_db)):
+    """PO-type presets, C-Codes, and superintendent suggestions.
+
+    Superintendents we've actually worked with for this customer come first
+    (from prior cover sheets), then the general roster.
+    """
+    seen, supers = set(), []
+    if customer and customer.strip():
+        like = f"%{customer.strip()}%"
+        prior = (
+            db.query(CoverSheet)
+            .filter(CoverSheet.super_name.isnot(None), CoverSheet.super_name != "")
+            .filter(or_(CoverSheet.cu_company.ilike(like), CoverSheet.cu_name.ilike(like)))
+            .order_by(CoverSheet.id.desc())
+            .all()
+        )
+        for s in prior:
+            key = (s.super_name or "").strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                supers.append({"name": s.super_name, "phone": s.super_phone,
+                               "email": s.super_email, "source": "prior job"})
+    for s in db.query(Superintendent).order_by(Superintendent.name).all():
+        if s.name.strip().lower() not in seen:
+            seen.add(s.name.strip().lower())
+            supers.append({"name": s.name, "phone": s.phone, "email": s.email,
+                           "source": s.company or "roster"})
+    # Vendors we've actually used: newest first, one entry per name+code pair.
+    used: dict[tuple[str, str], dict] = {}
+    for p in (
+        db.query(CoverSheetPO)
+        .filter(CoverSheetPO.vendor.isnot(None), CoverSheetPO.vendor != "")
+        .order_by(CoverSheetPO.id.desc())
+        .all()
+    ):
+        key = (p.kind, (p.vendor or "").strip().lower())
+        if key not in used:
+            used[key] = {"kind": p.kind, "vendor": p.vendor.strip(),
+                         "vendor_code": (p.vendor_code or "").strip() or None}
     return {
-        "vendors": [
-            {"kind": v.kind, "po_type": v.po_type, "po_abb": v.po_abb,
-             "vendor": v.vendor, "vendor_code": v.vendor_code}
+        "po_types": [
+            {"kind": v.kind, "po_type": v.po_type, "po_abb": v.po_abb}
             for v in db.query(CoverVendor).order_by(CoverVendor.kind, CoverVendor.id).all()
         ],
-        "superintendents": [
-            {"name": s.name, "phone": s.phone, "email": s.email, "company": s.company}
-            for s in db.query(Superintendent).order_by(Superintendent.name).all()
-        ],
+        "used_vendors": list(used.values()),
+        "superintendents": supers,
     }
+
 
 
 @router.get("/cover-sheets/{sheet_id}")

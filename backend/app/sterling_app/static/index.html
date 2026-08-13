@@ -2053,12 +2053,15 @@ async function renderCoverList() {
 }
 
 const COVER_LABELS = {
-  job_code: "Job Code", sale_date: "Sale Date", plan_type: "Plan Type",
-  customer_account: "Customer Account", job_number: "Job Number", install_code: "Install Code",
+  job_code: "Cab Job Code", sale_date: "Sale Date", plan_type: "Plan Type",
+  customer_account: "Ashely's Code", job_number: "G-Code", install_code: "I-Code",
 };
 
 async function renderCoverSheet(id) {
-  const [s, refs] = await Promise.all([api("/cover-sheets/" + id), api("/cover-sheets/refs")]);
+  const s = await api("/cover-sheets/" + id);
+  // suggestions are customer-aware from the first paint
+  const refs = await api("/cover-sheets/refs?customer=" +
+    encodeURIComponent((s.cu_company || s.cu_name || "").trim()));
   window._coverRefs = refs;
   const f = (key, label, width = "100%") => `
     <div class="set-row"><span>${label}</span>
@@ -2102,11 +2105,12 @@ async function renderCoverSheet(id) {
       <div class="card" style="flex:1; min-width:260px">
         <div class="settings-grid" style="grid-template-columns:1fr">
           ${block("Superintendent", `
-            <div class="set-row"><span>Pick</span>
-              <select id="cvSuper" style="width:200px"><option value="">— choose —</option>
-                ${refs.superintendents.map(x => `<option ${s.super_name === x.name ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
-              </select></div>
-            ${f("super_name", "Name", "200px")}${f("super_phone", "Phone", "200px")}${f("super_email", "Email", "200px")}`)}
+            <div class="set-row"><span>Name</span>
+              <input class="cv" data-k="super_name" id="cvSuperName" list="superList"
+                value="${esc(s.super_name ?? "")}" style="width:200px" placeholder="Type a name"></div>
+            ${f("super_phone", "Phone", "200px")}${f("super_email", "Email", "200px")}
+            <div class="set-row" style="border:none"><span class="muted" style="font-weight:400; font-size:11.5px" id="cvSuperHint"></span></div>`)}
+      <datalist id="superList"></datalist>
         </div>
       </div>
     </div>
@@ -2117,6 +2121,8 @@ async function renderCoverSheet(id) {
         <div class="spacer"></div>
         <button class="ghost small cv-add" data-kind="${kind}">+ PO Line</button>
       </div>
+      <datalist id="vendorList${kind}">${(refs.used_vendors || []).filter(v => v.kind === kind)
+        .map(v => `<option value="${esc(v.vendor)}">${esc(v.vendor_code || "")}</option>`).join("")}</datalist>
       <div class="card" style="padding:0; overflow-x:auto; margin-bottom:12px">
         <table>
           <thead><tr><th>PO Type</th><th>Abb</th><th>Vendor</th><th>Vendor Code</th>
@@ -2147,9 +2153,9 @@ async function renderCoverSheet(id) {
         <div class="set-title">Contract</div>
         <table>
           <tbody>
-            <tr><td>Cabinets</td><td class="num"><input class="cv" data-k="sale_cabinets" type="number" step="0.01" value="${Number(s.sale_cabinets)}" style="width:120px"></td></tr>
-            <tr><td>Countertops</td><td class="num"><input class="cv" data-k="sale_countertops" type="number" step="0.01" value="${Number(s.sale_countertops)}" style="width:120px"></td></tr>
-            <tr><td>Other</td><td class="num"><input class="cv" data-k="sale_other" type="number" step="0.01" value="${Number(s.sale_other)}" style="width:120px"></td></tr>
+            ${[["sale_cabinets","Cabinets"],["sale_countertops","Countertops"],["sale_other","Other"]].map(([k,l]) => `
+            <tr><td>${l}</td><td class="num"><input class="cv money" data-k="${k}"
+              value="${Number(s[k]) ? money(s[k]) : ""}" placeholder="$0.00" style="width:120px; text-align:right"></td></tr>`).join("")}
             <tr class="sub"><td><strong>Total Sale</strong></td><td class="num" id="cvSale"><strong>${money(s.totals.sale)}</strong></td></tr>
           </tbody>
         </table>
@@ -2170,7 +2176,9 @@ async function renderCoverSheet(id) {
     const body = {job_id: s.job_id};
     $$(".cv").forEach(el => {
       const k = el.dataset.k;
-      body[k] = el.type === "number" ? (Number(el.value) || 0) : (el.value.trim() || null);
+      if (el.classList.contains("money")) body[k] = Number(el.value.replace(/[^0-9.-]/g, "")) || 0;
+      else if (el.type === "number") body[k] = Number(el.value) || 0;
+      else body[k] = el.value.trim() || null;
     });
     body.pos = $$(".cv-body tr[data-po]").map(tr => ({
       kind: tr.closest(".cv-body").dataset.kind,
@@ -2219,23 +2227,44 @@ async function renderCoverSheet(id) {
   $("#main").addEventListener("change", e => {
     if (e.target.classList.contains("po-type")) {
       const tr = e.target.closest("tr");
-      const v = (window._coverRefs.vendors || []).find(x => x.po_type === e.target.value);
-      if (v) {
-        $(".po-abb", tr).value = v.po_abb ?? "";
-        $(".po-vendor", tr).value = v.vendor ?? "";
-        $(".po-code", tr).value = v.vendor_code ?? "";
-      }
+      const v = (window._coverRefs.po_types || []).find(x => x.po_type === e.target.value);
+      if (v) $(".po-abb", tr).value = v.po_abb ?? "";  // vendor + code stay for you to fill
+      recalc();
+    }
+    // a vendor we've used before brings its saved vendor code along
+    if (e.target.classList.contains("po-vendor")) {
+      const tr = e.target.closest("tr");
+      const hit = (window._coverRefs.used_vendors || []).find(
+        v => v.vendor.toLowerCase() === e.target.value.trim().toLowerCase());
+      if (hit && hit.vendor_code && !$(".po-code", tr).value.trim()) $(".po-code", tr).value = hit.vendor_code;
       recalc();
     }
   });
-  $("#cvSuper").onchange = e => {
-    const x = refs.superintendents.find(v => v.name === e.target.value);
-    if (x) {
-      $("[data-k='super_name']").value = x.name;
-      $("[data-k='super_phone']").value = x.phone ?? "";
-      $("[data-k='super_email']").value = x.email ?? "";
-    }
+  const fillSupers = list => {
+    window._coverRefs.superintendents = list;
+    $("#superList").innerHTML = list.map(x =>
+      `<option value="${esc(x.name)}">${esc(x.source || "")}</option>`).join("");
+    const prior = list.filter(x => x.source === "prior job").map(x => x.name);
+    $("#cvSuperHint").textContent = prior.length
+      ? "Worked with before: " + prior.slice(0, 4).join(", ") : "";
   };
+  fillSupers(refs.superintendents);
+  const refreshRefs = async () => {
+    const customer = $("[data-k='cu_company']").value.trim() || $("[data-k='cu_name']").value.trim();
+    const r = await api("/cover-sheets/refs?customer=" + encodeURIComponent(customer));
+    window._coverRefs.used_vendors = r.used_vendors;
+    fillSupers(r.superintendents);
+  };
+  ["cu_company", "cu_name"].forEach(k => $(`[data-k='${k}']`).addEventListener("change", refreshRefs));
+  // typing a known superintendent fills phone + email (only if blank)
+  $("#cvSuperName").addEventListener("change", e => {
+    const x = (window._coverRefs.superintendents || []).find(
+      v => v.name.toLowerCase() === e.target.value.trim().toLowerCase());
+    if (x) {
+      if (!$("[data-k='super_phone']").value.trim()) $("[data-k='super_phone']").value = x.phone ?? "";
+      if (!$("[data-k='super_email']").value.trim()) $("[data-k='super_email']").value = x.email ?? "";
+    }
+  });
   $$(".cv-add").forEach(b => b.onclick = e => {
     const kind = e.target.dataset.kind;
     $(`.cv-body[data-kind="${kind}"]`).insertAdjacentHTML("beforeend", coverPORow({}, kind, refs));
@@ -2244,6 +2273,12 @@ async function renderCoverSheet(id) {
   $("#main").addEventListener("click", e => {
     if (e.target.classList.contains("po-del")) { e.target.closest("tr").remove(); recalc(); }
   });
+  $("#main").addEventListener("blur", e => {
+    if (e.target.classList && e.target.classList.contains("money")) {
+      const n = Number(e.target.value.replace(/[^0-9.-]/g, ""));
+      e.target.value = n ? money(n) : "";   // zero stays blank
+    }
+  }, true);
   $("#cvSave").onclick = () => save();
   $("#cvDel").onclick = async () => {
     if (!confirm("Delete this cover sheet?")) return;
@@ -2255,14 +2290,14 @@ async function renderCoverSheet(id) {
 }
 
 function coverPORow(p, kind, refs) {
-  const types = (refs.vendors || []).filter(v => v.kind === kind);
+  const types = (refs.po_types || []).filter(v => v.kind === kind);
   return `<tr data-po>
     <td><select class="po-type" style="width:150px"><option value=""></option>
       ${types.map(v => `<option ${p.po_type === v.po_type ? "selected" : ""}>${esc(v.po_type)}</option>`).join("")}
     </select></td>
     <td><input class="po-abb" style="width:56px" value="${esc(p.po_abb ?? "")}"></td>
-    <td><input class="po-vendor" style="width:190px" value="${esc(p.vendor ?? "")}"></td>
-    <td><input class="po-code" style="width:80px" value="${esc(p.vendor_code ?? "")}"></td>
+    <td><input class="po-vendor" list="vendorList${kind}" style="width:190px" value="${esc(p.vendor ?? "")}" placeholder="Vendor"></td>
+    <td><input class="po-code" style="width:95px" value="${esc(p.vendor_code ?? "")}" placeholder="Vendor code"></td>
     <td class="num"><input class="po-a1" type="number" step="0.01" style="width:100px" value="${p.amount1 !== undefined ? Number(p.amount1) : ""}"></td>
     <td class="num"><input class="po-a2" type="number" step="0.01" style="width:100px" value="${p.amount2 !== undefined ? Number(p.amount2) : ""}"></td>
     <td class="num"><span class="po-total">${money(p.total ?? 0)}</span>
@@ -2344,9 +2379,9 @@ function printCoverSheet(s) {
       </table></div>
       <div><table>
         <tr><th>Contract Item</th><th class="num">Total Sale</th></tr>
-        <tr><td>Cabinets</td><td class="num">${money(s.sale_cabinets)}</td></tr>
-        <tr><td>Countertops</td><td class="num">${money(s.sale_countertops)}</td></tr>
-        <tr><td>Other</td><td class="num">${money(s.sale_other)}</td></tr>
+        <tr><td>Cabinets</td><td class="num">${Number(s.sale_cabinets) ? money(s.sale_cabinets) : ""}</td></tr>
+        <tr><td>Countertops</td><td class="num">${Number(s.sale_countertops) ? money(s.sale_countertops) : ""}</td></tr>
+        <tr><td>Other</td><td class="num">${Number(s.sale_other) ? money(s.sale_other) : ""}</td></tr>
         <tr class="sum"><td>Total Sale</td><td class="num">${money(t.sale)}</td></tr>
       </table></div>
       <div><table>
