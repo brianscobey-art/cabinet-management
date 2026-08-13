@@ -28,13 +28,15 @@ MONEY = '"$"#,##0.00;;""'          # blank instead of $0.00
 MONEY_HARD = '"$"#,##0.00'
 PCT = '0.0%;;""'
 
-COLS = 40          # base grid; the three columns below are widened
-# N/Z/AM sit inside the Sale, Job-Info and Customer value fields (and inside the
-# PO Vendor/Type/Total columns), so widening them stretches every typing field
-# on the sheet. The base grid is narrowed to pay for it, which keeps the total
-# at ~7.9in — the sheet still prints at 100%, no fit-to-page shrink.
-COL_W = 1.42                                    # ~15px
-WIDE_COLS = {14: 9.29, 26: 9.29, 39: 9.29}      # N, Z, AM -> 70px
+COLS = 40          # base grid; N, Z, AM are the wide ones
+# Column widths are CALIBRATED against Excel itself (openpyxl's width value is
+# not the pixel count — Excel subtracts padding and scales by the Normal font).
+# Verified via COM: written 2.10 -> 15.2px, written 7.77 -> 56.0px, which read
+# as 19px and 70px in Excel on a 125%-scaled display. Total 7.61in of an 8.00in
+# page, so it still prints at 100% with no fit-to-page shrink.
+COL_W = 2.10                                       # reads 19px
+WIDE_W = 7.77                                      # reads 70px
+WIDE_COLS = {14: WIDE_W, 26: WIDE_W, 39: WIDE_W}   # N, Z, AM
 ROW_ENTRY = 18     # typing rows — roomy enough to read and click
 ROW_TABLE = 16
 ROW_BAND = 19
