@@ -553,6 +553,7 @@ async function renderJobDetail(id) {
       <button class="ghost" id="docsBtn" title="Documents saved with this job — 2020 uploads land here automatically">Docs</button>
       <button class="ghost" id="editJob">Edit</button>
       <button class="ghost" id="dupJob">Duplicate</button>
+      <button class="gray" id="jobCover" title="Sales Order Cover Sheet — prefilled from this job's pricing">Cover Sheet</button>
       <button class="gray" id="jobTops" title="Top Pricing form — countertops priced by the sqft, added after margin">Tops</button>
       <button class="neon" id="printContract" title="Carter Kitchen and Bath contract — pick the payment schedule in the preview, then print">Contract</button>
       <button class="gray" id="printQuote" title="Page 1 breakdown + all SKUs and each service section itemized">Print Detailed</button>
@@ -690,6 +691,11 @@ async function renderJobDetail(id) {
   $("#dupJob").onclick = async () => {
     const copy = await api(`/jobs/${j.id}/duplicate`, {method:"POST"});
     toast("Job duplicated"); location.hash = "#/job/" + copy.id;
+  };
+  $("#jobCover").onclick = async () => {
+    const cs = await api(`/cover-sheets/from-job/${j.id}`, {method:"POST"});
+    toast("Cover sheet ready");
+    location.hash = "#/coversheet/" + cs.id;
   };
   $("#jobTops").onclick = () => topsDialog("Jobs", `Job ${j.id}`, j.id, () => renderJobDetail(id), j.name);
   $("#printContract").onclick = () => printContract(j);
@@ -2007,6 +2013,349 @@ function printEverluxeSheet(res, opts) {
       Hardware count = doors + drawers per SKU; assembly/install units per the Everluxe Install-Hardware values.
       Freight on dealer cabinet cost; sales tax on materials. Pricing valid (14) calendar days.
     </div>
+  <script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+
+// ---------- Sales Order Cover Sheet ----------
+async function renderCoverList() {
+  const sheets = await api("/cover-sheets");
+  $("#main").innerHTML = `
+    <h1>Sales Order Cover Sheets</h1>
+    <div class="toolbar">
+      <span class="muted" style="font-size:12.5px">Fill one out on its own, or start it from a priced job.</span>
+      <div class="spacer"></div>
+      <button class="orange" id="newCover">+ New Cover Sheet</button>
+    </div>
+    <div class="card" style="padding:0; overflow-x:auto">
+      <table>
+        <thead><tr><th>Job Code</th><th>Sale Date</th><th>Job</th><th>Customer</th>
+          <th class="num">Total Sale</th><th class="num">Margin %</th><th>Updated</th></tr></thead>
+        <tbody>
+          ${sheets.length ? sheets.map(s => `
+            <tr class="click" onclick="location.hash='#/coversheet/${s.id}'">
+              <td><strong>${esc(s.job_code ?? "—")}</strong></td>
+              <td>${esc(s.sale_date ?? "—")}</td>
+              <td>${esc(s.ji_name ?? "")}${s.ji_address ? " · " + esc(s.ji_address) : ""}</td>
+              <td>${esc(s.cu_company ?? "—")}</td>
+              <td class="num">${money(s.sale)}</td>
+              <td class="num">${pct(s.margin_pct)}</td>
+              <td class="muted">${mdyy(s.updated_at)}</td>
+            </tr>`).join("")
+          : `<tr><td colspan="7" class="empty">No cover sheets yet — start one with “+ New Cover Sheet”, or from a job's Cover Sheet button.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+  $("#newCover").onclick = async () => {
+    const s = await api("/cover-sheets", {method:"POST", body: {}});
+    location.hash = "#/coversheet/" + s.id;
+  };
+}
+
+const COVER_LABELS = {
+  job_code: "Job Code", sale_date: "Sale Date", plan_type: "Plan Type",
+  customer_account: "Customer Account", job_number: "Job Number", install_code: "Install Code",
+};
+
+async function renderCoverSheet(id) {
+  const [s, refs] = await Promise.all([api("/cover-sheets/" + id), api("/cover-sheets/refs")]);
+  window._coverRefs = refs;
+  const f = (key, label, width = "100%") => `
+    <div class="set-row"><span>${label}</span>
+      <input class="cv" data-k="${key}" value="${esc(s[key] ?? "")}" style="width:${width}"></div>`;
+  const block = (title, rows) => `
+    <div class="set-group"><div class="set-title">${title}</div>${rows}</div>`;
+  const addrRows = (p) => [
+    f(p + "_address", "Address", "200px"), f(p + "_city", "City", "200px"),
+    `<div class="set-row"><span>State / Zip</span><span style="display:flex; gap:6px">
+       <input class="cv" data-k="${p}_state" value="${esc(s[p + "_state"] ?? "")}" style="width:56px">
+       <input class="cv" data-k="${p}_zip" value="${esc(s[p + "_zip"] ?? "")}" style="width:96px"></span></div>`,
+    f(p + "_phone", "Phone", "200px"), f(p + "_email", "Email", "200px"),
+  ].join("");
+  $("#main").innerHTML = `
+    <div class="toolbar no-print">
+      <button class="ghost small" onclick="location.hash='#/cover'">&larr; Cover Sheets</button>
+      <h1 style="margin:0">Sales Order Cover Sheet</h1>
+      ${s.job_id ? `<span class="chip Sold">Job #${s.job_id}</span>` : `<span class="chip Lead">Standalone</span>`}
+      <div class="spacer"></div>
+      <button class="gray" id="cvPrint">Print</button>
+      <button class="orange" id="cvSave">Save</button>
+      <button class="danger" id="cvDel">Delete</button>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <div class="card" style="flex:1; min-width:300px">
+        <div class="settings-grid" style="grid-template-columns:1fr">
+          ${block("Sale", Object.entries(COVER_LABELS).map(([k, l]) => f(k, l, "200px")).join("")
+            + f("scope", "Scope", "200px"))}
+        </div>
+      </div>
+      <div class="card" style="flex:1; min-width:300px">
+        <div class="settings-grid" style="grid-template-columns:1fr">
+          ${block("Job Information", f("ji_name", "Name", "200px") + f("ji_contact", "Contact", "200px") + addrRows("ji"))}
+        </div>
+      </div>
+      <div class="card" style="flex:1; min-width:300px">
+        <div class="settings-grid" style="grid-template-columns:1fr">
+          ${block("Customer", f("cu_company", "Company", "200px") + f("cu_name", "Name", "200px") + addrRows("cu"))}
+        </div>
+      </div>
+      <div class="card" style="flex:1; min-width:260px">
+        <div class="settings-grid" style="grid-template-columns:1fr">
+          ${block("Superintendent", `
+            <div class="set-row"><span>Pick</span>
+              <select id="cvSuper" style="width:200px"><option value="">— choose —</option>
+                ${refs.superintendents.map(x => `<option ${s.super_name === x.name ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
+              </select></div>
+            ${f("super_name", "Name", "200px")}${f("super_phone", "Phone", "200px")}${f("super_email", "Email", "200px")}`)}
+        </div>
+      </div>
+    </div>
+
+    ${["product", "labor"].map(kind => `
+      <div class="toolbar no-print" style="margin-bottom:4px">
+        <h2>${kind === "product" ? "PO's Needed — Products" : "PO's Needed — Labor"}</h2>
+        <div class="spacer"></div>
+        <button class="ghost small cv-add" data-kind="${kind}">+ PO Line</button>
+      </div>
+      <div class="card" style="padding:0; overflow-x:auto; margin-bottom:12px">
+        <table>
+          <thead><tr><th>PO Type</th><th>Abb</th><th>Vendor</th><th>Vendor Code</th>
+            <th class="num">${kind === "product" ? "Cost" : "Assemble"}</th>
+            <th class="num">${kind === "product" ? "Freight" : "Install"}</th>
+            <th class="num">Total</th><th>PO Number</th><th class="no-print"></th></tr></thead>
+          <tbody class="cv-body" data-kind="${kind}">
+            ${s.pos.filter(p => p.kind === kind).map(p => coverPORow(p, kind, refs)).join("")}
+          </tbody>
+        </table>
+      </div>`).join("")}
+
+    <div class="row">
+      <div class="card" style="flex:1; min-width:280px">
+        <div class="set-title">Cost Summary</div>
+        <table>
+          <tbody>
+            <tr><td>Total Materials</td><td class="num" id="cvMat">${money(s.totals.materials)}</td></tr>
+            <tr><td>Total Labor</td><td class="num" id="cvLab">${money(s.totals.labor)}</td></tr>
+            <tr><td>Total Tax <input class="cv" data-k="tax_pct" type="number" min="0" step="0.001"
+              value="${Number(s.tax_pct)}" style="width:64px"> % on materials</td>
+              <td class="num" id="cvTax">${money(s.totals.tax)}</td></tr>
+            <tr class="sub"><td><strong>Total COGS</strong></td><td class="num" id="cvCogs"><strong>${money(s.totals.cogs)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="flex:1; min-width:280px">
+        <div class="set-title">Contract</div>
+        <table>
+          <tbody>
+            <tr><td>Cabinets</td><td class="num"><input class="cv" data-k="sale_cabinets" type="number" step="0.01" value="${Number(s.sale_cabinets)}" style="width:120px"></td></tr>
+            <tr><td>Countertops</td><td class="num"><input class="cv" data-k="sale_countertops" type="number" step="0.01" value="${Number(s.sale_countertops)}" style="width:120px"></td></tr>
+            <tr><td>Other</td><td class="num"><input class="cv" data-k="sale_other" type="number" step="0.01" value="${Number(s.sale_other)}" style="width:120px"></td></tr>
+            <tr class="sub"><td><strong>Total Sale</strong></td><td class="num" id="cvSale"><strong>${money(s.totals.sale)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="flex:1; min-width:220px">
+        <div class="set-title">Margin</div>
+        <div class="totals-card" style="margin-top:8px">
+          <div class="t"><div class="label">Dollars</div><div class="value" id="cvMarginD">${money(s.totals.margin)}</div></div>
+          <div class="t"><div class="label">Percent</div><div class="value orange" id="cvMarginP">${pct(s.totals.margin_pct)}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <label class="f">Notes<textarea class="cv" data-k="notes" rows="2">${esc(s.notes ?? "")}</textarea></label>
+    </div>`;
+
+  const collect = () => {
+    const body = {job_id: s.job_id};
+    $$(".cv").forEach(el => {
+      const k = el.dataset.k;
+      body[k] = el.type === "number" ? (Number(el.value) || 0) : (el.value.trim() || null);
+    });
+    body.pos = $$(".cv-body tr[data-po]").map(tr => ({
+      kind: tr.closest(".cv-body").dataset.kind,
+      po_type: $(".po-type", tr).value || null,
+      po_abb: $(".po-abb", tr).value.trim() || null,
+      vendor: $(".po-vendor", tr).value.trim() || null,
+      vendor_code: $(".po-code", tr).value.trim() || null,
+      amount1: Number($(".po-a1", tr).value) || 0,
+      amount2: Number($(".po-a2", tr).value) || 0,
+      total_override: $(".po-tot", tr).value === "" ? null : Number($(".po-tot", tr).value),
+    }));
+    return body;
+  };
+  const recalc = () => {
+    const b = collect();
+    let mat = 0, lab = 0;
+    b.pos.forEach(p => {
+      const t = p.total_override !== null ? p.total_override : p.amount1 + p.amount2;
+      if (p.kind === "labor") lab += t; else mat += t;
+    });
+    const tax = mat * (b.tax_pct || 0) / 100;
+    const cogs = mat + lab + tax;
+    const sale = (b.sale_cabinets || 0) + (b.sale_countertops || 0) + (b.sale_other || 0);
+    const margin = sale - cogs;
+    $("#cvMat").textContent = money(mat); $("#cvLab").textContent = money(lab);
+    $("#cvTax").textContent = money(tax);
+    $("#cvCogs").innerHTML = `<strong>${money(cogs)}</strong>`;
+    $("#cvSale").innerHTML = `<strong>${money(sale)}</strong>`;
+    $("#cvMarginD").textContent = money(margin);
+    $("#cvMarginP").textContent = sale ? pct(margin / sale * 100) : "—";
+    $$(".cv-body tr[data-po]").forEach(tr => {
+      const a1 = Number($(".po-a1", tr).value) || 0, a2 = Number($(".po-a2", tr).value) || 0;
+      const ov = $(".po-tot", tr).value;
+      $(".po-total", tr).textContent = money(ov === "" ? a1 + a2 : Number(ov));
+      $(".po-num", tr).textContent = `${($("[data-k='job_code']").value || "").trim()} ${$(".po-abb", tr).value}`.trim();
+    });
+  };
+  const save = async (quiet) => {
+    const res = await api("/cover-sheets/" + id, {method:"PUT", body: collect()});
+    if (!quiet) toast("Cover sheet saved");
+    return res;
+  };
+  $("#main").addEventListener("input", e => {
+    if (e.target.matches(".cv, .po-a1, .po-a2, .po-tot, .po-abb")) recalc();
+  });
+  $("#main").addEventListener("change", e => {
+    if (e.target.classList.contains("po-type")) {
+      const tr = e.target.closest("tr");
+      const v = (window._coverRefs.vendors || []).find(x => x.po_type === e.target.value);
+      if (v) {
+        $(".po-abb", tr).value = v.po_abb ?? "";
+        $(".po-vendor", tr).value = v.vendor ?? "";
+        $(".po-code", tr).value = v.vendor_code ?? "";
+      }
+      recalc();
+    }
+  });
+  $("#cvSuper").onchange = e => {
+    const x = refs.superintendents.find(v => v.name === e.target.value);
+    if (x) {
+      $("[data-k='super_name']").value = x.name;
+      $("[data-k='super_phone']").value = x.phone ?? "";
+      $("[data-k='super_email']").value = x.email ?? "";
+    }
+  };
+  $$(".cv-add").forEach(b => b.onclick = e => {
+    const kind = e.target.dataset.kind;
+    $(`.cv-body[data-kind="${kind}"]`).insertAdjacentHTML("beforeend", coverPORow({}, kind, refs));
+    recalc();
+  });
+  $("#main").addEventListener("click", e => {
+    if (e.target.classList.contains("po-del")) { e.target.closest("tr").remove(); recalc(); }
+  });
+  $("#cvSave").onclick = () => save();
+  $("#cvDel").onclick = async () => {
+    if (!confirm("Delete this cover sheet?")) return;
+    await api("/cover-sheets/" + id, {method:"DELETE"});
+    toast("Deleted"); location.hash = "#/cover";
+  };
+  $("#cvPrint").onclick = async () => { const fresh = await save(true); printCoverSheet(fresh); };
+  recalc();
+}
+
+function coverPORow(p, kind, refs) {
+  const types = (refs.vendors || []).filter(v => v.kind === kind);
+  return `<tr data-po>
+    <td><select class="po-type" style="width:150px"><option value=""></option>
+      ${types.map(v => `<option ${p.po_type === v.po_type ? "selected" : ""}>${esc(v.po_type)}</option>`).join("")}
+    </select></td>
+    <td><input class="po-abb" style="width:56px" value="${esc(p.po_abb ?? "")}"></td>
+    <td><input class="po-vendor" style="width:190px" value="${esc(p.vendor ?? "")}"></td>
+    <td><input class="po-code" style="width:80px" value="${esc(p.vendor_code ?? "")}"></td>
+    <td class="num"><input class="po-a1" type="number" step="0.01" style="width:100px" value="${p.amount1 !== undefined ? Number(p.amount1) : ""}"></td>
+    <td class="num"><input class="po-a2" type="number" step="0.01" style="width:100px" value="${p.amount2 !== undefined ? Number(p.amount2) : ""}"></td>
+    <td class="num"><span class="po-total">${money(p.total ?? 0)}</span>
+      <input class="po-tot" type="number" step="0.01" style="width:90px" placeholder="override"
+        value="${p.total_override != null ? Number(p.total_override) : ""}"></td>
+    <td class="po-num muted">${esc(p.po_number ?? "")}</td>
+    <td class="no-print"><button class="danger small po-del">✕</button></td>
+  </tr>`;
+}
+
+// Printable cover sheet — the workbook's layout, Carter-branded
+function printCoverSheet(s) {
+  const t = s.totals;
+  const w = window.open("", "_blank", "width=810,height=1050");
+  const rows = (kind, c1, c2) => s.pos.filter(p => p.kind === kind).map(p => `<tr>
+      <td>${esc(p.po_number || "")}</td><td>${esc(p.vendor_code ?? "")}</td><td>${esc(p.vendor ?? "")}</td>
+      <td>${esc(p.po_type ?? "")}</td><td class="num">${money(p.amount1)}</td>
+      <td class="num">${money(p.amount2)}</td><td class="num tot">${money(p.total)}</td></tr>`).join("")
+    || `<tr><td colspan="7" style="color:#888">—</td></tr>`;
+  const pair = (l, v) => `<tr><td class="lbl">${l}</td><td>${esc(v ?? "")}</td></tr>`;
+  w.document.write(`<!DOCTYPE html><html><head><title>Sales Order Cover Sheet ${esc(s.job_code || "")}</title><style>
+    @page { size: letter; margin: 0.4in; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; color:#111; font-size:11.5px; width:7.7in; margin:12px auto 30px; }
+    @media print { body { margin: 0 auto; } }
+    h1 { color:#125952; font-size:19px; margin:0 0 2px; }
+    .sub { color:#444; font-size:11px; margin-bottom:10px; }
+    table { width:100%; border-collapse:collapse; margin-bottom:9px; }
+    td, th { border:1px solid #444; padding:3px 6px; }
+    th { background:#125952; color:#fff; text-align:left; font-size:10.5px; }
+    .band { background:#125952; color:#fff; font-weight:700; padding:3px 8px; font-size:11px; }
+    .lbl { background:#eaf2f0; color:#125952; font-weight:600; width:38%; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .tot { font-weight:700; }
+    .grid { display:flex; gap:10px; align-items:flex-start; }
+    .grid > div { flex:1; }
+    .sum td { font-weight:700; }
+  </style></head><body>
+    <h1>SALES ORDER COVER SHEET</h1>
+    <div class="sub">Carter Kitchen &amp; Bath &nbsp;|&nbsp; ${esc(s.job_code || "")} &nbsp;|&nbsp; ${esc(s.sale_date || "")}</div>
+    <div class="grid">
+      <div><table>
+        <tr><td class="band" colspan="2">Sale</td></tr>
+        ${pair("Sale Date", s.sale_date)}${pair("Plan Type", s.plan_type)}
+        ${pair("Customer Account", s.customer_account)}${pair("Job Number", s.job_number)}
+        ${pair("Install Code", s.install_code)}${pair("Job Code", s.job_code)}
+        ${pair("Scope", s.scope)}
+      </table></div>
+      <div><table>
+        <tr><td class="band" colspan="2">Job Information</td></tr>
+        ${pair("Name", s.ji_name)}${pair("Contact", s.ji_contact)}${pair("Address", s.ji_address)}
+        ${pair("City", s.ji_city)}${pair("State", s.ji_state)}${pair("Zip", s.ji_zip)}
+        ${pair("Phone", s.ji_phone)}${pair("Email", s.ji_email)}
+      </table></div>
+      <div><table>
+        <tr><td class="band" colspan="2">Customer</td></tr>
+        ${pair("Company", s.cu_company)}${pair("Name", s.cu_name)}${pair("Address", s.cu_address)}
+        ${pair("City", s.cu_city)}${pair("State", s.cu_state)}${pair("Zip", s.cu_zip)}
+        ${pair("Phone", s.cu_phone)}${pair("Email", s.cu_email)}
+      </table></div>
+    </div>
+    <table><tr><td class="band" colspan="3">Superintendent</td></tr>
+      <tr><td>${esc(s.super_name ?? "")}</td><td>${esc(s.super_phone ?? "")}</td><td>${esc(s.super_email ?? "")}</td></tr>
+    </table>
+    <div class="band">PO's Needed — Products</div>
+    <table><thead><tr><th>Job</th><th>Vendor Code</th><th>Vendor</th><th>Type</th>
+      <th class="num">Cost</th><th class="num">Freight</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows("product")}</tbody></table>
+    <div class="band">PO's Needed — Labor</div>
+    <table><thead><tr><th>Job</th><th>Vendor Code</th><th>Vendor</th><th>Type</th>
+      <th class="num">Assemble</th><th class="num">Install</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows("labor")}</tbody></table>
+    <div class="grid">
+      <div><table>
+        <tr><th>Item</th><th class="num">Total Cost</th></tr>
+        <tr><td>Total Materials</td><td class="num">${money(t.materials)}</td></tr>
+        <tr><td>Total Labor</td><td class="num">${money(t.labor)}</td></tr>
+        <tr><td>Total Tax (${Number(s.tax_pct)}%)</td><td class="num">${money(t.tax)}</td></tr>
+        <tr class="sum"><td>Total COGS</td><td class="num">${money(t.cogs)}</td></tr>
+      </table></div>
+      <div><table>
+        <tr><th>Contract Item</th><th class="num">Total Sale</th></tr>
+        <tr><td>Cabinets</td><td class="num">${money(s.sale_cabinets)}</td></tr>
+        <tr><td>Countertops</td><td class="num">${money(s.sale_countertops)}</td></tr>
+        <tr><td>Other</td><td class="num">${money(s.sale_other)}</td></tr>
+        <tr class="sum"><td>Total Sale</td><td class="num">${money(t.sale)}</td></tr>
+      </table></div>
+      <div><table>
+        <tr><th>Margin</th><th class="num"></th></tr>
+        <tr><td>Dollars</td><td class="num">${money(t.margin)}</td></tr>
+        <tr><td>Percent</td><td class="num">${pct(t.margin_pct)}</td></tr>
+      </table></div>
+    </div>
+    ${s.notes ? `<div class="band">Notes</div><div style="border:1px solid #444; border-top:none; padding:6px 8px">${esc(s.notes)}</div>` : ""}
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
