@@ -1,8 +1,12 @@
 """Sales Order Cover Sheet as a fillable .xlsx — same layout as the web form.
 
-Built to the "make-excel-template" rules: one narrow base column (2.2), every
-field a merged span, borders across whole merges, live formulas for the totals,
-and print setup that fits one portrait letter page.
+Built to the "make-excel-template" rules: one narrow base column, every field a
+merged span, borders across whole merges, live formulas for the totals, and
+print setup that fits one portrait letter page.
+
+Geometry: 40 base columns at width 2.0 (~19 px each) = 7.9in, i.e. the full
+printable width of letter at 0.3in margins. Field spans below are sized to the
+characters each one actually holds (addresses/emails ~30, money ~10).
 
 `build_cover_workbook(sheet)` returns BytesIO; pass None for a blank form.
 """
@@ -12,8 +16,8 @@ from datetime import date
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.worksheet.page import PageMargins
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.page import PageMargins
 
 GREEN = "125952"
 BAND_TXT = "FFFFFF"
@@ -23,7 +27,17 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 MONEY = '"$"#,##0.00;;""'          # blank instead of $0.00
 MONEY_HARD = '"$"#,##0.00'
 PCT = '0.0%;;""'
-COLS = 34                            # 34 x 2.2 ≈ 7.5in of printable width
+
+COLS = 40          # 40 x 19px = 760px = 7.9in = full printable width
+COL_W = 2.0
+ROW_ENTRY = 18     # typing rows — roomy enough to read and click
+ROW_TABLE = 16
+ROW_BAND = 19
+
+# Header blocks (label span, value span) — values sized to ~24-30 characters
+SALE_L, SALE_V = 6, 8          # "Ashely's Code" is the longest label here
+JOB_L, JOB_V = 4, 9
+CUST_L, CUST_V = 4, 9          # 14 + 13 + 13 = 40
 
 
 def _cell(ws, row, col, span, value=None, *, bold=False, fill=None, align="left",
@@ -47,13 +61,13 @@ def _cell(ws, row, col, span, value=None, *, bold=False, fill=None, align="left"
 
 def _band(ws, row, text, col=1, span=COLS):
     _cell(ws, row, col, span, text, bold=True, fill=GREEN, align="center", size=10.5)
-    ws.row_dimensions[row].height = 19
+    ws.row_dimensions[row].height = ROW_BAND
 
 
-def _pair(ws, row, col, label, value, lab_span=7, val_span=10, fmt=None):
+def _pair(ws, row, col, label, value, lab_span, val_span, fmt=None):
     """Label cell + fillable value cell."""
     nxt = _cell(ws, row, col, lab_span, label, bold=True, fill=LABEL_FILL, size=9.5)
-    return _cell(ws, row, nxt, val_span, value, fmt=fmt, size=9.5)
+    return _cell(ws, row, nxt, val_span, value, fmt=fmt, size=10)
 
 
 def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
@@ -61,32 +75,33 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     pos = s.get("pos", [])
     products = [p for p in pos if p.get("kind") != "labor"]
     labor = [p for p in pos if p.get("kind") == "labor"]
-    PROD_ROWS, LAB_ROWS = 8, 4          # fillable blanks when the sheet is empty
+    PROD_ROWS, LAB_ROWS = 8, 4          # blank PO lines on an empty form
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Sales Order Cover Sheet"
     for c in range(1, COLS + 1):
-        ws.column_dimensions[get_column_letter(c)].width = 2.2
+        ws.column_dimensions[get_column_letter(c)].width = COL_W
 
     r = 1
     ws.row_dimensions[r].height = 24
-    _cell(ws, r, 1, 22, "SALES ORDER COVER SHEET", bold=True, size=15,
+    _cell(ws, r, 1, 26, "SALES ORDER COVER SHEET", bold=True, size=15,
           color=GREEN, border=False)
-    _cell(ws, r, 23, 12, s.get("job_code") or "", bold=True, size=12, align="right",
+    _cell(ws, r, 27, 14, s.get("job_code") or "", bold=True, size=12, align="right",
           border=False)
     r += 1
     ws.row_dimensions[r].height = 15
-    _cell(ws, r, 1, 22, "Carter Kitchen & Bath", size=9.5, color="555555", border=False)
-    _cell(ws, r, 23, 12, f"Printed {date.today():%m/%d/%y}", size=9, align="right",
+    _cell(ws, r, 1, 26, "Carter Kitchen & Bath", size=9.5, color="555555", border=False)
+    _cell(ws, r, 27, 14, f"Printed {date.today():%m/%d/%y}", size=9, align="right",
           color="555555", border=False)
+    ws.row_dimensions[r + 1].height = 7      # spacer
     r += 2
 
     # ---- three header blocks: Sale | Job Information | Customer ----
-    top = r
-    _band(ws, r, "Sale", 1, 11)
-    _band(ws, r, "Job Information", 12, 11)
-    _band(ws, r, "Customer", 23, 12)
+    sale_c, job_c, cust_c = 1, 1 + SALE_L + SALE_V, 1 + SALE_L + SALE_V + JOB_L + JOB_V
+    _band(ws, r, "Sale", sale_c, SALE_L + SALE_V)
+    _band(ws, r, "Job Information", job_c, JOB_L + JOB_V)
+    _band(ws, r, "Customer", cust_c, CUST_L + CUST_V)
     r += 1
     sale_rows = [
         ("Sale Date", s.get("sale_date")), ("Plan Type", s.get("plan_type")),
@@ -106,129 +121,156 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         ("State", s.get("cu_state")), ("Zip", s.get("cu_zip")),
         ("Phone", s.get("cu_phone")), ("Email", s.get("cu_email")),
     ]
-    for i in range(max(len(sale_rows), len(job_rows), len(cust_rows))):
-        ws.row_dimensions[r + i].height = 16
+    block_rows = max(len(sale_rows), len(job_rows), len(cust_rows))
+    for i in range(block_rows):
+        ws.row_dimensions[r + i].height = ROW_ENTRY
         if i < len(sale_rows):
-            _pair(ws, r + i, 1, sale_rows[i][0], sale_rows[i][1], 5, 6)
+            _pair(ws, r + i, sale_c, sale_rows[i][0], sale_rows[i][1], SALE_L, SALE_V)
+        else:  # keep the block's box square
+            _cell(ws, r + i, sale_c, SALE_L + SALE_V, None)
         if i < len(job_rows):
-            _pair(ws, r + i, 12, job_rows[i][0], job_rows[i][1], 4, 7)
+            _pair(ws, r + i, job_c, job_rows[i][0], job_rows[i][1], JOB_L, JOB_V)
         if i < len(cust_rows):
-            _pair(ws, r + i, 23, cust_rows[i][0], cust_rows[i][1], 4, 8)
-    r += 8
+            _pair(ws, r + i, cust_c, cust_rows[i][0], cust_rows[i][1], CUST_L, CUST_V)
+    r += block_rows
 
-    # ---- superintendent ----
+    # ---- superintendent: name 12 / phone 8 / email 8 wide ----
     _band(ws, r, "Superintendent")
     r += 1
-    ws.row_dimensions[r].height = 16
-    _cell(ws, r, 1, 5, "Name", bold=True, fill=LABEL_FILL, size=9.5)
-    _cell(ws, r, 6, 10, s.get("super_name"))
-    _cell(ws, r, 16, 4, "Phone", bold=True, fill=LABEL_FILL, size=9.5)
-    _cell(ws, r, 20, 7, s.get("super_phone"))
-    _cell(ws, r, 27, 3, "Email", bold=True, fill=LABEL_FILL, size=9.5)
-    _cell(ws, r, 30, 5, s.get("super_email"))
+    ws.row_dimensions[r].height = ROW_ENTRY
+    col = _cell(ws, r, 1, 4, "Name", bold=True, fill=LABEL_FILL, size=9.5)
+    col = _cell(ws, r, col, 12, s.get("super_name"))
+    col = _cell(ws, r, col, 4, "Phone", bold=True, fill=LABEL_FILL, size=9.5)
+    col = _cell(ws, r, col, 8, s.get("super_phone"))
+    col = _cell(ws, r, col, 4, "Email", bold=True, fill=LABEL_FILL, size=9.5)
+    _cell(ws, r, col, COLS - col + 1, s.get("super_email"))
+    ws.row_dimensions[r + 1].height = 7      # spacer
     r += 2
+
+    # PO columns sized to content: PO number 19ch, vendor 27ch, code 13ch,
+    # type 16ch, money 10ch each.
+    PO_SPANS = [7, 10, 5, 6, 4, 4, 4]           # = 40
+    MONEY_COL_1 = 1 + sum(PO_SPANS[:4])          # first money column
+    MONEY_COL_2 = MONEY_COL_1 + PO_SPANS[4]
+    TOTAL_COL = MONEY_COL_2 + PO_SPANS[5]
 
     def po_table(start, title, rows, count, c1, c2):
         _band(ws, start, title)
         hr = start + 1
-        ws.row_dimensions[hr].height = 16
+        ws.row_dimensions[hr].height = ROW_TABLE
         col = 1
-        for label, span, align in (("Job / PO Number", 7, "left"), ("Vendor", 8, "left"),
-                                   ("Vendor Code", 5, "left"), ("Type", 5, "left"),
-                                   (c1, 3, "right"), (c2, 3, "right"), ("Total", 3, "right")):
+        for label, span, align in zip(
+            ("Job / PO Number", "Vendor", "Vendor Code", "Type", c1, c2, "Total"),
+            PO_SPANS,
+            ("left", "left", "left", "left", "right", "right", "right"),
+        ):
             col = _cell(ws, hr, col, span, label, bold=True, fill=GREEN, align=align, size=9)
         first = hr + 1
         for i in range(count):
             rr = first + i
-            ws.row_dimensions[rr].height = 15
+            ws.row_dimensions[rr].height = ROW_TABLE
             p = rows[i] if i < len(rows) else {}
-            po_num = p.get("po_number") or ""
-            _cell(ws, rr, 1, 7, po_num, size=9.5)
-            _cell(ws, rr, 8, 8, p.get("vendor"), size=9.5)
-            _cell(ws, rr, 16, 5, p.get("vendor_code"), size=9.5)
-            _cell(ws, rr, 21, 5, p.get("po_type"), size=9.5)
-            _cell(ws, rr, 26, 3, float(p["amount1"]) if p.get("amount1") else None,
-                  align="right", fmt=MONEY, size=9.5)
-            _cell(ws, rr, 29, 3, float(p["amount2"]) if p.get("amount2") else None,
-                  align="right", fmt=MONEY, size=9.5)
-            a1, a2 = get_column_letter(26), get_column_letter(29)
-            _cell(ws, rr, 32, 3, f"={a1}{rr}+{a2}{rr}", align="right", fmt=MONEY, size=9.5)
+            col = _cell(ws, rr, 1, PO_SPANS[0], p.get("po_number") or "", size=10)
+            col = _cell(ws, rr, col, PO_SPANS[1], p.get("vendor"), size=10)
+            col = _cell(ws, rr, col, PO_SPANS[2], p.get("vendor_code"), size=10)
+            col = _cell(ws, rr, col, PO_SPANS[3], p.get("po_type"), size=10)
+            col = _cell(ws, rr, col, PO_SPANS[4],
+                        float(p["amount1"]) if p.get("amount1") else None,
+                        align="right", fmt=MONEY, size=10)
+            col = _cell(ws, rr, col, PO_SPANS[5],
+                        float(p["amount2"]) if p.get("amount2") else None,
+                        align="right", fmt=MONEY, size=10)
+            a1, a2 = get_column_letter(MONEY_COL_1), get_column_letter(MONEY_COL_2)
+            _cell(ws, rr, col, PO_SPANS[6], f"={a1}{rr}+{a2}{rr}",
+                  align="right", fmt=MONEY, size=10)
         last = first + count - 1
         tr = last + 1
-        ws.row_dimensions[tr].height = 16
-        _cell(ws, tr, 1, 31, f"{title} total", bold=True, fill=LABEL_FILL, align="right", size=9.5)
-        col_t = get_column_letter(32)
-        _cell(ws, tr, 32, 3, f"=SUM({col_t}{first}:{col_t}{last})", bold=True,
-              align="right", fmt=MONEY_HARD, size=10)
+        ws.row_dimensions[tr].height = ROW_TABLE
+        _cell(ws, tr, 1, TOTAL_COL - 1, f"{title} total", bold=True, fill=LABEL_FILL,
+              align="right", size=9.5)
+        tcol = get_column_letter(TOTAL_COL)
+        _cell(ws, tr, TOTAL_COL, PO_SPANS[6], f"=SUM({tcol}{first}:{tcol}{last})",
+              bold=True, align="right", fmt=MONEY_HARD, size=10)
         return tr
 
     prod_total_row = po_table(r, "PO's Needed — Products", products,
                               max(PROD_ROWS, len(products)), "Cost", "Freight")
+    ws.row_dimensions[prod_total_row + 1].height = 7   # spacer
     r = prod_total_row + 2
     lab_total_row = po_table(r, "PO's Needed — Labor", labor,
                              max(LAB_ROWS, len(labor)), "Assemble", "Install")
+    ws.row_dimensions[lab_total_row + 1].height = 7    # spacer
     r = lab_total_row + 2
 
-    # ---- summary: cost | contract | margin ----
-    _band(ws, r, "Cost Summary", 1, 13)
-    _band(ws, r, "Contract", 14, 12)
-    _band(ws, r, "Margin", 26, 9)
-    hdr = r
+    # ---- summary: cost | contract | margin (15 + 13 + 12 = 40) ----
+    COST_L, COST_V = 9, 6
+    CONTRACT_L, CONTRACT_V = 7, 6
+    MARGIN_L, MARGIN_V = 6, 6
+    cost_c = 1
+    contract_c = cost_c + COST_L + COST_V
+    margin_c = contract_c + CONTRACT_L + CONTRACT_V
+    _band(ws, r, "Cost Summary", cost_c, COST_L + COST_V)
+    _band(ws, r, "Contract", contract_c, CONTRACT_L + CONTRACT_V)
+    _band(ws, r, "Margin", margin_c, MARGIN_L + MARGIN_V)
     r += 1
-    T = get_column_letter(32)
-    mat, lab = f"{T}{prod_total_row}", f"{T}{lab_total_row}"
-    tax_pct = float(s.get("tax_pct") or 9)
-    rows_cost = [
-        ("Total Materials", f"={mat}"),
-        ("Total Labor", f"={lab}"),
-        ("Total Tax", None),          # written below so we can put the % beside it
-        ("Total COGS", None),
-    ]
-    for i, (label, formula) in enumerate(rows_cost):
-        rr = r + i
-        ws.row_dimensions[rr].height = 16
-        _cell(ws, rr, 1, 8, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
-        _cell(ws, rr, 9, 5, formula, align="right", fmt=MONEY_HARD, bold=(i == 3), size=9.5)
-    tax_cell = f"{get_column_letter(9)}{r + 2}"
-    pct_cell = f"{get_column_letter(9)}{r + 4}"
-    ws.cell(row=r + 2, column=9).value = f"={mat}*{pct_cell}"
-    ws.cell(row=r + 3, column=9).value = (
-        f"={get_column_letter(9)}{r}+{get_column_letter(9)}{r + 1}+{tax_cell}")
-    # tax rate lives just under the cost block so it can be edited
-    rr = r + 4
-    ws.row_dimensions[rr].height = 16
-    _cell(ws, rr, 1, 8, "Tax rate (on materials)", fill=LABEL_FILL, size=9)
-    _cell(ws, rr, 9, 5, tax_pct / 100, align="right", fmt="0.0%", size=9.5)
 
-    contract = [("Cabinets", s.get("sale_cabinets")), ("Countertops", s.get("sale_countertops")),
-                ("Other", s.get("sale_other")), ("Total Sale", None)]
-    for i, (label, val) in enumerate(contract):
+    T = get_column_letter(TOTAL_COL)
+    mat_ref, lab_ref = f"{T}{prod_total_row}", f"{T}{lab_total_row}"
+    cost_val_col = cost_c + COST_L
+    CV = get_column_letter(cost_val_col)
+    tax_row = r + 4
+    for i, label in enumerate(("Total Materials", "Total Labor", "Total Tax", "Total COGS")):
         rr = r + i
-        _cell(ws, rr, 14, 7, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
+        ws.row_dimensions[rr].height = ROW_ENTRY
+        _cell(ws, rr, cost_c, COST_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
+        formula = (
+            f"={mat_ref}", f"={lab_ref}",
+            f"={mat_ref}*{CV}{tax_row}",
+            f"={CV}{r}+{CV}{r + 1}+{CV}{r + 2}",
+        )[i]
+        _cell(ws, rr, cost_val_col, COST_V, formula, align="right",
+              fmt=MONEY_HARD, bold=(i == 3), size=10)
+    ws.row_dimensions[tax_row].height = ROW_TABLE
+    _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9)
+    _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 9) / 100,
+          align="right", fmt="0.0%", size=10)
+
+    contract_val_col = contract_c + CONTRACT_L
+    KV = get_column_letter(contract_val_col)
+    for i, (label, val) in enumerate((
+        ("Cabinets", s.get("sale_cabinets")), ("Countertops", s.get("sale_countertops")),
+        ("Other", s.get("sale_other")), ("Total Sale", None),
+    )):
+        rr = r + i
+        _cell(ws, rr, contract_c, CONTRACT_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
         if i < 3:
-            v = float(val) if val not in (None, "", 0, "0") and float(val) else None
-            _cell(ws, rr, 21, 5, v, align="right", fmt=MONEY, size=9.5)
+            v = float(val) if val not in (None, "") and float(val) else None
+            _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="right", fmt=MONEY, size=10)
         else:
-            c21 = get_column_letter(21)
-            _cell(ws, rr, 21, 5, f"=SUM({c21}{r}:{c21}{r + 2})", bold=True,
-                  align="right", fmt=MONEY_HARD, size=9.5)
-    sale_cell = f"{get_column_letter(21)}{r + 3}"
-    cogs_cell = f"{get_column_letter(9)}{r + 3}"
+            _cell(ws, rr, contract_val_col, CONTRACT_V, f"=SUM({KV}{r}:{KV}{r + 2})",
+                  bold=True, align="right", fmt=MONEY_HARD, size=10)
+    sale_cell = f"{KV}{r + 3}"
+    cogs_cell = f"{CV}{r + 3}"
+
+    margin_val_col = margin_c + MARGIN_L
     for i, label in enumerate(("Dollars", "Percent")):
         rr = r + i
-        _cell(ws, rr, 26, 5, label, fill=LABEL_FILL, size=9.5)
-        if i == 0:
-            _cell(ws, rr, 31, 4, f"={sale_cell}-{cogs_cell}", align="right",
-                  fmt=MONEY_HARD, bold=True, size=9.5)
-        else:
-            _cell(ws, rr, 31, 4, f"=IF({sale_cell}=0,\"\",({sale_cell}-{cogs_cell})/{sale_cell})",
-                  align="right", fmt=PCT, bold=True, size=9.5)
+        _cell(ws, rr, margin_c, MARGIN_L, label, fill=LABEL_FILL, size=9.5)
+        formula = (
+            f"={sale_cell}-{cogs_cell}",
+            f'=IF({sale_cell}=0,"",({sale_cell}-{cogs_cell})/{sale_cell})',
+        )[i]
+        _cell(ws, rr, margin_val_col, MARGIN_V, formula, align="right",
+              fmt=(MONEY_HARD if i == 0 else PCT), bold=True, size=10)
+    # square off the margin block against the taller cost/contract columns
+    for i in (2, 3):
+        _cell(ws, r + i, margin_c, MARGIN_L + MARGIN_V, None)
     r += 5
 
     _band(ws, r, "Notes")
     r += 1
-    ws.row_dimensions[r].height = 30
-    _cell(ws, r, 1, COLS, s.get("notes"), wrap=True, align="left", size=9.5)
+    ws.row_dimensions[r].height = 32
+    _cell(ws, r, 1, COLS, s.get("notes"), wrap=True, align="left", size=10)
     last_row = r
 
     # ---- print setup: one portrait letter page ----
@@ -239,7 +281,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_area = f"A1:{get_column_letter(COLS)}{last_row}"
-    ws.page_margins = PageMargins(left=0.3, right=0.3, top=0.4, bottom=0.3)
+    ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.35, bottom=0.25)
 
     buf = io.BytesIO()
     wb.save(buf)
