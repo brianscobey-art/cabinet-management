@@ -36,19 +36,24 @@ ROW_BAND = 19
 
 # Header blocks (label span, value span) — values sized to ~24-30 characters
 SALE_L, SALE_V = 6, 8          # "Ashely's Code" is the longest label here
-JOB_L, JOB_V = 4, 9
-CUST_L, CUST_V = 4, 9          # 14 + 13 + 13 = 40
+JOB_L, JOB_V = 3, 10           # short labels, long values (addresses, emails)
+CUST_L, CUST_V = 3, 10         # 14 + 13 + 13 = 40
 
 
 def _cell(ws, row, col, span, value=None, *, bold=False, fill=None, align="left",
-          wrap=False, fmt=None, size=10, color=None, border=True):
-    """One merged field; returns the next free column."""
+          wrap=False, fmt=None, size=10, color=None, border=True, shrink=False):
+    """One merged field; returns the next free column.
+
+    shrink=True lets Excel scale long entries down instead of clipping them —
+    every cell someone types into uses it (wrap and shrink are exclusive).
+    """
     if span > 1:
         ws.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col + span - 1)
     c = ws.cell(row=row, column=col, value=value)
     c.font = Font(name="Calibri", size=size, bold=bold,
                   color=color or (BAND_TXT if fill == GREEN else "000000"))
-    c.alignment = Alignment(horizontal=align, vertical="center", wrap_text=wrap)
+    c.alignment = Alignment(horizontal=align, vertical="center", wrap_text=wrap,
+                            shrink_to_fit=shrink and not wrap)
     if fill:
         c.fill = PatternFill("solid", fgColor=fill)
     if fmt:
@@ -66,8 +71,8 @@ def _band(ws, row, text, col=1, span=COLS):
 
 def _pair(ws, row, col, label, value, lab_span, val_span, fmt=None):
     """Label cell + fillable value cell."""
-    nxt = _cell(ws, row, col, lab_span, label, bold=True, fill=LABEL_FILL, size=9.5)
-    return _cell(ws, row, nxt, val_span, value, fmt=fmt, size=10)
+    nxt = _cell(ws, row, col, lab_span, label, bold=True, fill=LABEL_FILL, size=9)
+    return _cell(ws, row, nxt, val_span, value, fmt=fmt, size=10, shrink=True)
 
 
 def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
@@ -138,18 +143,18 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     _band(ws, r, "Superintendent")
     r += 1
     ws.row_dimensions[r].height = ROW_ENTRY
-    col = _cell(ws, r, 1, 4, "Name", bold=True, fill=LABEL_FILL, size=9.5)
-    col = _cell(ws, r, col, 12, s.get("super_name"))
-    col = _cell(ws, r, col, 4, "Phone", bold=True, fill=LABEL_FILL, size=9.5)
-    col = _cell(ws, r, col, 8, s.get("super_phone"))
-    col = _cell(ws, r, col, 4, "Email", bold=True, fill=LABEL_FILL, size=9.5)
-    _cell(ws, r, col, COLS - col + 1, s.get("super_email"))
+    col = _cell(ws, r, 1, 4, "Name", bold=True, fill=LABEL_FILL, size=9)
+    col = _cell(ws, r, col, 11, s.get("super_name"), shrink=True)
+    col = _cell(ws, r, col, 4, "Phone", bold=True, fill=LABEL_FILL, size=9)
+    col = _cell(ws, r, col, 7, s.get("super_phone"), shrink=True)
+    col = _cell(ws, r, col, 4, "Email", bold=True, fill=LABEL_FILL, size=9)
+    _cell(ws, r, col, COLS - col + 1, s.get("super_email"), shrink=True)
     ws.row_dimensions[r + 1].height = 7      # spacer
     r += 2
 
     # PO columns sized to content: PO number 19ch, vendor 27ch, code 13ch,
     # type 16ch, money 10ch each.
-    PO_SPANS = [7, 10, 5, 6, 4, 4, 4]           # = 40
+    PO_SPANS = [6, 11, 5, 6, 4, 4, 4]           # = 40 (vendor is the long one)
     MONEY_COL_1 = 1 + sum(PO_SPANS[:4])          # first money column
     MONEY_COL_2 = MONEY_COL_1 + PO_SPANS[4]
     TOTAL_COL = MONEY_COL_2 + PO_SPANS[5]
@@ -170,19 +175,19 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             rr = first + i
             ws.row_dimensions[rr].height = ROW_TABLE
             p = rows[i] if i < len(rows) else {}
-            col = _cell(ws, rr, 1, PO_SPANS[0], p.get("po_number") or "", size=10)
-            col = _cell(ws, rr, col, PO_SPANS[1], p.get("vendor"), size=10)
-            col = _cell(ws, rr, col, PO_SPANS[2], p.get("vendor_code"), size=10)
-            col = _cell(ws, rr, col, PO_SPANS[3], p.get("po_type"), size=10)
+            col = _cell(ws, rr, 1, PO_SPANS[0], p.get("po_number") or "", size=10, shrink=True)
+            col = _cell(ws, rr, col, PO_SPANS[1], p.get("vendor"), size=10, shrink=True)
+            col = _cell(ws, rr, col, PO_SPANS[2], p.get("vendor_code"), size=10, shrink=True)
+            col = _cell(ws, rr, col, PO_SPANS[3], p.get("po_type"), size=10, shrink=True)
             col = _cell(ws, rr, col, PO_SPANS[4],
                         float(p["amount1"]) if p.get("amount1") else None,
-                        align="right", fmt=MONEY, size=10)
+                        align="right", fmt=MONEY, size=10, shrink=True)
             col = _cell(ws, rr, col, PO_SPANS[5],
                         float(p["amount2"]) if p.get("amount2") else None,
-                        align="right", fmt=MONEY, size=10)
+                        align="right", fmt=MONEY, size=10, shrink=True)
             a1, a2 = get_column_letter(MONEY_COL_1), get_column_letter(MONEY_COL_2)
             _cell(ws, rr, col, PO_SPANS[6], f"={a1}{rr}+{a2}{rr}",
-                  align="right", fmt=MONEY, size=10)
+                  align="right", fmt=MONEY, size=10, shrink=True)
         last = first + count - 1
         tr = last + 1
         ws.row_dimensions[tr].height = ROW_TABLE
@@ -203,9 +208,9 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     r = lab_total_row + 2
 
     # ---- summary: cost | contract | margin (15 + 13 + 12 = 40) ----
-    COST_L, COST_V = 9, 6
-    CONTRACT_L, CONTRACT_V = 7, 6
-    MARGIN_L, MARGIN_V = 6, 6
+    COST_L, COST_V = 8, 7
+    CONTRACT_L, CONTRACT_V = 6, 7
+    MARGIN_L, MARGIN_V = 5, 7
     cost_c = 1
     contract_c = cost_c + COST_L + COST_V
     margin_c = contract_c + CONTRACT_L + CONTRACT_V
@@ -229,7 +234,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             f"={CV}{r}+{CV}{r + 1}+{CV}{r + 2}",
         )[i]
         _cell(ws, rr, cost_val_col, COST_V, formula, align="right",
-              fmt=MONEY_HARD, bold=(i == 3), size=10)
+              fmt=MONEY_HARD, bold=(i == 3), size=10, shrink=True)
     ws.row_dimensions[tax_row].height = ROW_TABLE
     _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9)
     _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 9) / 100,
@@ -245,7 +250,8 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         _cell(ws, rr, contract_c, CONTRACT_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
         if i < 3:
             v = float(val) if val not in (None, "") and float(val) else None
-            _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="right", fmt=MONEY, size=10)
+            _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="right", fmt=MONEY,
+                  size=10, shrink=True)
         else:
             _cell(ws, rr, contract_val_col, CONTRACT_V, f"=SUM({KV}{r}:{KV}{r + 2})",
                   bold=True, align="right", fmt=MONEY_HARD, size=10)
@@ -261,7 +267,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             f'=IF({sale_cell}=0,"",({sale_cell}-{cogs_cell})/{sale_cell})',
         )[i]
         _cell(ws, rr, margin_val_col, MARGIN_V, formula, align="right",
-              fmt=(MONEY_HARD if i == 0 else PCT), bold=True, size=10)
+              fmt=(MONEY_HARD if i == 0 else PCT), bold=True, size=10, shrink=True)
     # square off the margin block against the taller cost/contract columns
     for i in (2, 3):
         _cell(ws, r + i, margin_c, MARGIN_L + MARGIN_V, None)
