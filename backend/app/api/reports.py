@@ -172,13 +172,47 @@ def manager_report(db: Session = Depends(get_db)):
     return build_manager_report(db)
 
 
+SHARE_KEY = "manager_report_token"
+
+
 @router.get("/reports/manager/public")
 def manager_report_public(token: str = Query(...), db: Session = Depends(get_db)):
     """Read-only, no login — for upper management. Gated by the share token."""
-    configured = get_settings().manager_report_token
+    from app.models import get_setting
+
+    configured = get_setting(db, SHARE_KEY) or get_settings().manager_report_token
     if not configured or not secrets.compare_digest(token, configured):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return build_manager_report(db)
+
+
+@router.get("/reports/manager/share", dependencies=[Depends(read_access)])
+def manager_share_status(db: Session = Depends(get_db)):
+    """Current share token (admins copy the link; None = link disabled)."""
+    from app.models import get_setting
+
+    return {"token": get_setting(db, SHARE_KEY) or get_settings().manager_report_token or None}
+
+
+@router.post("/reports/manager/share", dependencies=[Depends(write_access)])
+def manager_share_enable(db: Session = Depends(get_db)):
+    """Generate (or regenerate) the public share token and return it."""
+    from app.models import set_setting
+
+    token = secrets.token_urlsafe(24)
+    set_setting(db, SHARE_KEY, token)
+    db.commit()
+    return {"token": token}
+
+
+@router.delete("/reports/manager/share", dependencies=[Depends(write_access)])
+def manager_share_disable(db: Session = Depends(get_db)):
+    """Turn off the public link."""
+    from app.models import set_setting
+
+    set_setting(db, SHARE_KEY, "")
+    db.commit()
+    return {"token": None}
 
 
 # --- Open PO report -------------------------------------------------------

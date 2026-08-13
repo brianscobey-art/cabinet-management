@@ -22,6 +22,7 @@ export interface Account {
   name: string;
   type: "builder" | "retail";
   notes: string | null;
+  ksr?: string | null;
 }
 
 export interface Community {
@@ -115,6 +116,8 @@ export interface Job {
   field_contact_phone: string | null;
   field_contact_email: string | null;
   notes: string | null;
+  ksr: string | null;
+  sale_date: string | null;
 }
 
 export interface JobDetail extends Job {
@@ -249,6 +252,9 @@ export const listAccounts = (activeOnly = false) =>
 export const getAccount = (id: number) => api<AccountDetail>(`/accounts/${id}`);
 export const createAccount = (data: { name: string; type: string }) =>
   api<Account>("/accounts", { method: "POST", body: JSON.stringify(data) });
+export const updateAccount = (id: number, data: Record<string, unknown>) =>
+  api<Account>(`/accounts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const listKsrs = () => api<string[]>("/ksrs");
 export const createCommunity = (data: { account_id: number; name: string; market?: string }) =>
   api<Community>("/communities", { method: "POST", body: JSON.stringify(data) });
 export const listCommunities = (accountId: number, activeOnly = true) =>
@@ -638,6 +644,56 @@ export interface OpenServiceRow {
 export const getOpenService = () => api<OpenServiceRow[]>("/reports/open-service");
 
 export const getReportsList = () => api<ReportInfo[]>("/reports");
+
+// --- Manager Sales Report ---------------------------------------------------
+export interface InstalledPeriod {
+  label: string;
+  count: number;
+  po_total: number;
+}
+export interface KsrSalesRow {
+  ksr: string;
+  count: number;
+  po_total: number;
+  is_new_q2: boolean;
+}
+export interface KsrMilesRow {
+  ksr: string;
+  jobs: number;
+  monthly_miles: number;
+}
+export interface ManagerReport {
+  generated_at: string;
+  as_of: string;
+  roster: string[];
+  installed: Record<"current_month" | "previous_month" | "previous_quarter" | "ytd", InstalledPeriod>;
+  open_pipeline: { count: number; po_total: number };
+  by_ksr: KsrSalesRow[];
+  pl_net_sales: { value: number | null; source_file: string; label: string | null } | null;
+  capacity: {
+    active_houses: number;
+    houses_per_person: number;
+    field_people_needed: number | null;
+    coverage_sq_miles: number;
+    trips_per_job: number;
+    by_ksr_miles: KsrMilesRow[];
+    miles_estimated: boolean;
+    total_monthly_miles: number;
+  };
+}
+export const getManagerReport = () => api<ManagerReport>("/reports/manager");
+export const getShareStatus = () => api<{ token: string | null }>("/reports/manager/share");
+export const enableShare = () =>
+  api<{ token: string }>("/reports/manager/share", { method: "POST" });
+export const disableShare = () =>
+  api<{ token: null }>("/reports/manager/share", { method: "DELETE" });
+
+/** Public (no auth) — used by the shareable link page. */
+export async function getPublicManagerReport(token: string): Promise<ManagerReport> {
+  const resp = await fetch(`/api/reports/manager/public?token=${encodeURIComponent(token)}`);
+  if (!resp.ok) throw new Error("This report link is invalid or has been turned off.");
+  return resp.json();
+}
 export const getOpenPO = () => api<OpenPOReport>("/reports/open-po");
 export const getPoStatus = () => api<StatusSummaryRow[]>("/reports/po-status");
 export const getRevenueBuilder = () => api<RevenueGroup[]>("/reports/revenue-builder");

@@ -16,6 +16,7 @@ class AccountCreate(BaseModel):
 class AccountUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = None
+    ksr: str | None = None
 
 
 class AccountOut(BaseModel):
@@ -25,6 +26,7 @@ class AccountOut(BaseModel):
     name: str
     type: AccountType
     notes: str | None
+    ksr: str | None = None
     created_at: datetime
 
 
@@ -170,6 +172,8 @@ class JobUpdate(BaseModel):
     field_contact_phone: str | None = None
     field_contact_email: EmailStr | None = None
     notes: str | None = None
+    ksr: str | None = None
+    sale_date: date | None = None
 
 
 class JobOut(BaseModel):
@@ -194,6 +198,8 @@ class JobOut(BaseModel):
     field_contact_phone: str | None
     field_contact_email: str | None
     notes: str | None
+    ksr: str | None
+    sale_date: date | None
     created_at: datetime
     updated_at: datetime
 

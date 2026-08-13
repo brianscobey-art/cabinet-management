@@ -313,3 +313,102 @@ class LineItem(Base):
     notes: Mapped[str | None] = mapped_column(String(500), default=None)
 
     room: Mapped[Room] = relationship(back_populates="lines")
+
+
+class CoverVendor(Base):
+    """PO-type presets for the Sales Order Cover Sheet (Type -> abbr/vendor/code)."""
+
+    __tablename__ = "cover_vendors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10), default="product")  # product | labor
+    po_type: Mapped[str] = mapped_column(String(60))
+    po_abb: Mapped[str | None] = mapped_column(String(10), default=None)
+    vendor: Mapped[str | None] = mapped_column(String(120), default=None)
+    vendor_code: Mapped[str | None] = mapped_column(String(30), default=None)
+
+
+class Superintendent(Base):
+    """Builder superintendents picked on the cover sheet."""
+
+    __tablename__ = "superintendents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(40), default=None)
+    email: Mapped[str | None] = mapped_column(String(160), default=None)
+    company: Mapped[str | None] = mapped_column(String(120), default=None)
+
+
+class CoverSheet(Base):
+    """Sales Order Cover Sheet — standalone, or tied to a Sterling job."""
+
+    __tablename__ = "cover_sheets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), index=True, default=None)
+
+    job_code: Mapped[str | None] = mapped_column(String(40), default=None)
+    sale_date: Mapped[str | None] = mapped_column(String(20), default=None)  # m/d/yy as typed
+    plan_type: Mapped[str | None] = mapped_column(String(80), default=None)
+    customer_account: Mapped[str | None] = mapped_column(String(40), default=None)
+    job_number: Mapped[str | None] = mapped_column(String(40), default=None)   # G-code
+    install_code: Mapped[str | None] = mapped_column(String(40), default=None)  # I-code
+    scope: Mapped[str | None] = mapped_column(String(200), default="Kitchens and Bath Cabinets")
+
+    # Job Information (the house)
+    ji_name: Mapped[str | None] = mapped_column(String(120), default=None)
+    ji_contact: Mapped[str | None] = mapped_column(String(120), default=None)
+    ji_address: Mapped[str | None] = mapped_column(String(200), default=None)
+    ji_city: Mapped[str | None] = mapped_column(String(80), default=None)
+    ji_state: Mapped[str | None] = mapped_column(String(10), default=None)
+    ji_zip: Mapped[str | None] = mapped_column(String(15), default=None)
+    ji_phone: Mapped[str | None] = mapped_column(String(40), default=None)
+    ji_email: Mapped[str | None] = mapped_column(String(160), default=None)
+
+    # Customer (who is billed)
+    cu_company: Mapped[str | None] = mapped_column(String(120), default=None)
+    cu_name: Mapped[str | None] = mapped_column(String(120), default=None)
+    cu_address: Mapped[str | None] = mapped_column(String(200), default=None)
+    cu_city: Mapped[str | None] = mapped_column(String(80), default=None)
+    cu_state: Mapped[str | None] = mapped_column(String(10), default=None)
+    cu_zip: Mapped[str | None] = mapped_column(String(15), default=None)
+    cu_phone: Mapped[str | None] = mapped_column(String(40), default=None)
+    cu_email: Mapped[str | None] = mapped_column(String(160), default=None)
+
+    super_name: Mapped[str | None] = mapped_column(String(120), default=None)
+    super_phone: Mapped[str | None] = mapped_column(String(40), default=None)
+    super_email: Mapped[str | None] = mapped_column(String(160), default=None)
+
+    tax_pct: Mapped[Decimal] = mapped_column(Numeric(6, 3), default=Decimal("9"))  # materials tax
+    sale_cabinets: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    sale_countertops: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    sale_other: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    notes: Mapped[str | None] = mapped_column(Text, default=None)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    pos: Mapped[list["CoverSheetPO"]] = relationship(
+        back_populates="sheet", cascade="all, delete-orphan", order_by="CoverSheetPO.id"
+    )
+
+
+class CoverSheetPO(Base):
+    """One PO line. Products: amount1=Cost, amount2=Freight.
+    Labor: amount1=Assemble, amount2=Install. Total = amount1+amount2 unless overridden."""
+
+    __tablename__ = "cover_sheet_pos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sheet_id: Mapped[int] = mapped_column(ForeignKey("cover_sheets.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="product")  # product | labor
+    po_type: Mapped[str | None] = mapped_column(String(60), default=None)
+    po_abb: Mapped[str | None] = mapped_column(String(10), default=None)
+    vendor: Mapped[str | None] = mapped_column(String(120), default=None)
+    vendor_code: Mapped[str | None] = mapped_column(String(30), default=None)
+    amount1: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    amount2: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    total_override: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+
+    sheet: Mapped[CoverSheet] = relationship(back_populates="pos")

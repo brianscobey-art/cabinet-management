@@ -12,8 +12,15 @@ from app.api.schemas import (
 )
 from app.database import get_db
 from app.models import Account, Community, Job, JobStatus
+from app.sales import KSR_ROSTER
 
 router = APIRouter(tags=["accounts"])
+
+
+@router.get("/ksrs", response_model=list[str], dependencies=[Depends(read_access)])
+def list_ksrs():
+    """The KSR roster for the account/job assignment dropdowns."""
+    return KSR_ROSTER
 
 
 def get_account_or_404(account_id: int, db: Session) -> Account:

@@ -26,6 +26,9 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from app.sterling_app.database import SessionLocal
 from app.sterling_app.models import (
     CatalogItem,
+    CoverSheet,
+    CoverSheetPO,
+    CoverVendor,
     CostModel,
     DoorStyle,
     InstallMode,
@@ -42,6 +45,7 @@ from app.sterling_app.models import (
     Room,
     Setting,
     Stage,
+    Superintendent,
     TopPiece,
 )
 
@@ -94,6 +98,35 @@ SHEETS = [
         ("ID", "id"), ("Snapshot ID", "snapshot_id"), ("Division", "division"),
         ("Plan", "plan"), ("COGS", "cogs"), ("Margin %", "margin_pct"),
         ("Sale", "sale"), ("Tops", "tops"), ("Total", "total"),
+    ]),
+    ("CoverVendors", "CoverVendors", CoverVendor, [
+        ("ID", "id"), ("Kind", "kind"), ("PO Type", "po_type"), ("PO Abb", "po_abb"),
+        ("Vendor", "vendor"), ("Vendor Code", "vendor_code"),
+    ]),
+    ("Superintendents", "Superintendents", Superintendent, [
+        ("ID", "id"), ("Name", "name"), ("Phone", "phone"), ("Email", "email"),
+        ("Company", "company"),
+    ]),
+    ("CoverSheets", "CoverSheets", CoverSheet, [
+        ("ID", "id"), ("Job ID", "job_id"), ("Job Code", "job_code"), ("Sale Date", "sale_date"),
+        ("Plan Type", "plan_type"), ("Customer Account", "customer_account"),
+        ("Job Number", "job_number"), ("Install Code", "install_code"), ("Scope", "scope"),
+        ("JI Name", "ji_name"), ("JI Contact", "ji_contact"), ("JI Address", "ji_address"),
+        ("JI City", "ji_city"), ("JI State", "ji_state"), ("JI Zip", "ji_zip"),
+        ("JI Phone", "ji_phone"), ("JI Email", "ji_email"),
+        ("Cust Company", "cu_company"), ("Cust Name", "cu_name"), ("Cust Address", "cu_address"),
+        ("Cust City", "cu_city"), ("Cust State", "cu_state"), ("Cust Zip", "cu_zip"),
+        ("Cust Phone", "cu_phone"), ("Cust Email", "cu_email"),
+        ("Super Name", "super_name"), ("Super Phone", "super_phone"), ("Super Email", "super_email"),
+        ("Tax %", "tax_pct"), ("Sale Cabinets", "sale_cabinets"),
+        ("Sale Countertops", "sale_countertops"), ("Sale Other", "sale_other"),
+        ("Notes", "notes"), ("Created", "created_at"), ("Updated", "updated_at"),
+    ]),
+    ("CoverSheetPOs", "CoverSheetPOs", CoverSheetPO, [
+        ("ID", "id"), ("Sheet ID", "sheet_id"), ("Kind", "kind"), ("PO Type", "po_type"),
+        ("PO Abb", "po_abb"), ("Vendor", "vendor"), ("Vendor Code", "vendor_code"),
+        ("Cost/Assemble", "amount1"), ("Freight/Install", "amount2"),
+        ("Total Override", "total_override"),
     ]),
     ("PlanBids", "PlanBids", PlanBid, [
         ("ID", "id"), ("Builder", "builder"), ("Plan", "plan"),
@@ -285,6 +318,8 @@ def _parse(attr, v):
         "multiplier_override", "freight_pct_override", "install_rate",
         "hardware_rate", "assembly_rate", "pia_amount",
         "rate_sqft", "width", "depth", "cogs", "sale", "tops", "total",
+        "tax_pct", "sale_cabinets", "sale_countertops", "sale_other",
+        "amount1", "amount2", "total_override",
     ):
         return Decimal(str(v))
     if attr in (
@@ -292,7 +327,7 @@ def _parse(attr, v):
         "price_group", "doors", "drawers", "hardware_qty_override",
         "assembly_units", "install_units", "assembly_boxes",
         "assemble_value", "install_value",
-        "tops_id", "k_sinks", "v_sinks", "snapshot_id",
+        "tops_id", "k_sinks", "v_sinks", "snapshot_id", "sheet_id",
     ):
         return int(v)
     if attr in ("exported_at", "created_at", "updated_at"):
@@ -337,6 +372,8 @@ def load_into_db() -> dict:
                     DoorStyle: "name", PlanInstall: "plan", PlanTemplateItem: "sku",
                     PlanTops: "plan", TopPiece: "area",
                     PriceSnapshot: "division", PriceSnapshotRow: "plan",
+                    CoverVendor: "po_type", Superintendent: "name",
+                    CoverSheet: "id", CoverSheetPO: "kind",
                 }[model]
                 n = 0
                 for row in rows:

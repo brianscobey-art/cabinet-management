@@ -12,6 +12,7 @@ import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
 import HelpPage from "./pages/HelpPage";
+import { PublicManagerReport } from "./pages/ManagerReport";
 import SetPasswordPage from "./pages/SetPasswordPage";
 import SuitePage from "./pages/SuitePage";
 import UsersPage from "./pages/UsersPage";
@@ -87,6 +88,9 @@ export default function App() {
 
   // The emailed invite link must work before (and instead of) signing in.
   if (hash.startsWith("#/set-password")) return <SetPasswordPage />;
+  // The shared manager-report link is public (no login) — gated by its token.
+  const reportMatch = hash.match(/^#\/report\/(.+)$/);
+  if (reportMatch) return <PublicManagerReport token={decodeURIComponent(reportMatch[1])} />;
 
   if (loading) return <div className="center">Loading…</div>;
   if (!user) {

@@ -1815,3 +1815,37 @@ tfoot td {
   color: var(--teal); border: 1px solid var(--teal); border-radius: 999px;
   padding: 0.1rem 0.55rem; margin-top: 0.2rem;
 }
+
+/* ===== Manager Sales Report ===== */
+.mr { color: #1c2b29; }
+.mr-head h1 { margin: 0; color: #125952; font-size: 1.6rem; }
+.mr-sub { color: #6b7b78; margin-top: 2px; }
+.mr-section { color: #125952; margin: 1.4rem 0 0.6rem; font-size: 1.1rem; border-bottom: 2px solid #e3ebe9; padding-bottom: 4px; }
+.mr-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.mr-tile { background: #fff; border: 1px solid #e0e8e6; border-radius: 10px; padding: 14px 16px; }
+.mr-tile-label { color: #6b7b78; font-size: 0.82rem; }
+.mr-tile-big { color: #125952; font-size: 2rem; font-weight: 700; line-height: 1.1; margin-top: 2px; }
+.mr-tile-sub { color: #45514f; font-size: 0.85rem; margin-top: 2px; }
+.mr-callouts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.mr-callout { background: #fff; border: 1px solid #e0e8e6; border-radius: 10px; padding: 16px 18px; }
+.mr-callout-accent { background: #125952; border-color: #125952; color: #fff; }
+.mr-callout-label { font-size: 0.85rem; opacity: 0.9; }
+.mr-callout-big { font-size: 2.2rem; font-weight: 700; line-height: 1.1; margin-top: 4px; }
+.mr-callout .mr-callout-big { color: #125952; }
+.mr-callout-accent .mr-callout-big { color: #fff; }
+.mr-callout-sub { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+.mr-table { width: 100%; border-collapse: collapse; }
+.mr-table th, .mr-table td { padding: 8px 12px; border-bottom: 1px solid #eef2f1; text-align: left; }
+.mr-table th { background: #fff; color: #6b7b78; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; position: static; }
+.mr-table td.r, .mr-table th.r { text-align: right; }
+.mr-badge { background: #df5822; color: #fff; font-size: 0.68rem; font-weight: 700; border-radius: 999px; padding: 1px 7px; margin-left: 8px; text-transform: uppercase; }
+.mr-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.mr-share-url { flex: 1; min-width: 220px; max-width: 460px; padding: 6px 10px; font-size: 0.85rem; color: #45514f; }
+.mr-public-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #125952; margin-bottom: 16px; }
+
+@media print {
+  .shell > header, .mr-toolbar, .no-print, nav, .toast { display: none !important; }
+  .shell, main, .shell main { display: block !important; padding: 0 !important; }
+  .mr-tile, .mr-callout, .card { break-inside: avoid; }
+  .mr-callout-accent { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

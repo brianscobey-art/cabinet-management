@@ -1,4 +1,5 @@
 from app.models.account import Account, AccountType
+from app.models.appsetting import AppSetting, get_setting, set_setting
 from app.models.community import Community
 from app.models.document import JobDocument
 from app.models.domotxn import DomoTxn
@@ -19,6 +20,9 @@ from app.models.worker import DutyAssignment, Worker, WorkerTimeOff
 __all__ = [
     "Account",
     "AccountType",
+    "AppSetting",
+    "get_setting",
+    "set_setting",
     "Community",
     "ConfirmationStatus",
     "DomoTxn",

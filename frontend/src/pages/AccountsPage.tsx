@@ -1,5 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Account, AccountDetail, createAccount, createCommunity, getAccount, listAccounts } from "../api";
+import {
+  Account,
+  AccountDetail,
+  createAccount,
+  createCommunity,
+  getAccount,
+  listAccounts,
+  listKsrs,
+  updateAccount,
+} from "../api";
 
 export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -7,12 +16,24 @@ export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [type, setType] = useState("builder");
+  const [ksrs, setKsrs] = useState<string[]>([]);
 
   const refresh = () => listAccounts().then(setAccounts).catch((e) => setError(e.message));
 
   useEffect(() => {
     refresh();
+    listKsrs().then(setKsrs).catch(() => {});
   }, []);
+
+  async function setAccountKsr(id: number, ksr: string) {
+    setError("");
+    try {
+      await updateAccount(id, { ksr: ksr || null });
+      setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, ksr: ksr || null } : a)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set KSR");
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -49,6 +70,7 @@ export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
             <tr>
               <th>Name</th>
               <th>Type</th>
+              <th>KSR (default for its jobs)</th>
               <th />
             </tr>
           </thead>
@@ -58,6 +80,22 @@ export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
                 <td>{a.name}</td>
                 <td>{a.type}</td>
                 <td>
+                  {canWrite ? (
+                    <select
+                      value={a.ksr ?? ""}
+                      onChange={(e) => setAccountKsr(a.id, e.target.value)}
+                      style={!a.ksr ? { color: "#b23" } : undefined}
+                    >
+                      <option value="">— unassigned —</option>
+                      {ksrs.map((k) => (
+                        <option key={k} value={k}>{k}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    a.ksr ?? <span className="muted">unassigned</span>
+                  )}
+                </td>
+                <td>
                   <button className="link-btn" onClick={() => getAccount(a.id).then(setSelected)}>
                     communities
                   </button>
@@ -66,7 +104,7 @@ export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={3} className="muted">
+                <td colSpan={4} className="muted">
                   No accounts yet.
                 </td>
               </tr>

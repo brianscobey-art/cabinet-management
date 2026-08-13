@@ -8,6 +8,7 @@ import {
   deleteHardware,
   deleteRoom,
   getJob,
+  listKsrs,
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
@@ -22,11 +23,13 @@ import ServiceRequestsSection from "./ServiceRequestsSection";
 export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [error, setError] = useState("");
+  const [ksrs, setKsrs] = useState<string[]>([]);
 
   const refresh = () => getJob(jobId).then(setJob).catch((e) => setError(e.message));
 
   useEffect(() => {
     refresh();
+    if (canWrite) listKsrs().then(setKsrs).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
@@ -99,6 +102,41 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             </dd>
             <dt>Warranty start</dt>
             <dd>{fmtDate(job.warranty_start_date)}</dd>
+            <dt>KSR (sold by)</dt>
+            <dd>
+              {canWrite ? (
+                <select
+                  value={job.ksr ?? ""}
+                  onChange={async (e) => {
+                    await updateJob(job.id, { ksr: e.target.value || null });
+                    refresh();
+                  }}
+                >
+                  <option value="">— account default —</option>
+                  {ksrs.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              ) : (
+                job.ksr ?? "account default"
+              )}
+            </dd>
+            <dt>Sale date</dt>
+            <dd>
+              {canWrite ? (
+                <input
+                  type="date"
+                  className="date-input"
+                  value={job.sale_date ?? ""}
+                  onChange={async (e) => {
+                    await updateJob(job.id, { sale_date: e.target.value || null });
+                    refresh();
+                  }}
+                />
+              ) : (
+                fmtDate(job.sale_date)
+              )}
+            </dd>
           </dl>
         </div>
         <div className="card">

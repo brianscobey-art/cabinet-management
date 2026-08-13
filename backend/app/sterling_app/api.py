@@ -16,6 +16,9 @@ from app.sterling_app.database import get_db
 from app.sterling_app.export_cabinettron import ExportError, export_job
 from app.sterling_app.models import (
     CatalogItem,
+    CoverSheet,
+    CoverSheetPO,
+    CoverVendor,
     DoorStyle,
     Job,
     LineItem,
@@ -25,6 +28,7 @@ from app.sterling_app.models import (
     Room,
     Setting,
     Stage,
+    Superintendent,
 )
 
 router = APIRouter(prefix="/api")
@@ -1329,6 +1333,207 @@ def download_job_doc(job_id: int, category: str, name: str, db: Session = Depend
 def delete_job_doc(job_id: int, category: str, name: str, db: Session = Depends(get_db)):
     _get_or_404(db, Job, job_id, "Job")
     _doc_path_or_404(job_id, category, name).unlink()
+
+
+# --- Sales Order Cover Sheet ---
+
+COVER_FIELDS = [
+    "job_code", "sale_date", "plan_type", "customer_account", "job_number", "install_code", "scope",
+    "ji_name", "ji_contact", "ji_address", "ji_city", "ji_state", "ji_zip", "ji_phone", "ji_email",
+    "cu_company", "cu_name", "cu_address", "cu_city", "cu_state", "cu_zip", "cu_phone", "cu_email",
+    "super_name", "super_phone", "super_email", "notes",
+]
+COVER_MONEY = ["tax_pct", "sale_cabinets", "sale_countertops", "sale_other"]
+
+
+class CoverPOIn(BaseModel):
+    kind: str = Field(default="product", max_length=10)
+    po_type: str | None = None
+    po_abb: str | None = None
+    vendor: str | None = None
+    vendor_code: str | None = None
+    amount1: Decimal = Field(default=Decimal("0"))
+    amount2: Decimal = Field(default=Decimal("0"))
+    total_override: Decimal | None = None
+
+
+class CoverSheetIn(BaseModel):
+    job_id: int | None = None
+    job_code: str | None = None
+    sale_date: str | None = None
+    plan_type: str | None = None
+    customer_account: str | None = None
+    job_number: str | None = None
+    install_code: str | None = None
+    scope: str | None = None
+    ji_name: str | None = None
+    ji_contact: str | None = None
+    ji_address: str | None = None
+    ji_city: str | None = None
+    ji_state: str | None = None
+    ji_zip: str | None = None
+    ji_phone: str | None = None
+    ji_email: str | None = None
+    cu_company: str | None = None
+    cu_name: str | None = None
+    cu_address: str | None = None
+    cu_city: str | None = None
+    cu_state: str | None = None
+    cu_zip: str | None = None
+    cu_phone: str | None = None
+    cu_email: str | None = None
+    super_name: str | None = None
+    super_phone: str | None = None
+    super_email: str | None = None
+    notes: str | None = None
+    tax_pct: Decimal = Field(default=Decimal("9"), ge=0, lt=100)
+    sale_cabinets: Decimal = Field(default=Decimal("0"), ge=0)
+    sale_countertops: Decimal = Field(default=Decimal("0"), ge=0)
+    sale_other: Decimal = Field(default=Decimal("0"), ge=0)
+    pos: list[CoverPOIn] = []
+
+
+def _cover_out(db: Session, s: CoverSheet) -> dict:
+    money = compute.money
+    rows = []
+    materials = labor = Decimal("0")
+    for p in s.pos:
+        total = (
+            Decimal(p.total_override)
+            if p.total_override is not None
+            else money(Decimal(p.amount1) + Decimal(p.amount2))
+        )
+        if p.kind == "labor":
+            labor += total
+        else:
+            materials += total
+        rows.append({
+            "id": p.id, "kind": p.kind, "po_type": p.po_type, "po_abb": p.po_abb,
+            "vendor": p.vendor, "vendor_code": p.vendor_code,
+            "amount1": str(p.amount1), "amount2": str(p.amount2),
+            "total_override": str(p.total_override) if p.total_override is not None else None,
+            "total": str(money(total)),
+            "po_number": f"{s.job_code or ''} {p.po_abb or ''}".strip(),
+        })
+    materials, labor = money(materials), money(labor)
+    tax = money(materials * Decimal(s.tax_pct) / 100)
+    cogs = money(materials + labor + tax)
+    sale = money(Decimal(s.sale_cabinets) + Decimal(s.sale_countertops) + Decimal(s.sale_other))
+    margin = money(sale - cogs)
+    data = {f: getattr(s, f) for f in COVER_FIELDS}
+    data.update({m: str(getattr(s, m)) for m in COVER_MONEY})
+    data.update({
+        "id": s.id, "job_id": s.job_id, "pos": rows,
+        "totals": {
+            "materials": str(materials), "labor": str(labor), "tax": str(tax), "cogs": str(cogs),
+            "sale": str(sale), "margin": str(margin),
+            "margin_pct": str(money(margin / sale * 100)) if sale else None,
+        },
+        "updated_at": s.updated_at.isoformat(),
+    })
+    return data
+
+
+@router.get("/cover-sheets")
+def list_cover_sheets(db: Session = Depends(get_db)):
+    out = []
+    for s in db.query(CoverSheet).order_by(CoverSheet.id.desc()).all():
+        d = _cover_out(db, s)
+        out.append({
+            "id": s.id, "job_id": s.job_id, "job_code": s.job_code, "sale_date": s.sale_date,
+            "ji_name": s.ji_name, "ji_address": s.ji_address, "cu_company": s.cu_company,
+            "sale": d["totals"]["sale"], "margin_pct": d["totals"]["margin_pct"],
+            "updated_at": d["updated_at"],
+        })
+    return out
+
+
+@router.get("/cover-sheets/refs")
+def cover_refs(db: Session = Depends(get_db)):
+    return {
+        "vendors": [
+            {"kind": v.kind, "po_type": v.po_type, "po_abb": v.po_abb,
+             "vendor": v.vendor, "vendor_code": v.vendor_code}
+            for v in db.query(CoverVendor).order_by(CoverVendor.kind, CoverVendor.id).all()
+        ],
+        "superintendents": [
+            {"name": s.name, "phone": s.phone, "email": s.email, "company": s.company}
+            for s in db.query(Superintendent).order_by(Superintendent.name).all()
+        ],
+    }
+
+
+@router.get("/cover-sheets/{sheet_id}")
+def get_cover_sheet(sheet_id: int, db: Session = Depends(get_db)):
+    return _cover_out(db, _get_or_404(db, CoverSheet, sheet_id, "Cover sheet"))
+
+
+@router.post("/cover-sheets", status_code=201)
+def create_cover_sheet(payload: CoverSheetIn, db: Session = Depends(get_db)):
+    data = payload.model_dump(exclude={"pos"})
+    s = CoverSheet(**data)
+    s.pos = [CoverSheetPO(**p.model_dump()) for p in payload.pos]
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return _cover_out(db, s)
+
+
+@router.put("/cover-sheets/{sheet_id}")
+def update_cover_sheet(sheet_id: int, payload: CoverSheetIn, db: Session = Depends(get_db)):
+    s = _get_or_404(db, CoverSheet, sheet_id, "Cover sheet")
+    for field, value in payload.model_dump(exclude={"pos"}).items():
+        setattr(s, field, value)
+    s.pos = [CoverSheetPO(**p.model_dump()) for p in payload.pos]
+    db.commit()
+    db.refresh(s)
+    return _cover_out(db, s)
+
+
+@router.delete("/cover-sheets/{sheet_id}", status_code=204)
+def delete_cover_sheet(sheet_id: int, db: Session = Depends(get_db)):
+    db.delete(_get_or_404(db, CoverSheet, sheet_id, "Cover sheet"))
+    db.commit()
+
+
+@router.post("/cover-sheets/from-job/{job_id}", status_code=201)
+def cover_sheet_from_job(job_id: int, db: Session = Depends(get_db)):
+    """Prefill a cover sheet from a Sterling job: addresses, contacts, and the
+    priced cabinets/tops/COGS so only the PO details need typing."""
+    job = _get_or_404(db, Job, job_id, "Job")
+    t = compute.job_totals(db, job)
+    existing = db.query(CoverSheet).filter(CoverSheet.job_id == job_id).first()
+    s = existing or CoverSheet(job_id=job_id)
+    if existing is None:
+        db.add(s)
+    s.job_code = s.job_code or job.name
+    s.plan_type = job.plan
+    s.ji_name = job.name
+    s.ji_address = job.address
+    s.ji_contact = job.field_contact_name or job.sales_contact_name
+    s.ji_phone = job.field_contact_phone or job.sales_contact_phone
+    s.ji_email = job.field_contact_email or job.sales_contact_email
+    s.cu_company = job.builder
+    s.cu_name = job.sales_contact_name
+    s.cu_phone = job.sales_contact_phone
+    s.cu_email = job.sales_contact_email
+    tops = t["tops"]
+    s.sale_cabinets = compute.money(t["sell"] - tops)
+    s.sale_countertops = tops
+    if not s.pos:
+        # seed the PO lines from the job's own cost build-up
+        cab = compute.money(t["cabinets_cost"] + t["lumber_cost"] + t["hardware_material"])
+        s.pos.append(CoverSheetPO(
+            kind="product", po_type="Cabinets", po_abb="CAB",
+            amount1=cab, amount2=t["freight"],
+        ))
+        s.pos.append(CoverSheetPO(
+            kind="labor", po_type="Install", po_abb="INS",
+            amount1=t["assembly"], amount2=t["install_cost"],
+        ))
+    db.commit()
+    db.refresh(s)
+    return _cover_out(db, s)
 
 
 # --- Excel workbook (the database) ---
