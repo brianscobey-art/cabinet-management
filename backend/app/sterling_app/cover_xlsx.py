@@ -35,7 +35,7 @@ ROW_TABLE = 16
 ROW_BAND = 19
 
 # Header blocks (label span, value span) — values sized to ~24-30 characters
-SALE_L, SALE_V = 6, 8          # "Ashely's Code" is the longest label here
+SALE_L, SALE_V = 5, 9          # "Ashely's Code" is the longest label here
 JOB_L, JOB_V = 3, 10           # short labels, long values (addresses, emails)
 CUST_L, CUST_V = 3, 10         # 14 + 13 + 13 = 40
 
@@ -71,7 +71,7 @@ def _band(ws, row, text, col=1, span=COLS):
 
 def _pair(ws, row, col, label, value, lab_span, val_span, fmt=None):
     """Label cell + fillable value cell."""
-    nxt = _cell(ws, row, col, lab_span, label, bold=True, fill=LABEL_FILL, size=9)
+    nxt = _cell(ws, row, col, lab_span, label, bold=True, fill=LABEL_FILL, size=9, shrink=True)
     return _cell(ws, row, nxt, val_span, value, fmt=fmt, size=10, shrink=True)
 
 
@@ -143,11 +143,11 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     _band(ws, r, "Superintendent")
     r += 1
     ws.row_dimensions[r].height = ROW_ENTRY
-    col = _cell(ws, r, 1, 4, "Name", bold=True, fill=LABEL_FILL, size=9)
+    col = _cell(ws, r, 1, 4, "Name", bold=True, fill=LABEL_FILL, size=9, shrink=True)
     col = _cell(ws, r, col, 11, s.get("super_name"), shrink=True)
-    col = _cell(ws, r, col, 4, "Phone", bold=True, fill=LABEL_FILL, size=9)
+    col = _cell(ws, r, col, 4, "Phone", bold=True, fill=LABEL_FILL, size=9, shrink=True)
     col = _cell(ws, r, col, 7, s.get("super_phone"), shrink=True)
-    col = _cell(ws, r, col, 4, "Email", bold=True, fill=LABEL_FILL, size=9)
+    col = _cell(ws, r, col, 4, "Email", bold=True, fill=LABEL_FILL, size=9, shrink=True)
     _cell(ws, r, col, COLS - col + 1, s.get("super_email"), shrink=True)
     ws.row_dimensions[r + 1].height = 7      # spacer
     r += 2
@@ -169,7 +169,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             PO_SPANS,
             ("left", "left", "left", "left", "right", "right", "right"),
         ):
-            col = _cell(ws, hr, col, span, label, bold=True, fill=GREEN, align=align, size=9)
+            col = _cell(ws, hr, col, span, label, bold=True, fill=GREEN, align=align, size=9, shrink=True)
         first = hr + 1
         for i in range(count):
             rr = first + i
@@ -192,7 +192,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         tr = last + 1
         ws.row_dimensions[tr].height = ROW_TABLE
         _cell(ws, tr, 1, TOTAL_COL - 1, f"{title} total", bold=True, fill=LABEL_FILL,
-              align="right", size=9.5)
+              align="right", size=9.5, shrink=True)
         tcol = get_column_letter(TOTAL_COL)
         _cell(ws, tr, TOTAL_COL, PO_SPANS[6], f"=SUM({tcol}{first}:{tcol}{last})",
               bold=True, align="right", fmt=MONEY_HARD, size=10)
@@ -227,7 +227,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     for i, label in enumerate(("Total Materials", "Total Labor", "Total Tax", "Total COGS")):
         rr = r + i
         ws.row_dimensions[rr].height = ROW_ENTRY
-        _cell(ws, rr, cost_c, COST_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
+        _cell(ws, rr, cost_c, COST_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5, shrink=True)
         formula = (
             f"={mat_ref}", f"={lab_ref}",
             f"={mat_ref}*{CV}{tax_row}",
@@ -236,7 +236,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         _cell(ws, rr, cost_val_col, COST_V, formula, align="right",
               fmt=MONEY_HARD, bold=(i == 3), size=10, shrink=True)
     ws.row_dimensions[tax_row].height = ROW_TABLE
-    _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9)
+    _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9, shrink=True)
     _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 9) / 100,
           align="right", fmt="0.0%", size=10)
 
@@ -247,7 +247,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         ("Other", s.get("sale_other")), ("Total Sale", None),
     )):
         rr = r + i
-        _cell(ws, rr, contract_c, CONTRACT_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5)
+        _cell(ws, rr, contract_c, CONTRACT_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5, shrink=True)
         if i < 3:
             v = float(val) if val not in (None, "") and float(val) else None
             _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="right", fmt=MONEY,
@@ -261,7 +261,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     margin_val_col = margin_c + MARGIN_L
     for i, label in enumerate(("Dollars", "Percent")):
         rr = r + i
-        _cell(ws, rr, margin_c, MARGIN_L, label, fill=LABEL_FILL, size=9.5)
+        _cell(ws, rr, margin_c, MARGIN_L, label, fill=LABEL_FILL, size=9.5, shrink=True)
         formula = (
             f"={sale_cell}-{cogs_cell}",
             f'=IF({sale_cell}=0,"",({sale_cell}-{cogs_cell})/{sale_cell})',
