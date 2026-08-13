@@ -211,6 +211,21 @@ async function api(path, opts={}) {
   return data;
 }
 
+// Downloads go through fetch so the bearer token rides along.
+async function downloadFile(url, filename) {
+  try {
+    const resp = await fetch(url, {headers: authHeaders()});
+    if (!resp.ok) throw new Error(`Download failed (${resp.status})`);
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- Router ----------
 const routes = {
   dashboard: renderDashboard,
@@ -2025,6 +2040,7 @@ async function renderCoverList() {
     <div class="toolbar">
       <span class="muted" style="font-size:12.5px">Fill one out on its own, or start it from a priced job.</span>
       <div class="spacer"></div>
+      <button class="gray" id="blankXlsx" title="Empty fillable Excel form — one portrait page">Blank Excel Form</button>
       <button class="orange" id="newCover">+ New Cover Sheet</button>
     </div>
     <div class="card" style="padding:0; overflow-x:auto">
@@ -2046,6 +2062,7 @@ async function renderCoverList() {
         </tbody>
       </table>
     </div>`;
+  $("#blankXlsx").onclick = () => downloadFile(API_BASE + "/cover-sheets/blank.xlsx", "Sales Order Cover Sheet.xlsx");
   $("#newCover").onclick = async () => {
     const s = await api("/cover-sheets", {method:"POST", body: {}});
     location.hash = "#/coversheet/" + s.id;
@@ -2081,6 +2098,7 @@ async function renderCoverSheet(id) {
       <h1 style="margin:0">Sales Order Cover Sheet</h1>
       ${s.job_id ? `<span class="chip Sold">Job #${s.job_id}</span>` : `<span class="chip Lead">Standalone</span>`}
       <div class="spacer"></div>
+      <button class="gray" id="cvXlsx" title="This cover sheet as a fillable Excel workbook">Excel</button>
       <button class="gray" id="cvPrint">Print</button>
       <button class="orange" id="cvSave">Save</button>
       <button class="danger" id="cvDel">Delete</button>
@@ -2286,6 +2304,11 @@ async function renderCoverSheet(id) {
     toast("Deleted"); location.hash = "#/cover";
   };
   $("#cvPrint").onclick = async () => { const fresh = await save(true); printCoverSheet(fresh); };
+  $("#cvXlsx").onclick = async () => {
+    await save(true);   // Excel mirrors exactly what's on screen
+    downloadFile(`${API_BASE}/cover-sheets/${id}/xlsx`,
+      `Sales Order Cover Sheet ${$("[data-k='job_code']").value.trim() || id}.xlsx`);
+  };
   recalc();
 }
 

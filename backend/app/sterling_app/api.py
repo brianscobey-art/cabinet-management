@@ -1499,9 +1499,40 @@ def cover_refs(customer: str | None = None, db: Session = Depends(get_db)):
 
 
 
+@router.get("/cover-sheets/blank.xlsx")
+def blank_cover_xlsx():
+    """Empty fillable Excel cover sheet (one portrait page)."""
+    from fastapi.responses import StreamingResponse
+
+    from app.sterling_app.cover_xlsx import build_cover_workbook
+
+    return StreamingResponse(
+        build_cover_workbook(None),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Sales Order Cover Sheet.xlsx"'},
+    )
+
+
 @router.get("/cover-sheets/{sheet_id}")
 def get_cover_sheet(sheet_id: int, db: Session = Depends(get_db)):
     return _cover_out(db, _get_or_404(db, CoverSheet, sheet_id, "Cover sheet"))
+
+
+@router.get("/cover-sheets/{sheet_id}/xlsx")
+def cover_sheet_xlsx(sheet_id: int, db: Session = Depends(get_db)):
+    """This cover sheet as a fillable Excel workbook (formulas live)."""
+    from fastapi.responses import StreamingResponse
+
+    from app.sterling_app.cover_xlsx import build_cover_workbook
+
+    s = _get_or_404(db, CoverSheet, sheet_id, "Cover sheet")
+    data = _cover_out(db, s)
+    name = f"Sales Order Cover Sheet {s.job_code or s.id}.xlsx".replace("/", "-")
+    return StreamingResponse(
+        build_cover_workbook(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.post("/cover-sheets", status_code=201)
