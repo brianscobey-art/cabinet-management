@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Order Pack — Carter Kitchen &amp; Bath</title>
+<style>
+  :root {
+    --green: #125952;
+    --green-dark: #0d423d;
+    --green-pale: #e7f2f0;
+    --mint: #2bb99f;
+    --mint-pale: #e4f6f2;
+    --orange: #df5822;
+    --orange-pale: #fdeee7;
+    --red: #c0392b;
+    --red-pale: #fdecea;
+    --amber: #b7791f;
+    --amber-pale: #fdf3e0;
+    --ink: #1e2b28;
+    --line: #d8e0de;
+    --bg: #f3f6f5;
+    --panel: #ffffff;
+    --muted: #64756f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Segoe UI", Arial, system-ui, sans-serif;
+    font-size: 14px; color: var(--ink); background: var(--bg);
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; }
+  input, select, textarea {
+    border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; background: #fff; color: var(--ink);
+  }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--mint); outline-offset: 1px; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  .topbar {
+    background: var(--green); color: #fff; display: flex; align-items: center; gap: 14px;
+    padding: 10px 16px; flex-shrink: 0; flex-wrap: wrap;
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; }
+  .topbar .dots {
+    display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+    border-radius: 6px; background: rgba(255,255,255,.16); font-size: 15px;
+  }
+  .topbar b { font-size: 16px; letter-spacing: .3px; }
+  .topbar small { display: block; font-size: 11px; opacity: .85; }
+  .topbar .spacer { flex: 1; }
+  .tbtn {
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); color: #fff;
+    border-radius: 6px; padding: 7px 12px; font-size: 13px;
+  }
+  .tbtn:hover { background: rgba(255,255,255,.26); }
+  .tbtn.primary { background: var(--mint); border-color: var(--mint); color: #06302a; font-weight: 600; }
+  .tbtn.primary:hover { filter: brightness(1.07); }
+  .tbtn[disabled] { opacity: .5; cursor: default; }
+
+  .agent { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #9db8b3; flex: none; }
+  .dot.ok { background: #63e6c2; box-shadow: 0 0 0 3px rgba(99,230,194,.22); }
+  .dot.stale { background: #f0c060; }
+  .dot.off { background: #e08b7a; }
+
+  .tabs { display: flex; gap: 2px; padding: 0 16px; background: var(--green-dark); flex-shrink: 0; }
+  .tabs button {
+    background: none; border: none; color: #b7d0cb; padding: 10px 16px; font-size: 13.5px;
+    border-bottom: 3px solid transparent;
+  }
+  .tabs button:hover { color: #fff; }
+  .tabs button.active { color: #fff; border-bottom-color: var(--mint); }
+  .tabs .count { font-size: 11px; background: rgba(255,255,255,.18); border-radius: 9px; padding: 1px 6px; margin-left: 6px; }
+
+  .body { flex: 1; overflow: auto; padding: 14px 16px 40px; }
+  .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .filters input[type=search] { min-width: 210px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 14px; }
+  .card p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+
+  table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; background: var(--green-pale); color: var(--green-dark);
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px;
+    padding: 8px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 2;
+  }
+  tbody td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  tbody tr:hover { background: var(--mint-pale); cursor: pointer; }
+  tbody tr.flagged { background: var(--red-pale); }
+  tbody tr.flagged:hover { background: #fbdedb; }
+  .code { font-weight: 600; }
+  .sub { display: block; font-size: 11.5px; color: var(--muted); font-weight: normal; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mismatch { color: var(--red); font-weight: 600; }
+
+  .pill { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 11px; white-space: nowrap; }
+  .pill.s1 { background: #e8eef7; color: #2c4f80; }
+  .pill.s2 { background: #eae6f6; color: #4b3c86; }
+  .pill.s3 { background: var(--orange-pale); color: #a2411a; }
+  .pill.s4 { background: var(--mint-pale); color: #12695a; }
+  .pill.century { background: #f2eee4; color: #6b5a2b; }
+  .pill.sold { background: #e6efe6; color: #3c6b3f; }
+  .pill.missing { background: var(--red-pale); color: var(--red); }
+  .pill.none { background: #eef1f0; color: var(--muted); }
+  .pill.review { background: var(--red-pale); color: var(--red); font-weight: 600; }
+  .pill.status { background: #eef1f0; color: #3d4f4a; }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+  .empty b { display: block; color: var(--ink); margin-bottom: 6px; font-size: 15px; }
+
+  .runrow { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .runrow .st { font-size: 11.5px; padding: 2px 8px; border-radius: 11px; }
+  .st.queued { background: #eef1f0; color: var(--muted); }
+  .st.running { background: var(--mint-pale); color: #12695a; }
+  .st.done { background: #e6efe6; color: #3c6b3f; }
+  .st.failed { background: var(--red-pale); color: var(--red); }
+  .st.cancelled { background: #f2eee4; color: #6b5a2b; }
+  pre.log {
+    background: #10201d; color: #cfe6e0; padding: 10px 12px; border-radius: 6px; font-size: 12px;
+    max-height: 260px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* drawer */
+  .scrim { position: fixed; inset: 0; background: rgba(15,30,27,.45); display: flex; justify-content: flex-end; z-index: 50; }
+  .drawer { background: var(--panel); width: min(560px, 100%); height: 100%; overflow: auto; padding: 18px 20px 40px; }
+  .drawer h2 { margin: 0 0 2px; font-size: 18px; }
+  .drawer .close { float: right; background: none; border: none; font-size: 22px; color: var(--muted); line-height: 1; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 5px 10px; margin: 14px 0; font-size: 13px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .files { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; }
+  .files li { padding: 4px 0; border-bottom: 1px dashed var(--line); color: #37504a; }
+  .field { margin: 10px 0; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field input, .field textarea { width: 100%; }
+  .btn { background: var(--green); color: #fff; border: none; border-radius: 6px; padding: 9px 15px; font-size: 13.5px; }
+  .btn:hover { background: var(--green-dark); }
+  .btn.ghost { background: #fff; color: var(--green); border: 1px solid var(--line); }
+  .btn.danger { background: var(--red); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+    background: var(--green-dark); color: #fff; padding: 10px 18px; border-radius: 7px;
+    font-size: 13.5px; opacity: 0; pointer-events: none; transition: .2s; z-index: 90;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: var(--red); }
+
+  .loginbox { max-width: 380px; margin: 12vh auto; }
+  .loginerr { color: var(--red); font-size: 13px; min-height: 18px; }
+
+  @media (max-width: 720px) {
+    .body { padding: 10px 8px 40px; }
+    table { font-size: 12px; }
+    tbody td, thead th { padding: 6px 6px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="drawerRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================= API ================= */
+const TOKEN_KEY = "cms_token";   // one login, shared with the rest of the suite
+let META = null;
+let ROWS = [];
+let RUNS = [];
+let VIEW = "board";
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
+async function api(path, opts = {}) {
+  const resp = await fetch("/api/ordering-platform/pack" + path, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: "Bearer " + token(),
+    },
+  });
+  if (resp.status === 401) { renderLogin(); throw new Error("Not signed in"); }
+  if (resp.status === 403) { renderDenied(); throw new Error("Not your page"); }
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null))?.detail;
+    throw new Error(detail || resp.statusText);
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+
+/* ================= Helpers ================= */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function fmtDate(iso) {                       // m/d/yy — Brian's format everywhere
+  if (!iso) return "";
+  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return m + "/" + d + "/" + String(y).slice(2);
+}
+function fmtWhen(iso) {
+  if (!iso) return "never";
+  const t = new Date(iso), mins = Math.round((Date.now() - t.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + " min ago";
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return hrs + " hr ago";
+  return fmtDate(iso);
+}
+function money(v) {
+  if (v == null || v === "") return "";
+  return "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function toast(msg, err) {
+  const t = $("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), err ? 4500 : 2400);
+}
+
+const FOLDER_CLASS = {
+  stage1: "s1", stage2: "s2", stage3: "s3", stage4: "s4",
+  century: "century", sold: "sold", missing: "missing",
+};
+function folderPill(row) {
+  const key = row.current_folder;
+  if (!key) return '<span class="pill none">not scanned</span>';
+  const label = (META && META.folder_labels && META.folder_labels[key]) || key;
+  return '<span class="pill ' + (FOLDER_CLASS[key] || "none") + '">' + esc(label) + "</span>";
+}
+
+/* ================= Filters ================= */
+const F = { folder: "", q: "", builder: "", hideDone: false };
+
+function visibleRows() {
+  return ROWS.filter(r => {
+    if (F.folder && r.current_folder !== F.folder) return false;
+    if (F.hideDone && r.current_folder === "sold") return false;
+    if (F.builder && r.account_name !== F.builder) return false;
+    if (F.q) {
+      const hay = [r.job_code, r.community_name, r.lot_number, r.plan, r.buid,
+                   r.po_number, r.so_number, r.carter_po_number, r.folder_name]
+        .join(" ").toLowerCase();
+      if (!hay.includes(F.q.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+const flaggedRows = () => ROWS.filter(r => r.exception || r.review || r.current_folder === "missing");
+
+/* ================= Shell ================= */
+function renderShell() {
+  $("app").innerHTML =
+    '<div class="app">' +
+      '<div class="topbar">' +
+        '<a class="brand" href="/ordering-platform" title="Back to Optimus">' +
+          '<span class="dots">&#9783;</span>' +
+          "<span><b>Order Pack</b><small>private mode &middot; Optimus</small></span>" +
+        "</a>" +
+        '<span class="agent" id="agentPill"></span>' +
+        '<span class="spacer"></span>' +
+        '<button class="tbtn primary" id="scanBtn" onclick="queueScan()">Scan folders now</button>' +
+        '<button class="tbtn" onclick="refresh(true)">Refresh</button>' +
+      "</div>" +
+      '<div class="tabs" id="tabs"></div>' +
+      '<div class="body" id="view"></div>' +
+    "</div>";
+  renderTabs();
+}
+
+function renderTabs() {
+  const flags = flaggedRows().length;
+  const tabs = [
+    ["board", "Board", ROWS.length],
+    ["exceptions", "Needs you", flags],
+    ["runs", "Runs", RUNS.length],
+  ];
+  $("tabs").innerHTML = tabs.map(([k, label, n]) =>
+    '<button class="' + (VIEW === k ? "active" : "") + '" onclick="go(\'' + k + '\')">' +
+    esc(label) + (n ? '<span class="count">' + n + "</span>" : "") + "</button>").join("");
+}
+function go(v) { VIEW = v; renderTabs(); render(); }
+
+function renderAgent() {
+  const seen = META && META.agent_last_seen;
+  const mins = seen ? (Date.now() - new Date(seen).getTime()) / 60000 : null;
+  const gap = (META && META.scan_minutes ? META.scan_minutes : 15) * 3;
+  const cls = mins == null ? "off" : mins <= gap ? "ok" : "stale";
+  const text = mins == null ? "agent never checked in" : "agent " + fmtWhen(seen);
+  $("agentPill").innerHTML = '<span class="dot ' + cls + '"></span>' + esc(text);
+}
+
+/* ================= Board ================= */
+function render() {
+  renderAgent();
+  if (VIEW === "runs") return renderRuns();
+  if (VIEW === "exceptions") return renderExceptions();
+  renderBoard();
+}
+
+function filterBar() {
+  const builders = [...new Set(ROWS.map(r => r.account_name).filter(Boolean))].sort();
+  const folders = (META && META.folders ? META.folders.map(f => f.key) : [])
+    .concat(["century", "sold", "missing"]);
+  return '<div class="filters">' +
+    '<input type="search" id="fq" placeholder="Search job, lot, PO, SO…" value="' + esc(F.q) + '">' +
+    '<select id="ffolder"><option value="">Every folder</option>' +
+      folders.map(k => '<option value="' + k + '"' + (F.folder === k ? " selected" : "") + ">" +
+        esc((META && META.folder_labels[k]) || k) + "</option>").join("") +
+    "</select>" +
+    '<select id="fbuilder"><option value="">Every builder</option>' +
+      builders.map(b => '<option' + (F.builder === b ? " selected" : "") + ">" + esc(b) + "</option>").join("") +
+    "</select>" +
+    '<label><input type="checkbox" id="fdone"' + (F.hideDone ? " checked" : "") + "> Hide filed jobs</label>" +
+    '<span style="flex:1"></span>' +
+    '<span style="font-size:12px;color:var(--muted)" id="rowcount"></span>' +
+  "</div>";
+}
+function wireFilters() {
+  const bind = (id, key, prop) => {
+    const el = $(id); if (!el) return;
+    el.addEventListener(prop === "checked" ? "change" : "input", () => { F[key] = el[prop]; render(); });
+  };
+  bind("fq", "q", "value"); bind("ffolder", "folder", "value");
+  bind("fbuilder", "builder", "value"); bind("fdone", "hideDone", "checked");
+}
+
+function boardTable(rows) {
+  if (!rows.length) {
+    return '<div class="empty"><b>Nothing here yet</b>' +
+      "Press <em>Scan folders now</em> and the agent on your PC will report what is sitting in each stage folder.</div>";
+  }
+  const head = ["Job", "Where it is", "Optimus", "Stage 1", "Stage 2", "Stage 3", "Stage 4",
+                "Builder PO", "SO", "Carter PO", "SO total", "PO total", "Install pay"];
+  return "<table><thead><tr>" + head.map(h => "<th>" + esc(h) + "</th>").join("") + "</tr></thead><tbody>" +
+    rows.map(r => {
+      const mismatch = r.so_total != null && r.po_total != null &&
+                       Number(r.so_total).toFixed(2) !== Number(r.po_total).toFixed(2);
+      const flagged = r.exception || r.review || r.current_folder === "missing";
+      return '<tr class="' + (flagged ? "flagged" : "") + '" onclick="openJob(' + r.job_id + ')">' +
+        '<td><span class="code">' + esc(r.job_code || "—") + "</span>" +
+          '<span class="sub">' + esc([r.community_name, r.lot_number ? "Lot " + r.lot_number : "", r.plan_abbr || r.plan].filter(Boolean).join(" · ")) + "</span></td>" +
+        "<td>" + folderPill(r) + (r.review ? ' <span class="pill review">REVIEW</span>' : "") + "</td>" +
+        '<td><span class="pill status">' + esc(r.status) + "</span></td>" +
+        "<td>" + fmtDate(r.stage1_date) + "</td>" +
+        "<td>" + fmtDate(r.stage2_date) + "</td>" +
+        "<td>" + fmtDate(r.stage3_date) + "</td>" +
+        "<td>" + fmtDate(r.stage4_date) + "</td>" +
+        "<td>" + esc(r.po_number || "") + "</td>" +
+        "<td>" + esc(r.so_number || "") + "</td>" +
+        "<td>" + esc(r.carter_po_number || "") + "</td>" +
+        '<td class="num' + (mismatch ? " mismatch" : "") + '">' + money(r.so_total) + "</td>" +
+        '<td class="num' + (mismatch ? " mismatch" : "") + '">' + money(r.po_total) + "</td>" +
+        '<td class="num">' + money(r.install_pay) + "</td>" +
+      "</tr>";
+    }).join("") + "</tbody></table>";
+}
+
+function renderBoard() {
+  const rows = visibleRows();
+  $("view").innerHTML = filterBar() + unmatchedCard() + boardTable(rows);
+  wireFilters();
+  if ($("rowcount")) $("rowcount").textContent = rows.length + " of " + ROWS.length + " jobs";
+}
+
+function unmatchedCard() {
+  const scan = META && META.last_scan;
+  if (!scan || !scan.unmatched || !scan.unmatched.length) return "";
+  return '<div class="card"><h3>Folders with no job in CabinetTron (' + scan.unmatched.length + ")</h3>" +
+    "<p>These folders are sitting in the chain but their job code isn't in the database, so they can't get a row on the board yet.</p>" +
+    "<ul class=\"files\">" + scan.unmatched.slice(0, 40).map(u =>
+      "<li>" + esc(u.folder) + " <span style=\"color:var(--muted)\">— " +
+      esc((META.folder_labels && META.folder_labels[u.bucket]) || u.bucket) + "</span></li>").join("") +
+    "</ul></div>";
+}
+
+function renderExceptions() {
+  const rows = flaggedRows();
+  if (!rows.length) {
+    $("view").innerHTML = '<div class="empty"><b>Nothing needs you</b>No mismatches, no REVIEW folders, nothing missing.</div>';
+    return;
+  }
+  $("view").innerHTML =
+    '<div class="card"><h3>Jobs waiting on you</h3><p>A total mismatch, a REVIEW flag from the SO comparison, or a folder that left the chain without being filed.</p></div>' +
+    boardTable(rows);
+}
+
+/* ================= Runs ================= */
+function renderRuns() {
+  const scan = META && META.last_scan;
+  let html = '<div class="card"><h3>Last folder scan</h3>';
+  if (!scan) {
+    html += "<p>No scan has been recorded yet.</p>";
+  } else {
+    const c = scan.counts || {};
+    html += "<p>" + esc(fmtWhen(scan.scanned_at)) + " — " +
+      Object.keys(c).map(k => c[k] + " in " + esc((META.folder_labels && META.folder_labels[k]) || k)).join(", ") +
+      ". " + scan.matched + " matched to jobs" +
+      (scan.unmatched && scan.unmatched.length ? ", " + scan.unmatched.length + " unmatched" : "") +
+      (scan.left_the_chain ? ", " + scan.left_the_chain + " left the chain" : "") + ".</p>";
+  }
+  html += "</div>";
+
+  if (!RUNS.length) {
+    html += '<div class="empty"><b>No runs yet</b>Press <em>Scan folders now</em> to queue one.</div>';
+  } else {
+    html += '<div class="card"><h3>Recent runs</h3>' + RUNS.map(r =>
+      '<div class="runrow"><span class="st ' + esc(r.status) + '">' + esc(r.status) + "</span>" +
+      "<b>" + esc(r.kind) + "</b>" +
+      '<span style="color:var(--muted);font-size:12px">' + esc(fmtWhen(r.requested_at)) +
+      (r.requested_by ? " · " + esc(r.requested_by) : "") + "</span>" +
+      '<span style="flex:1"></span>' +
+      (r.status === "queued" || r.status === "running"
+        ? '<button class="btn ghost" onclick="cancelRun(' + r.id + ')">Cancel</button>' : "") +
+      "</div>" +
+      (r.error ? '<pre class="log">' + esc(r.error) + "</pre>" :
+        r.log ? '<pre class="log">' + esc(r.log) + "</pre>" : "")).join("") + "</div>";
+  }
+  $("view").innerHTML = html;
+}
+
+async function queueScan() {
+  const btn = $("scanBtn"); btn.disabled = true;
+  try {
+    const run = await api("/runs", { method: "POST", body: JSON.stringify({ kind: "scan" }) });
+    toast(run.status === "queued" ? "Scan queued — the agent picks it up within a minute"
+                                  : "A scan is already " + run.status);
+    await refresh();
+  } catch (e) { toast("Couldn't queue the scan: " + e.message, true); }
+  finally { btn.disabled = false; }
+}
+async function cancelRun(id) {
+  try { await api("/runs/" + id + "/cancel", { method: "POST" }); await refresh(); }
+  catch (e) { toast("Couldn't cancel: " + e.message, true); }
+}
+
+/* ================= Job drawer ================= */
+let openJobId = null;
+function rowById(id) { return ROWS.find(r => r.job_id === id); }
+
+function openJob(id) {
+  const r = rowById(id); if (!r) return;
+  openJobId = id;
+  const files = (r.folder_files || []);
+  $("drawerRoot").innerHTML =
+    '<div class="scrim" onclick="if(event.target===this)closeDrawer()"><div class="drawer">' +
+    '<button class="close" onclick="closeDrawer()">&times;</button>' +
+    "<h2>" + esc(r.job_code || "(no job code)") + "</h2>" +
+    '<div style="color:var(--muted);font-size:13px">' + esc(r.account_name) +
+      (r.community_name ? " · " + esc(r.community_name) : "") +
+      (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</div>" +
+    '<div style="margin-top:10px">' + folderPill(r) + (r.review ? ' <span class="pill review">REVIEW</span>' : "") +
+      ' <span class="pill status">' + esc(r.status) + "</span></div>" +
+    (r.exception ? '<div class="card" style="background:var(--red-pale);border-color:#f0c8c2;margin-top:12px">' +
+        "<h3>Flagged</h3><p style=\"color:var(--ink)\">" + esc(r.exception) + "</p>" +
+        '<button class="btn ghost" onclick="clearFlag()">Clear this flag</button></div>' : "") +
+    '<div class="kv">' +
+      "<div>Address</div><div>" + esc(r.address || "") + "</div>" +
+      "<div>Plan</div><div>" + esc(r.plan || "") + (r.plan_abbr ? " (" + esc(r.plan_abbr) + ")" : "") + "</div>" +
+      "<div>BUID</div><div>" + esc(r.buid || "—") + "</div>" +
+      "<div>Folder</div><div>" + esc(r.folder_name || "—") + "</div>" +
+      "<div>Builder PO</div><div>" + esc(r.po_number || "—") + (r.po_date ? " · " + fmtDate(r.po_date) : "") +
+        (r.po_total != null ? " · " + money(r.po_total) : "") + "</div>" +
+      "<div>Everluxe SO</div><div>" + esc(r.so_number || "—") + (r.so_total != null ? " · " + money(r.so_total) : "") + "</div>" +
+      "<div>Carter PO</div><div>" + esc(r.carter_po_number || "—") + "</div>" +
+      "<div>Sub #</div><div>" + esc(r.sub_number || "—") + "</div>" +
+      "<div>Filed to sold</div><div>" + (r.moved_to_sold_date ? fmtDate(r.moved_to_sold_date) : "—") + "</div>" +
+      "<div>Installer pay sheet</div><div>" + (r.installer_pay_sheet == null ? "—" : r.installer_pay_sheet ? "Yes" : "No") +
+        (r.install_pay != null ? " · " + money(r.install_pay) : "") + "</div>" +
+      "<div>Last scan</div><div>" + esc(fmtWhen(r.last_scan_at)) + "</div>" +
+    "</div>" +
+    "<h3 style=\"font-size:13px;margin:16px 0 0\">Files in the folder (" + files.length + ")</h3>" +
+    (files.length ? '<ul class="files">' + files.map(f => {
+        const tag = f === r.selections_file ? "Selections" : f === r.po_file ? "Builder PO"
+                  : f === r.summary_file ? "Summary" : "";
+        return "<li>" + esc(f) + (tag ? ' <span class="pill s4">' + tag + "</span>" : "") + "</li>";
+      }).join("") + "</ul>"
+                  : '<p style="color:var(--muted);font-size:13px">Nothing recorded yet.</p>') +
+    '<div class="field"><label for="d_pay">Install pay (type what the pay sheet says — never guessed for you)</label>' +
+      '<input id="d_pay" type="number" step="0.01" value="' + (r.install_pay == null ? "" : esc(r.install_pay)) + '"></div>' +
+    '<div class="field"><label for="d_notes">Notes</label><textarea id="d_notes" rows="3">' + esc(r.notes || "") + "</textarea></div>" +
+    '<button class="btn" onclick="saveJob()">Save</button> ' +
+    '<button class="btn ghost" onclick="closeDrawer()">Cancel</button>' +
+    "</div></div>";
+}
+function closeDrawer() { $("drawerRoot").innerHTML = ""; openJobId = null; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+async function saveJob() {
+  const pay = $("d_pay").value.trim();
+  const body = { notes: $("d_notes").value, install_pay: pay === "" ? null : Number(pay) };
+  try {
+    const updated = await api("/jobs/" + openJobId, { method: "PATCH", body: JSON.stringify(body) });
+    Object.assign(rowById(openJobId), updated);
+    closeDrawer(); render(); toast("Saved");
+  } catch (e) { toast("Couldn't save: " + e.message, true); }
+}
+async function clearFlag() {
+  try {
+    const updated = await api("/jobs/" + openJobId, { method: "PATCH", body: JSON.stringify({ exception: null }) });
+    Object.assign(rowById(openJobId), updated);
+    openJob(openJobId); render(); toast("Flag cleared");
+  } catch (e) { toast("Couldn't clear it: " + e.message, true); }
+}
+
+/* ================= Login / denied ================= */
+function renderLogin() {
+  $("app").innerHTML =
+    '<div class="loginbox"><div class="card">' +
+    "<h2 style=\"margin-top:0\">Order Pack</h2><p>Sign in with your Carter Kitchen &amp; Bath account.</p>" +
+    '<div class="loginerr" id="loginErr"></div>' +
+    '<div class="field"><label for="l_email">Email</label><input id="l_email" type="email" autocomplete="username"></div>' +
+    '<div class="field"><label for="l_pw">Password</label><input id="l_pw" type="password" autocomplete="current-password"></div>' +
+    '<button class="btn" style="width:100%" onclick="doLogin()">Sign in</button>' +
+    "</div></div>";
+  $("l_email").focus();
+  $("l_pw").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+}
+function renderDenied() {
+  $("app").innerHTML = '<div class="loginbox"><div class="card"><h2 style="margin-top:0">Not available</h2>' +
+    "<p>This page isn't part of your account. Head back to " +
+    '<a href="/ordering-platform">Optimus</a>.</p></div></div>';
+}
+async function doLogin() {
+  $("loginErr").textContent = "";
+  const body = new URLSearchParams({ username: $("l_email").value, password: $("l_pw").value });
+  try {
+    const resp = await fetch("/api/auth/token", { method: "POST", body });
+    if (!resp.ok) {
+      const detail = (await resp.json().catch(() => null))?.detail;
+      throw new Error(detail || "Login failed");
+    }
+    localStorage.setItem(TOKEN_KEY, (await resp.json()).access_token);
+    renderShell(); await refresh();
+  } catch (e) { $("loginErr").textContent = e.message; }
+}
+
+/* ================= Boot ================= */
+async function refresh(manual) {
+  try {
+    META = await api("/meta");
+    const [rows, runs] = await Promise.all([api("/board"), api("/runs?limit=15")]);
+    ROWS = rows; RUNS = runs;
+    renderTabs(); render();
+    if (manual) toast("Refreshed — " + ROWS.length + " jobs on the board");
+  } catch (e) {
+    if (e.message !== "Not signed in" && e.message !== "Not your page") toast("Load failed: " + e.message, true);
+  }
+}
+if (!token()) renderLogin();
+else { renderShell(); refresh(); }
+// A queued run finishes on the agent's schedule, so keep the board fresh.
+setInterval(() => { if (token() && VIEW) refresh(); }, 60000);
+</script>
+</body>
+</html>

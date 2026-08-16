@@ -9,6 +9,7 @@ from app.models.jobcost import JobCost
 from app.models.note import JobNote
 from app.models.order import ConfirmationStatus, Order, ShipStatus, Supplier
 from app.models.ordering import OrderingChecklist
+from app.models.pack import RUN_KINDS, RUN_STATUSES, PackRun
 from app.models.phase import PhaseUpdate
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
 from app.models.selections import HardwareSelection, RoomSelection
@@ -37,6 +38,9 @@ __all__ = [
     "JobType",
     "Order",
     "OrderingChecklist",
+    "PackRun",
+    "RUN_KINDS",
+    "RUN_STATUSES",
     "PhaseUpdate",
     "Quote",
     "QuoteLineItem",

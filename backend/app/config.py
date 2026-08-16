@@ -82,6 +82,38 @@ class Settings(BaseSettings):
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"
     )
 
+    # Order Pack (private mode inside Optimus, /ordering-platform/pack) ------
+    # The four stage folders live under this root; a job folder's position in
+    # the chain IS its status, so the on-prem agent scans it and reports.
+    # These paths are read by the AGENT on Brian's PC, not by the cloud app.
+    new_orders_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"\Sold Jobs\New Orders"
+    )
+    # Where stage 4 files completed jobs. The old "Sold Jobs\Builders\DR Horton"
+    # tree is deprecated and must never be read or written.
+    sold_files_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
+        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
+        r"\National Accounts\DR Horton - All"
+    )
+    # Only these logins may load the page or hit its endpoints (comma-separated).
+    orderpack_owner_emails: str = (
+        "brian.scobey@townsendbuildingsupply.com,brian.scobey@carterlumber.com"
+    )
+    # Shared secret the on-prem agent authenticates with (X-Pack-Key header),
+    # same approach as WALLPAPER_FEED_KEY. Override in .env on Render AND on the PC.
+    orderpack_agent_key: str = "ckb-pack-9f3a71c4e08b"
+    # Minutes between the agent's folder scans (0 = scan only when asked).
+    orderpack_scan_minutes: int = 15
+    # Auto-run stage 4 on a schedule the way Pull_scheduled.vbs does today.
+    # Off for now (Brian's call 8/16/26): nothing fires unless he presses Run.
+    orderpack_auto_stage4: bool = False
+
+    @property
+    def orderpack_owner_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.orderpack_owner_emails.split(",") if e.strip()]
+
     # Autobot — the service tech's home base (868 Murray Rd, Dothan) and workday,
     # minutes since midnight. Override in .env if the shop or hours change.
     autobot_depot_lat: float = 31.2571037

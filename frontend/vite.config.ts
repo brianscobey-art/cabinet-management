@@ -8,7 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
-        // Server-rendered pages outside the SPA — never fall back to index.html
+        // Server-rendered pages outside the SPA — never fall back to index.html.
+        // The /ordering-platform entry is a prefix match, so it also covers
+        // /ordering-platform/pack (Order Pack). Don't tighten it to an exact match.
         navigateFallbackDenylist: [/^\/ordering-platform/, /^\/autobot/, /^\/sterling/, /^\/api\//, /^\/docs/],
       },
       manifest: {

@@ -34,3 +34,7 @@ app-server.log
 watchdog.log
 *.tsbuildinfo
 /upload_feeds_to_r2.bat
+
+# Order Pack agent (runs on Brian's PC - its log and stop-file are local)
+agent/orderpack_agent.log
+agent/orderpack_agent.stop

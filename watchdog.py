@@ -32,6 +32,13 @@ LOG_FILE = ROOT / "watchdog.log"
 STOP_FILE = ROOT / "watchdog.stop"
 APP_LOG = ROOT / "app-server.log"  # uvicorn output lands here
 
+# Order Pack agent — the on-prem service that scans the New Orders folders and
+# runs queued stage work. It holds port 8791 as its single-instance lock, so an
+# unbound port means it isn't running. Supervised here so it self-heals too.
+AGENT_PY = ROOT / "agent" / "orderpack_agent.py"
+AGENT_LOCK_PORT = 8791
+AGENT_STOP_FILE = ROOT / "agent" / "orderpack_agent.stop"
+
 # Crash-loop backoff: after each failed start, wait longer before the next try.
 BACKOFF_STEPS = [10, 60, 300]
 
@@ -74,6 +81,36 @@ def start_app() -> None:
     log(f"started app (pid {proc.pid}); waiting for it to come up…")
 
 
+def agent_running() -> bool:
+    """True if the Order Pack agent holds its single-instance lock port."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", AGENT_LOCK_PORT))
+        return False           # we got the port, so nothing is holding it
+    except OSError:
+        return True
+    finally:
+        probe.close()
+
+
+def check_agent() -> None:
+    """Keep the Order Pack agent alive. Never allowed to disturb app watching —
+    any problem here is logged and swallowed."""
+    try:
+        if not AGENT_PY.exists() or AGENT_STOP_FILE.exists() or agent_running():
+            return
+        pythonw = BACKEND / ".venv" / "Scripts" / "pythonw.exe"
+        exe = pythonw if pythonw.exists() else VENV_PY
+        subprocess.Popen(
+            [str(exe), str(AGENT_PY)],
+            cwd=str(ROOT),
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+        )
+        log("started the Order Pack agent")
+    except Exception as exc:  # noqa: BLE001 — supervision must never crash
+        log(f"couldn't start the Order Pack agent: {exc}")
+
+
 def main() -> None:
     # Single-instance lock: hold a localhost port for the watchdog's lifetime.
     # A second copy (e.g. logon task while one is already running) exits quietly.
@@ -96,6 +133,8 @@ def main() -> None:
             STOP_FILE.unlink(missing_ok=True)
             log("watchdog.stop found — shutting down watchdog (app left as-is)")
             return
+
+        check_agent()
 
         if healthy():
             if failures:

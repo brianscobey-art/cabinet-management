@@ -15,6 +15,7 @@ from app.api.notes import router as notes_router
 from app.api.ordering import router as ordering_router
 from app.api.ordering_platform import router as ordering_platform_router
 from app.api.orders import router as orders_router
+from app.api.pack import router as pack_router
 from app.api.phases import router as phases_router
 from app.api.quotes import router as quotes_router
 from app.api.reports import router as reports_router
@@ -140,6 +141,7 @@ app.include_router(orders_router)
 app.include_router(documents_router)
 app.include_router(ordering_router)
 app.include_router(ordering_platform_router)
+app.include_router(pack_router)  # Order Pack — private mode inside Optimus
 app.include_router(sync_router)
 app.include_router(schedule_router)
 app.include_router(phases_router)
@@ -171,6 +173,16 @@ def ordering_platform_page():
     from fastapi.responses import FileResponse
 
     return FileResponse(_static / "ordering_platform.html")
+
+
+# Order Pack — Brian's private mode inside Optimus. Same login, but the page's
+# endpoints are allowlisted to him (see app/api/pack.py). No COAST tile, no nav
+# link; it's reached by typing the URL.
+@app.get("/ordering-platform/pack", include_in_schema=False)
+def order_pack_page():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_static / "orderpack.html")
 
 
 # Autobot is the service tech's standalone app — its own login, its own PWA
