@@ -334,7 +334,7 @@ def main() -> None:
             body = exc.read().decode("utf-8", "ignore")
             detail = " ".join(body.split())[:120] if body else ""
             if "<!DOCTYPE" in body or "<html" in body:
-                detail = "(HTML error page — the server is probably redeploying)"
+                detail = "(HTML error page - the server is probably redeploying)"
             log(f"HTTP {exc.code} from the server: {detail}")
             if exc.code == 403:
                 log("  the agent key is wrong - set ORDERPACK_AGENT_KEY to match the server")
