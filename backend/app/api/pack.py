@@ -780,8 +780,13 @@ def apply_backfill(payload: BackfillApply, db: Session = Depends(get_db)):
             value = getattr(item, field)
             if value is None:
                 continue
-            if getattr(cl, field) not in (None, "", []):
+            current = getattr(cl, field)
+            if current not in (None, "", []):
                 continue                       # already known — history yields
+            if current == value:
+                continue                       # already equal (an empty file list
+                                               # reads as blank; without this the
+                                               # run never converges)
             setattr(cl, field, value)
             touched = True
 

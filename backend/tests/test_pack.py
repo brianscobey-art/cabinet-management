@@ -465,6 +465,20 @@ def test_backfill_never_overwrites_and_is_idempotent(client, db):
     assert again["filled"] == 0 and again["already_complete"] == 1
 
 
+def test_backfill_converges_when_a_folder_has_no_files(client, db):
+    """An empty file list reads back as "blank", so without an equality guard
+    these rows report themselves filled on every single run and the backfill
+    never settles. Seen live 8/17/26: 35 rows re-filling forever."""
+    setup_owner(client, db)
+    empty = {**HISTORY, "folder_files": []}
+    first = _backfill(client, [empty])
+    assert first["filled"] == 1
+    for _ in range(2):
+        again = _backfill(client, [empty])
+        assert again["filled"] == 0, "backfill is not idempotent"
+        assert again["already_complete"] == 1
+
+
 def test_backfill_yields_to_a_live_scan(client, db):
     """If a scan says the folder is sitting in stage 3 right now, history must
     not overwrite that with 'sold' just because an old copy was filed."""
