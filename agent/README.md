@@ -49,7 +49,7 @@ baked into the script.
 
 | Variable | Default | What it is |
 |---|---|---|
-| `ORDERPACK_API_BASE` | `https://cabinettron.com` | Where to report. Point at `http://localhost:8000` to test against a local backend. |
+| `ORDERPACK_API_BASE` | `https://www.cabinettron.com` | Where to report. Must be the canonical host — the bare `cabinettron.com` 301-redirects to `www`, and a redirected POST silently becomes a GET. The agent refuses to follow redirects so a wrong value fails loudly. Point at `http://localhost:8000` to test against a local backend. |
 | `ORDERPACK_AGENT_KEY` | (built-in dev key) | Shared secret. **Must match the server's** `ORDERPACK_AGENT_KEY`. Change it from the default on both sides. |
 | `NEW_ORDERS_DIR` | the OneDrive New Orders folder | Root holding the four stage folders. |
 | `ORDERPACK_SCAN_MINUTES` | `15` | How often to scan on its own. `0` = only when asked. |

@@ -50,7 +50,10 @@ STOP_FILE = ROOT / "orderpack_agent.stop"
 # the local backend share one place to configure things.
 # ---------------------------------------------------------------------------
 DEFAULTS = {
-    "ORDERPACK_API_BASE": "https://cabinettron.com",
+    # MUST be the canonical host. cabinettron.com 301-redirects to www, and
+    # urllib quietly turns a POST into a GET when it follows a 301 — so a scan
+    # posted at the bare domain would report nothing and look like it worked.
+    "ORDERPACK_API_BASE": "https://www.cabinettron.com",
     "ORDERPACK_AGENT_KEY": "ckb-pack-9f3a71c4e08b",
     "NEW_ORDERS_DIR": r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
                       r"\Sold Jobs\New Orders",
@@ -110,6 +113,24 @@ def log(msg: str) -> None:
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow redirects.
+
+    urllib's default handler rewrites a redirected POST into a GET. Pointed at
+    the wrong host that turns every scan into a silent no-op that still looks
+    like a success. A misconfigured ORDERPACK_API_BASE must fail loudly.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError(
+            f"server redirected {req.get_method()} {req.full_url} -> {newurl}. "
+            f"Set ORDERPACK_API_BASE to the canonical host (https://www.cabinettron.com)."
+        )
+
+
+_OPENER = urllib.request.build_opener(_NoRedirects)
+
+
 def call(path: str, payload=None, method: str | None = None, timeout: int = 60):
     url = API_BASE + path
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -117,7 +138,7 @@ def call(path: str, payload=None, method: str | None = None, timeout: int = 60):
     req.add_header("X-Pack-Key", AGENT_KEY)
     if data:
         req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _OPENER.open(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8")
         return json.loads(body) if body else None
 
