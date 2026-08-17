@@ -328,7 +328,13 @@ def main() -> None:
             failures = 0
         except urllib.error.HTTPError as exc:
             failures += 1
-            detail = exc.read().decode("utf-8", "ignore")[:200]
+            # A 502 during a Render deploy returns a full HTML error page. Collapse
+            # it to one short line — this log is what gets read when something is
+            # actually wrong, and 20 KB of stylesheet buries the real message.
+            body = exc.read().decode("utf-8", "ignore")
+            detail = " ".join(body.split())[:120] if body else ""
+            if "<!DOCTYPE" in body or "<html" in body:
+                detail = "(HTML error page — the server is probably redeploying)"
             log(f"HTTP {exc.code} from the server: {detail}")
             if exc.code == 403:
                 log("  the agent key is wrong - set ORDERPACK_AGENT_KEY to match the server")
