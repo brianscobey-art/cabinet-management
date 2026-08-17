@@ -14,12 +14,20 @@ Two audiences, two auth schemes:
     on Brian's PC because only that machine can see OneDrive, Outlook and the
     logged-in VendorSuite session.
 
-Phase A (this file) is deliberately read-only about Optimus: the folder scan
-writes ONLY the Order Pack columns. It never touches `steps`, never calls
-_rollup_stages(), and never moves a job's status — so Optimus stays exactly as
-correct as it is today while the board starts telling the truth about where
-folders physically are. Stage execution (Phase B onward) is what stamps steps,
-and it does so through the same server helpers Optimus already uses.
+Two ways this module touches data, and the difference matters:
+
+  * The folder SCAN writes only the Order Pack columns. It never touches
+    `steps`, never rolls up, never moves a status. Its whole job is to report
+    where folders physically are, so drift shows up on the board instead of
+    being quietly papered over.
+  * A completed STAGE stamps Optimus — but only through the same helpers the
+    Optimus page itself uses (`_rollup_stages`, `_sync_status`), on the same
+    records. One set of rows, one ladder, no second source of truth. The agent
+    never writes a checkbox; it reports facts and the server decides.
+
+Stage 4's dollar gate (SO total must equal the Carter PO total exactly) is
+enforced on the agent side, twice, before anything moves. A job that fails it
+arrives here as an exception with both numbers and no step stamps.
 """
 
 from datetime import date, datetime, timezone
@@ -32,6 +40,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import NATIONAL_BUILDER_PREFIXES
 from app.api.ordering import get_or_create_checklist
+from app.api.ordering_platform import _STAGE_STEPS, _rollup_stages, _sync_status
 from app.auth.deps import get_current_user
 from app.config import get_settings
 from app.database import get_db
@@ -70,6 +79,9 @@ FOLDER_LABELS = {
 # Buckets a scan can move a job out of. A job that has never been scanned keeps
 # a null current_folder and is never demoted to "missing".
 PHYSICAL_FOLDERS = {"stage1", "stage2", "stage3", "stage4", "century"}
+
+# What the Run panel may fire today. Grows as each stage module lands in the agent.
+RUNNABLE_KINDS = ("scan", "stage4")
 
 LAST_SCAN_KEY = "orderpack.last_scan"      # summary JSON (unmatched folders, counts)
 AGENT_SEEN_KEY = "orderpack.agent_seen"    # ISO timestamp of the last agent contact
@@ -124,7 +136,7 @@ def _pick(files: list[str], marker: str) -> str | None:
             return (1, tail[4:6] + tail[0:2] + tail[2:4])  # YYMMDD
         return (0, fname.lower())
 
-    return sorted(hits, key=key)[-1]
+    return max(hits, key=key)
 
 
 def _dec(value) -> Decimal | None:
@@ -251,6 +263,29 @@ class RunFinish(BaseModel):
     log: str | None = None
 
 
+class Stage4Result(BaseModel):
+    """One Carter PO's outcome, as reported by the agent's stage-4 module."""
+
+    job_code: str | None = None
+    folder: str | None = None
+    so_number: str | None = None
+    carter_po_number: str | None = None
+    carter_po_total: Decimal | None = None
+    so_total: Decimal | None = None
+    sub_number: str | None = None
+    installer_pay_sheet: bool | None = None
+    install_pay: Decimal | None = None
+    i_code: str | None = None
+    moved_to_sold: bool = False
+    outcome: str = "skip"          # ok | mismatch | flag | skip | error
+    exception: str | None = None
+
+
+class Stage4Apply(BaseModel):
+    run_id: int | None = None
+    results: list[Stage4Result] = Field(default_factory=list)
+
+
 def _row(job: Job, cl: OrderingChecklist) -> BoardRow:
     folder = cl.folder_name or ""
     return BoardRow(
@@ -328,9 +363,9 @@ def pack_meta(user: User = Depends(owner_access), db: Session = Depends(get_db))
         "agent_last_seen": seen,
         "scan_minutes": s.orderpack_scan_minutes,
         "auto_stage4": s.orderpack_auto_stage4,
-        # Stages the agent can actually execute today. Phase A ships the scan;
-        # stage 4 lands in Phase B, then 1, 3, 2.
-        "runnable": ["scan"],
+        # Stages the agent can actually execute today. Stages 1-3 land in the
+        # remaining phases (C, D, E).
+        "runnable": list(RUNNABLE_KINDS),
         "last_scan": json.loads(last_scan) if last_scan else None,
         "owner": user.email,
     }
@@ -357,6 +392,9 @@ def pack_board(
         .filter(
             or_(
                 OrderingChecklist.current_folder.isnot(None),
+                # A flagged job must always be reachable, even if its folder was
+                # never scanned — an exception nobody can see is worse than none.
+                OrderingChecklist.exception.isnot(None),
                 Job.status.in_(
                     (JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordpo)
                 ),
@@ -435,12 +473,10 @@ def create_run(
     """Queue work for the agent. It picks the run up on its next poll."""
     if payload.kind not in RUN_KINDS:
         raise HTTPException(status_code=422, detail=f"Unknown run kind '{payload.kind}'")
-    if payload.kind != "scan":
-        # Phase A ships the scan only. The queue, the claim protocol and the log
-        # streaming are all real — Phase B just teaches the agent stage 4.
+    if payload.kind not in RUNNABLE_KINDS:
         raise HTTPException(
             status_code=409,
-            detail=f"{payload.kind} isn't built yet — Phase A runs the folder scan only",
+            detail=f"{payload.kind} isn't built yet — you can run: {', '.join(RUNNABLE_KINDS)}",
         )
     already = (
         db.query(PackRun)
@@ -605,6 +641,74 @@ def finish_run(run_id: int, payload: RunFinish, db: Session = Depends(get_db)):
     run.finished_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/agent/stage4/apply", dependencies=[Depends(agent_access)])
+def apply_stage4(payload: Stage4Apply, db: Session = Depends(get_db)):
+    """Record what stage 4 did, and stamp Optimus for the jobs that filed.
+
+    This is the one place stage completion touches Optimus, and it goes through
+    the SAME helpers the Optimus page uses — `_rollup_stages()` then
+    `_sync_status()` — so a job filed by the agent walks the 1.2->2.0 ladder
+    exactly as it would if Brian had ticked the boxes himself. The agent never
+    writes a checkbox; it reports facts and the server decides.
+
+    A job that failed the dollar gate gets its exception recorded and nothing
+    else. No steps, no status change, no move.
+    """
+    now = datetime.now(timezone.utc)
+    updated = flagged = unmatched = 0
+
+    for item in payload.results:
+        if not item.job_code:
+            unmatched += 1
+            continue
+        job = (
+            db.query(Job)
+            .options(joinedload(Job.account), joinedload(Job.community))
+            .filter(func.upper(Job.job_code) == item.job_code.upper())
+            .first()
+        )
+        if job is None:
+            unmatched += 1
+            continue
+        cl = get_or_create_checklist(db, job)
+
+        # Facts worth keeping whatever the outcome.
+        for field, value in (
+            ("so_number", item.so_number),
+            ("carter_po_number", item.carter_po_number),
+            ("so_total", item.so_total),
+            ("sub_number", item.sub_number),
+            ("installer_pay_sheet", item.installer_pay_sheet),
+        ):
+            if value is not None:
+                setattr(cl, field, value)
+        # Install pay is only ever what was read off the sheet. None means
+        # unreadable, and unreadable must not overwrite a number Brian typed.
+        if item.install_pay is not None:
+            cl.install_pay = item.install_pay
+        cl.exception = item.exception
+        cl.last_scan_at = now
+
+        if item.outcome == "ok" and item.moved_to_sold:
+            cl.moved_to_sold_date = now.date()
+            cl.current_folder = "sold"
+            # Stage 4's sub-steps all happened: the Carter PO exists (so it was
+            # generated and emailed), and the folder is filed.
+            steps = dict(cl.steps or {})
+            for step_key in _STAGE_STEPS["s4"]:
+                steps.setdefault(step_key, now.date().isoformat())
+            cl.steps = steps
+            _rollup_stages(cl)      # keeps the classic board's stageN_done in sync
+            _sync_status(job, cl)   # s4.poFiled -> 2.0-Ord, same ladder as ever
+            updated += 1
+        else:
+            flagged += 1
+
+    set_setting(db, AGENT_SEEN_KEY, now.isoformat())
+    db.commit()
+    return {"updated": updated, "flagged": flagged, "unmatched": unmatched}
 
 
 @router.post("/agent/heartbeat", dependencies=[Depends(agent_access)])

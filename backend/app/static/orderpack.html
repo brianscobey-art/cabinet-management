@@ -261,7 +261,10 @@ function renderShell() {
         "</a>" +
         '<span class="agent" id="agentPill"></span>' +
         '<span class="spacer"></span>' +
-        '<button class="tbtn primary" id="scanBtn" onclick="queueScan()">Scan folders now</button>' +
+        '<button class="tbtn" id="stage4Btn" onclick="queueRun(\'stage4\')" ' +
+          'title="Pull Carter POs from Outlook, verify the totals, file what passes">' +
+          'Run stage 4</button>' +
+        '<button class="tbtn primary" id="scanBtn" onclick="queueRun(\'scan\')">Scan folders now</button>' +
         '<button class="tbtn" onclick="refresh(true)">Refresh</button>' +
       "</div>" +
       '<div class="tabs" id="tabs"></div>' +
@@ -290,6 +293,11 @@ function renderAgent() {
   const cls = mins == null ? "off" : mins <= gap ? "ok" : "stale";
   const text = mins == null ? "agent never checked in" : "agent " + fmtWhen(seen);
   $("agentPill").innerHTML = '<span class="dot ' + cls + '"></span>' + esc(text);
+  // Only offer the stages the agent can actually run — the server is the source
+  // of that list, so a button never appears before its module ships.
+  const runnable = (META && META.runnable) || [];
+  const s4 = $("stage4Btn");
+  if (s4) s4.style.display = runnable.includes("stage4") ? "" : "none";
 }
 
 /* ================= Board ================= */
@@ -421,15 +429,26 @@ function renderRuns() {
   $("view").innerHTML = html;
 }
 
-async function queueScan() {
-  const btn = $("scanBtn"); btn.disabled = true;
+const RUN_LABELS = { scan: "Folder scan", stage4: "Stage 4" };
+
+async function queueRun(kind) {
+  const btn = $(kind === "scan" ? "scanBtn" : "stage4Btn");
+  if (kind === "stage4" && !confirm(
+      "Run stage 4?\n\n" +
+      "Pulls Carter POs out of Outlook (it needs to be open), checks each SO total " +
+      "against its Carter PO, and files the ones that match into the sold-jobs folder.\n\n" +
+      "Anything that doesn't match to the penny is left exactly where it is and " +
+      "shows up under “Needs you”.")) return;
+  if (btn) btn.disabled = true;
   try {
-    const run = await api("/runs", { method: "POST", body: JSON.stringify({ kind: "scan" }) });
-    toast(run.status === "queued" ? "Scan queued — the agent picks it up within a minute"
-                                  : "A scan is already " + run.status);
+    const run = await api("/runs", { method: "POST", body: JSON.stringify({ kind }) });
+    toast(run.status === "queued"
+      ? RUN_LABELS[kind] + " queued — the agent picks it up within a minute"
+      : RUN_LABELS[kind] + " is already " + run.status);
+    VIEW = "runs"; renderTabs();
     await refresh();
-  } catch (e) { toast("Couldn't queue the scan: " + e.message, true); }
-  finally { btn.disabled = false; }
+  } catch (e) { toast("Couldn't queue that: " + e.message, true); }
+  finally { if (btn) btn.disabled = false; }
 }
 async function cancelRun(id) {
   try { await api("/runs/" + id + "/cancel", { method: "POST" }); await refresh(); }

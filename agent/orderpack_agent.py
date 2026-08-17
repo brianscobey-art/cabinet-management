@@ -12,9 +12,10 @@ Two duties:
      chain IS its status, so this is what makes the board tell the truth.
      Runs on a timer (ORDERPACK_SCAN_MINUTES) and on demand.
 
-  2. RUNS — claim queued commands and execute them. Phase A implements "scan".
-     Stage execution lands in later phases (stage 4 first): each becomes a
-     module here, and the server stamps Optimus off the structured result.
+  2. RUNS — claim queued commands and execute them. "scan" and "stage4" are
+     built; stages 1-3 land in the later phases. Each stage is a module here,
+     and the SERVER stamps Optimus off the structured result the module
+     returns — the agent never writes a checkbox itself.
 
 Auth is a shared secret in the X-Pack-Key header (same idea as the wallpaper
 feed key). No credentials for anything else are stored or requested — in
@@ -39,7 +40,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-AGENT_VERSION = "phaseA-1"
+AGENT_VERSION = "phaseB-1"
 
 ROOT = Path(__file__).resolve().parent
 LOG_FILE = ROOT / "orderpack_agent.log"
@@ -229,6 +230,31 @@ def finish(run_id: int, status: str, result=None, error: str | None = None) -> N
         log(f"  ! couldn't report the finish of run {run_id}: {exc}")
 
 
+def do_stage4(run_id: int) -> dict:
+    """Stage 4 — pull the Carter POs, verify the totals, file what passes.
+
+    The results go to the server, which is what stamps Optimus. The agent never
+    writes checkboxes itself: one set of records, one place they change.
+    """
+    if str(ROOT) not in sys.path:      # so the import works whatever the cwd is
+        sys.path.insert(0, str(ROOT))
+    import stage4_pos
+
+    def emit(line: str) -> None:
+        log("  " + line)
+        send_log(run_id, line)
+
+    results = stage4_pos.run(NEW_ORDERS, emit)
+    if results:
+        applied = call("/agent/stage4/apply", {"run_id": run_id, "results": results})
+        emit(f"board updated: {applied.get('updated', 0)} job(s), "
+             f"{applied.get('flagged', 0)} flagged, "
+             f"{applied.get('unmatched', 0)} with no job record")
+    # A stage 4 run changes what's on disk, so re-scan before reporting done.
+    do_scan(run_id)
+    return {"results": results}
+
+
 def execute(run: dict) -> None:
     run_id, kind = run["id"], run["kind"]
     log(f"run {run_id}: {kind} - starting")
@@ -237,6 +263,10 @@ def execute(run: dict) -> None:
         if kind == "scan":
             summary = do_scan(run_id)
             finish(run_id, "done", result=summary)
+            log(f"run {run_id}: done")
+        elif kind == "stage4":
+            outcome = do_stage4(run_id)
+            finish(run_id, "done", result=outcome)
             log(f"run {run_id}: done")
         else:
             # Stage execution arrives in the later phases (stage 4 first).

@@ -1,0 +1,11 @@
+# On-prem agent dependencies (Brian's Windows PC only).
+#
+# Deliberately NOT in backend/requirements.txt: pywin32 is Windows-only and would
+# break the Linux Docker build on Render. The cloud never needs either of these —
+# all PDF reading and Outlook work happens down here.
+#
+# Install into the backend venv:
+#   backend\.venv\Scripts\python.exe -m pip install -r agent\requirements.txt
+
+pdfplumber>=0.11    # reads Carter POs, SOs, DR Horton POs, installer pay sheets
+pywin32>=306        # Outlook COM, for pulling Carter PO attachments out of the inbox
