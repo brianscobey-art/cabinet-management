@@ -142,14 +142,20 @@ def _newest_file(folder: Path) -> Path | None:
 def import_receipt_file(db) -> dict:
     s = get_settings()
     folder = Path(s.po_receipt_folder)
-    # Cloud: the export is uploaded to R2 by the PC — pull it down first.
+    # Cloud: the export is uploaded to R2 by the PC — pull just that prefix down
+    # (a full hydrate would re-download every tracker on each refresh).
     if s.r2_enabled:
         try:
-            from app.storage import hydrate_feeds
+            from app.storage import _client, _list
 
-            hydrate_feeds(s)
+            client = _client(s)
+            folder.mkdir(parents=True, exist_ok=True)
+            for key, size, _lm in _list(client, s.r2_bucket, "po-receipts/")[:2]:
+                local = folder / Path(key).name
+                if not (local.exists() and local.stat().st_size == size):
+                    client.download_file(s.r2_bucket, key, str(local))
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
-            logger.warning("R2 hydrate before receipt import failed: %s", exc)
+            logger.warning("R2 receipt hydrate failed: %s", exc)
     if not folder.is_dir():
         return {"error": f"folder not found: {folder}"}
     f = _newest_file(folder)
@@ -202,17 +208,30 @@ def refresh_receipts(db, with_potracker: bool = True) -> dict:
 
 # --- POTracker PO->job map (rides in on the tracker sync) -----------------------
 def ingest_potracker(db, tracker_path: Path) -> int:
-    """Replace job_pos from the tracker's POTracker table (PO Tracking sheet)."""
-    wb = load_workbook(tracker_path, data_only=True)
-    if "PO Tracking" not in wb.sheetnames or "POTracker" not in wb["PO Tracking"].tables:
+    """Replace job_pos from the tracker's POTracker table (PO Tracking sheet).
+
+    Uses openpyxl READ-ONLY mode — the full-fidelity loader needs ~1 GB on this
+    4.5 MB workbook and gets the cloud worker OOM-killed. Read-only can't see
+    table ranges, so the header row is found by looking for 'Our PO #' and rows
+    without a PO are skipped (that's what the table range was protecting against).
+    """
+    wb = load_workbook(tracker_path, data_only=True, read_only=True)
+    if "PO Tracking" not in wb.sheetnames:
         wb.close()
         return 0
     ws = wb["PO Tracking"]
-    m = re.match(r"[A-Z]+(\d+):([A-Z]+)(\d+)", ws.tables["POTracker"].ref)
-    hr, mr = int(m.group(1)), int(m.group(3))
-    grid = list(ws.iter_rows(min_row=hr, max_row=mr, values_only=True))
+    grid, hdr = [], None
+    for row in ws.iter_rows(max_col=40, values_only=True):
+        if hdr is None:
+            cells = [str(c).replace("\n", " ").strip() if c else "" for c in row]
+            if "Our PO #" in cells:
+                hdr = cells
+            continue
+        grid.append(row)
     wb.close()
-    hdr = [str(h).replace("\n", " ").strip() if h else "" for h in grid[0]]
+    if hdr is None:
+        return 0
+    grid = [hdr] + grid
 
     def gi(*names):
         for name in names:
