@@ -81,7 +81,17 @@ class Settings(BaseSettings):
     # + a token to let the server pull it live; else the newest export file is read.
     # O00021.V0 Purchase Receipt Details (PDP: None — a token reads it fully).
     po_receipt_dataset_id: str = "1f5601ba-d9a1-4ebb-aa76-ad9c5b226ea6"
-    po_receipt_dir: str = r"C:\Users\Brian SE6\Downloads"  # where a "PO Receipt List*.xlsx" export lands
+    po_receipt_dir: str = r"C:\Users\Brian SE6\Downloads"  # where a "PO Receipt List*" export lands
+
+    @property
+    def po_receipt_folder(self) -> str:
+        """The PC's export folder when it exists; in the cloud, a folder on the
+        feed disk beside the other feeds (hydrated from R2). Self-configuring so
+        no extra env var is needed on Render."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "po-receipts")
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

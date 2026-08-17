@@ -140,7 +140,16 @@ def _newest_file(folder: Path) -> Path | None:
 
 
 def import_receipt_file(db) -> dict:
-    folder = Path(get_settings().po_receipt_dir)
+    s = get_settings()
+    folder = Path(s.po_receipt_folder)
+    # Cloud: the export is uploaded to R2 by the PC — pull it down first.
+    if s.r2_enabled:
+        try:
+            from app.storage import hydrate_feeds
+
+            hydrate_feeds(s)
+        except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
+            logger.warning("R2 hydrate before receipt import failed: %s", exc)
     if not folder.is_dir():
         return {"error": f"folder not found: {folder}"}
     f = _newest_file(folder)
@@ -167,15 +176,28 @@ def import_receipt_file(db) -> dict:
     return {"file": f.name, "receipts": n}
 
 
-def refresh_receipts(db) -> dict:
-    """Live DOMO pull when configured, else the newest export file."""
+def refresh_receipts(db, with_potracker: bool = True) -> dict:
+    """Live DOMO pull when configured, else the newest export file. Also refreshes
+    the POTracker PO->job map when it's empty, so one button lights up the report."""
     s = get_settings()
     if s.po_receipt_dataset_id.strip() and s.domo_access_token.strip():
         res = pull_receipts_domo(db)
-        if "error" not in res:
-            return res
-        logger.warning("PO receipt live pull failed (%s) — trying file", res["error"])
-    return import_receipt_file(db)
+        if "error" in res:
+            logger.warning("PO receipt live pull failed (%s) — trying file", res["error"])
+            res = import_receipt_file(db)
+    else:
+        res = import_receipt_file(db)
+
+    if with_potracker and db.query(JobPo).count() == 0:
+        try:
+            from app.feeds import _by_mtime
+
+            files = _by_mtime(Path(s.tracker_dir), "3.0 Online Sales Tracker *.xlsm")
+            if files:
+                res["job_pos"] = ingest_potracker(db, files[0])
+        except Exception as exc:  # noqa: BLE001
+            res["job_pos"] = f"error: {exc}"
+    return res
 
 
 # --- POTracker PO->job map (rides in on the tracker sync) -----------------------
