@@ -177,6 +177,8 @@ class BoardRow(BaseModel):
     address: str
     plan: str | None
     plan_abbr: str | None
+    elevation: str | None
+    swing: str | None
     buid: str | None
     status: JobStatus
     # Physical reality, straight off the agent's last scan.
@@ -297,6 +299,8 @@ def _row(job: Job, cl: OrderingChecklist) -> BoardRow:
         address=job.address,
         plan=job.plan,
         plan_abbr=cl.plan_abbr,
+        elevation=cl.elevation,
+        swing=cl.swing,
         buid=cl.buid,
         status=job.status,
         current_folder=cl.current_folder,
@@ -709,6 +713,94 @@ def apply_stage4(payload: Stage4Apply, db: Session = Depends(get_db)):
     set_setting(db, AGENT_SEEN_KEY, now.isoformat())
     db.commit()
     return {"updated": updated, "flagged": flagged, "unmatched": unmatched}
+
+
+class BackfillRecord(BaseModel):
+    """One job's history, assembled from the tracker and the filed job folder.
+
+    Deliberately absent: so_total (POTracker's `Cost` is a different number and
+    would paint false mismatches), elevation and po_date (PDF-only).
+    """
+
+    job_code: str
+    buid: str | None = None
+    plan_abbr: str | None = None
+    swing: str | None = None
+    po_total: Decimal | None = None
+    install_pay: Decimal | None = None
+    carter_po_number: str | None = None
+    so_number: str | None = None
+    sub_number: str | None = None
+    folder_name: str | None = None
+    folder_files: list[str] | None = None
+    installer_pay_sheet: bool | None = None
+    moved_to_sold_date: date | None = None
+    current_folder: str | None = None
+
+
+class BackfillApply(BaseModel):
+    records: list[BackfillRecord] = Field(default_factory=list)
+
+
+# Every field the backfill is allowed to touch. Anything not listed here — the
+# totals the dollar gate depends on, exceptions, step stamps — is off limits.
+_BACKFILL_FIELDS = (
+    "buid", "plan_abbr", "swing", "po_total", "install_pay",
+    "carter_po_number", "so_number", "sub_number",
+    "folder_name", "folder_files", "installer_pay_sheet", "moved_to_sold_date",
+)
+
+
+@router.post("/agent/backfill/apply", dependencies=[Depends(agent_access)])
+def apply_backfill(payload: BackfillApply, db: Session = Depends(get_db)):
+    """Fill blank Order Pack columns from tracker + sold-folder history.
+
+    FILL-IF-NULL, always. History never overwrites a value a real stage run or
+    Brian himself established, so this is safe to re-run as often as you like.
+    It also never stamps a step or moves a status — this is reference data about
+    what already happened, not a claim that it happened just now.
+    """
+    now = datetime.now(timezone.utc)
+    matched = filled = skipped = unmatched = 0
+
+    for item in payload.records:
+        job = (
+            db.query(Job)
+            .filter(func.upper(Job.job_code) == item.job_code.upper())
+            .first()
+        )
+        if job is None:
+            unmatched += 1
+            continue
+        matched += 1
+        cl = get_or_create_checklist(db, job)
+        touched = False
+
+        for field in _BACKFILL_FIELDS:
+            value = getattr(item, field)
+            if value is None:
+                continue
+            if getattr(cl, field) not in (None, "", []):
+                continue                       # already known — history yields
+            setattr(cl, field, value)
+            touched = True
+
+        # Only claim a folder is filed if nothing is currently tracking it. If a
+        # scan says it's sitting in stage 3 right now, the scan is the truth.
+        if item.current_folder == "sold" and cl.current_folder is None:
+            cl.current_folder = "sold"
+            touched = True
+
+        if touched:
+            filled += 1
+            if cl.last_scan_at is None:
+                cl.last_scan_at = now
+        else:
+            skipped += 1
+
+    db.commit()
+    return {"matched": matched, "filled": filled,
+            "already_complete": skipped, "unmatched": unmatched}
 
 
 @router.post("/agent/heartbeat", dependencies=[Depends(agent_access)])

@@ -400,3 +400,95 @@ def test_install_pay_out_of_range_comes_back_blank(tmp_path, monkeypatch):
     (folder / "DROP-0094 BEAU Installer Pay Sheet 081226.pdf").unlink()
     present, pay, _icode, note = stage4.read_pay_sheet(folder)
     assert present is False and pay is None and "no installer pay sheet" in note
+
+
+# --------------------------------------------------------------------------
+# Backfill from history (tracker + filed job folders)
+# --------------------------------------------------------------------------
+def _backfill(client, records):
+    return client.post("/ordering-platform/pack/agent/backfill/apply",
+                       headers=AGENT_HEADERS, json={"records": records}).json()
+
+
+HISTORY = {
+    "job_code": "DRID60-0115",
+    "buid": "227330115",
+    "plan_abbr": "CREE",
+    "swing": "R",
+    "po_total": "3172.00",
+    "install_pay": "383.00",
+    "carter_po_number": "750004690",
+    "so_number": "SO45054",
+    "sub_number": "22733",
+    "folder_name": "DRID60-0115 CREE 081326",
+    "folder_files": ["DRID60-0115 CREE PO 081326.PDF"],
+    "installer_pay_sheet": True,
+    "moved_to_sold_date": "2026-07-09",
+    "current_folder": "sold",
+}
+
+
+def test_backfill_fills_blank_columns(client, db):
+    headers, _ = setup_owner(client, db)
+    summary = _backfill(client, [HISTORY])
+    assert summary == {"matched": 1, "filled": 1, "already_complete": 0, "unmatched": 0}
+
+    row = client.get("/ordering-platform/pack/board", headers=headers).json()[0]
+    assert row["buid"] == "227330115"
+    assert row["plan_abbr"] == "CREE"
+    assert str(row["install_pay"]) == "383.00"
+    assert row["carter_po_number"] == "750004690"
+    assert row["sub_number"] == "22733"
+    assert row["current_folder"] == "sold"
+    assert row["moved_to_sold_date"] == "2026-07-09"
+    # History is reference data about the past — it must not claim a stage just ran.
+    assert row["stage4_date"] is None
+    platform = client.get("/ordering-platform/board?include_ordered=true",
+                          headers=headers).json()
+    assert platform == [] or "s4.poFiled" not in platform[0]["steps"]
+
+
+def test_backfill_never_overwrites_and_is_idempotent(client, db):
+    """Fill-if-null, always. A real stage run and Brian's own typing both win."""
+    headers, job = setup_owner(client, db)
+    client.patch(f"/ordering-platform/pack/jobs/{job['id']}", headers=headers,
+                 json={"install_pay": "999.00", "sub_number": "99999"})
+
+    _backfill(client, [HISTORY])
+    row = client.get("/ordering-platform/pack/board", headers=headers).json()[0]
+    assert str(row["install_pay"]) == "999.00"     # Brian's number survives
+    assert row["sub_number"] == "99999"
+    assert row["buid"] == "227330115"              # the blank one still filled
+
+    # Re-running changes nothing further.
+    again = _backfill(client, [HISTORY])
+    assert again["filled"] == 0 and again["already_complete"] == 1
+
+
+def test_backfill_yields_to_a_live_scan(client, db):
+    """If a scan says the folder is sitting in stage 3 right now, history must
+    not overwrite that with 'sold' just because an old copy was filed."""
+    headers, _ = setup_owner(client, db)
+    client.post("/ordering-platform/pack/agent/scan", headers=AGENT_HEADERS, json={
+        "stages": {"stage3": [{"folder": "DRID60-0115 CREE 081326", "files": []}]},
+        "loose_files": {},
+    })
+    _backfill(client, [HISTORY])
+    row = client.get("/ordering-platform/pack/board", headers=headers).json()[0]
+    assert row["current_folder"] == "stage3"
+
+
+def test_backfill_cannot_touch_the_totals_the_gate_depends_on(client, db):
+    """so_total is deliberately not a backfillable field — POTracker's Cost is a
+    different number and would paint false mismatches."""
+    headers, _ = setup_owner(client, db)
+    _backfill(client, [{**HISTORY, "so_total": "2022.75"}])
+    row = client.get("/ordering-platform/pack/board", headers=headers).json()[0]
+    assert row["so_total"] is None
+    assert row["exception"] is None
+
+
+def test_backfill_reports_unknown_job_codes(client, db):
+    setup_owner(client, db)
+    summary = _backfill(client, [{"job_code": "DRNOPE-9999", "buid": "123456789"}])
+    assert summary == {"matched": 0, "filled": 0, "already_complete": 0, "unmatched": 1}

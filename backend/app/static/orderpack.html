@@ -478,6 +478,7 @@ function openJob(id) {
     '<div class="kv">' +
       "<div>Address</div><div>" + esc(r.address || "") + "</div>" +
       "<div>Plan</div><div>" + esc(r.plan || "") + (r.plan_abbr ? " (" + esc(r.plan_abbr) + ")" : "") + "</div>" +
+      "<div>Elevation / swing</div><div>" + esc([r.elevation, r.swing].filter(Boolean).join(" / ") || "—") + "</div>" +
       "<div>BUID</div><div>" + esc(r.buid || "—") + "</div>" +
       "<div>Folder</div><div>" + esc(r.folder_name || "—") + "</div>" +
       "<div>Builder PO</div><div>" + esc(r.po_number || "—") + (r.po_date ? " · " + fmtDate(r.po_date) : "") +
