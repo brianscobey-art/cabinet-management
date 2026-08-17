@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     domo_access_token: str = ""  # DOMO_ACCESS_TOKEN in .env enables live server-side pulls
     # DOMO "PO Receipt List" dataset (warehouse receipts). Set PO_RECEIPT_DATASET_ID
     # + a token to let the server pull it live; else the newest export file is read.
-    po_receipt_dataset_id: str = ""
+    # O00021.V0 Purchase Receipt Details (PDP: None — a token reads it fully).
+    po_receipt_dataset_id: str = "1f5601ba-d9a1-4ebb-aa76-ad9c5b226ea6"
     po_receipt_dir: str = r"C:\Users\Brian SE6\Downloads"  # where a "PO Receipt List*.xlsx" export lands
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"

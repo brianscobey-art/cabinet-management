@@ -102,13 +102,25 @@ def _domo_sql(sql: str, dataset_id: str) -> list[list]:
         return json.loads(resp.read()).get("rows", [])
 
 
+# The "PO Receipt List" is a card on the Purchase Receipt Details dataset:
+# receipts are `transaction code`='RE', one row per receipt at the Dothan store
+# (pos 750), costs summed. This grouped SQL reproduces the export's 7 columns.
+_RECEIPT_SQL = (
+    "SELECT `transaction number` AS `Receipt #`, MAX(`transaction date`) AS `Receipt Date`, "
+    "MAX(`pos`) AS `POS`, MAX(`supplier name title`) AS `Supplier`, "
+    "SUM(`reported cost`) AS `Supplier Cost`, SUM(`landed cost`) AS `Landed Cost`, "
+    "MAX(`order number`) AS `Order #` "
+    "FROM table WHERE `transaction code`='RE' AND `pos` LIKE '750%' "
+    "GROUP BY `transaction number`"
+)
+
+
 def pull_receipts_domo(db) -> dict:
     s = get_settings()
     if not (s.po_receipt_dataset_id.strip() and s.domo_access_token.strip()):
         return {"error": "no PO_RECEIPT_DATASET_ID / DOMO_ACCESS_TOKEN configured"}
-    select = ", ".join(f"`{c}`" for c in COLS)
     try:
-        raw = _domo_sql(f"SELECT {select} FROM table", s.po_receipt_dataset_id.strip())
+        raw = _domo_sql(_RECEIPT_SQL, s.po_receipt_dataset_id.strip())
     except urllib.error.HTTPError as e:
         return {"error": f"Domo returned {e.code} — token/dataset invalid?"}
     except urllib.error.URLError as e:
