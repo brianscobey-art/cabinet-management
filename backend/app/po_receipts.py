@@ -132,7 +132,10 @@ def pull_receipts_domo(db) -> dict:
 
 # --- source 2: export file -----------------------------------------------------
 def _newest_file(folder: Path) -> Path | None:
-    files = [f for f in folder.glob("PO Receipt List*.xlsx") if not f.name.startswith("~")]
+    files = [
+        f for f in folder.glob("PO Receipt List*")
+        if f.suffix.lower() in (".xlsx", ".csv") and not f.name.startswith("~")
+    ]
     return max(files, key=lambda f: f.stat().st_mtime) if files else None
 
 
@@ -142,11 +145,17 @@ def import_receipt_file(db) -> dict:
         return {"error": f"folder not found: {folder}"}
     f = _newest_file(folder)
     if f is None:
-        return {"error": "no 'PO Receipt List*.xlsx' export found"}
-    wb = load_workbook(f, data_only=True, read_only=True)
-    ws = wb["data"] if "data" in wb.sheetnames else wb[wb.sheetnames[0]]
-    grid = list(ws.iter_rows(values_only=True))
-    wb.close()
+        return {"error": "no 'PO Receipt List*' export (.xlsx/.csv) found"}
+    if f.suffix.lower() == ".csv":
+        import csv as _csv
+
+        with f.open(newline="", encoding="utf-8-sig") as fh:
+            grid = [tuple(r) for r in _csv.reader(fh)]
+    else:
+        wb = load_workbook(f, data_only=True, read_only=True)
+        ws = wb["data"] if "data" in wb.sheetnames else wb[wb.sheetnames[0]]
+        grid = list(ws.iter_rows(values_only=True))
+        wb.close()
     hdr = [str(h).strip() if h is not None else "" for h in grid[0]]
     idx = {c: (hdr.index(c) if c in hdr else -1) for c in COLS}
     rows = [
