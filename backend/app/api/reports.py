@@ -12,6 +12,7 @@ from app.api.deps import read_access, write_access
 from app.config import get_settings
 from app.database import get_db
 from app.manager_report import build as build_manager_report
+from app.po_receipts import build_report as build_po_receipts, refresh_receipts
 from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_from_file
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
 from app.models import (
@@ -147,6 +148,9 @@ REPORTS = [
                description="Scheduled installs grouped by install week with PO value."),
     ReportInfo(key="unordered", name="Needs Ordering", category="Operations",
                description="Active jobs with an install date but no cabinet PO yet — the risk list."),
+    ReportInfo(key="po-receipts", name="PO Receipts (Deliveries)", category="Operations",
+               description="Product deliveries received at the Dothan warehouse (from DOMO), matched to "
+                           "each job by PO, plus POs ordered but not yet received."),
     ReportInfo(key="open-service", name="Open Service Requests", category="Operations",
                description="Every service request with work still open — job, date created, material status, and scheduled completion date."),
     ReportInfo(key="revenue-builder", name="Revenue by Builder & Community", category="Sales",
@@ -170,6 +174,18 @@ def list_reports():
 @router.get("/reports/manager", dependencies=[Depends(read_access)])
 def manager_report(db: Session = Depends(get_db)):
     return build_manager_report(db)
+
+
+@router.get("/reports/po-receipts", dependencies=[Depends(read_access)])
+def po_receipts_report(db: Session = Depends(get_db)):
+    return build_po_receipts(db)
+
+
+@router.post("/reports/po-receipts/refresh", dependencies=[Depends(write_access)])
+def po_receipts_refresh(db: Session = Depends(get_db)):
+    res = refresh_receipts(db)
+    db.commit()
+    return res
 
 
 SHARE_KEY = "manager_report_token"

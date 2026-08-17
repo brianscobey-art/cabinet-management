@@ -645,6 +645,54 @@ export const getOpenService = () => api<OpenServiceRow[]>("/reports/open-service
 
 export const getReportsList = () => api<ReportInfo[]>("/reports");
 
+// --- PO Receipts (Deliveries) ----------------------------------------------
+export interface PoReceiptRow {
+  receipt_number: string;
+  receipt_date: string | null;
+  pos: string | null;
+  supplier: string | null;
+  supplier_cost: number | null;
+  landed_cost: number | null;
+  order_number: string | null;
+  job_code: string | null;
+  vendor: string | null;
+  product: string | null;
+  order_date: string | null;
+  job_id: number | null;
+  address: string | null;
+  community_name: string | null;
+  account_name: string | null;
+  status: string | null;
+  install_date: string | null;
+}
+export interface PoOutstandingRow {
+  order_number: string;
+  job_code: string | null;
+  vendor: string | null;
+  product: string | null;
+  order_date: string | null;
+  tent_due_date: string | null;
+  days_overdue: number | null;
+  job_id: number | null;
+  address: string | null;
+  community_name: string | null;
+  account_name: string | null;
+  status: string | null;
+  install_date: string | null;
+}
+export interface PoReceiptsReport {
+  as_of: string;
+  total_receipts: number;
+  received_this_month: number;
+  matched_to_job: number;
+  outstanding_count: number;
+  rows: PoReceiptRow[];
+  outstanding: PoOutstandingRow[];
+}
+export const getPoReceipts = () => api<PoReceiptsReport>("/reports/po-receipts");
+export const refreshPoReceipts = () =>
+  api<Record<string, unknown>>("/reports/po-receipts/refresh", { method: "POST" });
+
 // --- Manager Sales Report ---------------------------------------------------
 export interface InstalledPeriod {
   label: string;

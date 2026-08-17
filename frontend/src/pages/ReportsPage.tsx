@@ -30,6 +30,7 @@ import {
 } from "../api";
 import { fmtDate } from "../format";
 import ManagerReportView from "./ManagerReport";
+import PoReceiptsView from "./PoReceiptsView";
 
 const money = (v: number) =>
   `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", {
@@ -132,6 +133,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "other-labor" && <OtherLaborView />}
       {key === "domo-pl" && <DomoPLView />}
       {key === "manager" && <ManagerReportView />}
+      {key === "po-receipts" && <PoReceiptsView />}
     </div>
   );
 }

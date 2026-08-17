@@ -517,6 +517,14 @@ def sync_tracker(db: Session) -> dict:
     for f in files[:5]:
         try:
             result = sync_tracker_file(db, f)
+            # The same .xlsm carries POTracker (Our PO # -> Job Code) for the PO
+            # receipts report; refresh that map from this file too.
+            try:
+                from app.po_receipts import ingest_potracker
+
+                result["job_pos"] = ingest_potracker(db, f)
+            except Exception as exc:  # noqa: BLE001
+                result["job_pos"] = f"error: {exc}"
             db.commit()  # sibling feed syncs each commit their own work
             return {"skipped_locked": skipped, **result}
         except PermissionError:
@@ -554,4 +562,12 @@ def sync_all(db: Session) -> dict:
             result["new_orders"] = {"error": "file locked (open in Excel)"}
     else:
         result["new_orders"] = {"error": "file not found"}
+    # PO receipts — live DOMO pull when configured, else newest export file.
+    try:
+        from app.po_receipts import refresh_receipts
+
+        result["po_receipts"] = refresh_receipts(db)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        result["po_receipts"] = {"error": str(exc)}
     return result

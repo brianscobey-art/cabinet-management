@@ -12,6 +12,7 @@ from app.models.ordering import OrderingChecklist
 from app.models.pack import RUN_KINDS, RUN_STATUSES, PackRun
 from app.models.phase import PhaseUpdate
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
+from app.models.receipt import JobPo, PoReceipt
 from app.models.selections import HardwareSelection, RoomSelection
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
 from app.models.user import Role, User
@@ -42,6 +43,8 @@ __all__ = [
     "RUN_KINDS",
     "RUN_STATUSES",
     "PhaseUpdate",
+    "JobPo",
+    "PoReceipt",
     "Quote",
     "QuoteLineItem",
     "QuoteStatus",
