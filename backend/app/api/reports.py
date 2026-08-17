@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import read_access, write_access
+from app.api.deps import finance_access, read_access, write_access
 from app.config import get_settings
 from app.database import get_db
 from app.manager_report import build as build_manager_report
@@ -17,7 +17,7 @@ from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_fro
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
 from app.models import (
     Account, AccountType, Community, DomoTxn, Job, JobCost, JobDocument, JobStatus, PhaseUpdate,
-    ServiceLine, ServiceRequest,
+    Role, ServiceLine, ServiceRequest,
 )
 from app.phases import PHASE_HIDDEN_STATUSES, PHASE_LABELS
 
@@ -166,12 +166,19 @@ REPORTS = [
 ]
 
 
-@router.get("/reports", response_model=list[ReportInfo], dependencies=[Depends(read_access)])
-def list_reports():
-    return REPORTS
+# P&L / margin and the manager summary are management-only; everyone else never
+# sees the cards (and the endpoints above reject them anyway).
+ADMIN_ONLY_REPORTS = {"job-pl", "domo-pl", "other-labor", "manager"}
 
 
-@router.get("/reports/manager", dependencies=[Depends(read_access)])
+@router.get("/reports", response_model=list[ReportInfo])
+def list_reports(user=Depends(read_access)):
+    if getattr(user, "role", None) == Role.admin:
+        return REPORTS
+    return [r for r in REPORTS if r.key not in ADMIN_ONLY_REPORTS]
+
+
+@router.get("/reports/manager", dependencies=[Depends(finance_access)])
 def manager_report(db: Session = Depends(get_db)):
     return build_manager_report(db)
 
@@ -202,7 +209,7 @@ def manager_report_public(token: str = Query(...), db: Session = Depends(get_db)
     return build_manager_report(db)
 
 
-@router.get("/reports/manager/share", dependencies=[Depends(read_access)])
+@router.get("/reports/manager/share", dependencies=[Depends(finance_access)])
 def manager_share_status(db: Session = Depends(get_db)):
     """Current share token (admins copy the link; None = link disabled)."""
     from app.models import get_setting
@@ -210,7 +217,7 @@ def manager_share_status(db: Session = Depends(get_db)):
     return {"token": get_setting(db, SHARE_KEY) or get_settings().manager_report_token or None}
 
 
-@router.post("/reports/manager/share", dependencies=[Depends(write_access)])
+@router.post("/reports/manager/share", dependencies=[Depends(finance_access)])
 def manager_share_enable(db: Session = Depends(get_db)):
     """Generate (or regenerate) the public share token and return it."""
     from app.models import set_setting
@@ -221,7 +228,7 @@ def manager_share_enable(db: Session = Depends(get_db)):
     return {"token": token}
 
 
-@router.delete("/reports/manager/share", dependencies=[Depends(write_access)])
+@router.delete("/reports/manager/share", dependencies=[Depends(finance_access)])
 def manager_share_disable(db: Session = Depends(get_db)):
     """Turn off the public link."""
     from app.models import set_setting
@@ -509,7 +516,7 @@ def _pl_row(job: Job, cost: JobCost) -> JobPLRow:
     )
 
 
-@router.get("/reports/job-pl", response_model=JobPLReport, dependencies=[Depends(read_access)])
+@router.get("/reports/job-pl", response_model=JobPLReport, dependencies=[Depends(finance_access)])
 def job_pl_report(db: Session = Depends(get_db)):
     q = (
         db.query(Job, JobCost)
@@ -577,7 +584,7 @@ class OtherLaborReport(BaseModel):
     updated_at: datetime | None
 
 
-@router.get("/reports/other-labor", response_model=OtherLaborReport, dependencies=[Depends(read_access)])
+@router.get("/reports/other-labor", response_model=OtherLaborReport, dependencies=[Depends(finance_access)])
 def other_labor_report(db: Session = Depends(get_db)):
     """Every job carrying real (non-wash) labor billed to codes other than C9009, worst drag first."""
     q = (
@@ -632,7 +639,7 @@ def other_labor_report(db: Session = Depends(get_db)):
     )
 
 
-@router.post("/reports/job-pl/refresh", dependencies=[Depends(write_access)])
+@router.post("/reports/job-pl/refresh", dependencies=[Depends(finance_access)])
 def job_pl_refresh(db: Session = Depends(get_db)):
     """The report's Update button. Preference order:
     1. live token pull, 2. newest raw Domo dump (KB Domo Raw*.json — G+I combined),
@@ -757,7 +764,7 @@ def _periods(mode, year, quarter, half, start, end, today) -> list[DomoPeriod]:
     return [DomoPeriod(key="p", label=f"{_mdy(s)} – {_mdy(e)}", start=s, end=e)]
 
 
-@router.get("/reports/domo-pl", response_model=DomoPLReport, dependencies=[Depends(read_access)])
+@router.get("/reports/domo-pl", response_model=DomoPLReport, dependencies=[Depends(finance_access)])
 def domo_pl_report(
     db: Session = Depends(get_db),
     mode: str = Query("window"),
@@ -840,7 +847,7 @@ def domo_pl_report(
     )
 
 
-@router.get("/reports/domo-pl/builders", response_model=list[str], dependencies=[Depends(read_access)])
+@router.get("/reports/domo-pl/builders", response_model=list[str], dependencies=[Depends(finance_access)])
 def domo_pl_builders(db: Session = Depends(get_db)):
     rows = (
         db.query(DomoTxn.account_name)
@@ -852,7 +859,7 @@ def domo_pl_builders(db: Session = Depends(get_db)):
     return [r[0] for r in rows]
 
 
-@router.post("/reports/domo-pl/refresh", dependencies=[Depends(write_access)])
+@router.post("/reports/domo-pl/refresh", dependencies=[Depends(finance_access)])
 def domo_pl_refresh(db: Session = Depends(get_db)):
     """The report's button: use a dated transaction export if present, else calculate
     period data from the last Domo cost pull (each house dated by its install date)."""

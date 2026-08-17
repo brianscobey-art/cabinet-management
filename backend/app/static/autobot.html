@@ -374,26 +374,41 @@ async function boot() {
   try {
     me = await api("/auth/me");
   } catch (e) { signOut(); return; }
-  if (me.role !== "service_tech" && me.role !== "admin") {
+  // KSRs and field crews carry their own visits, so they get in too; only the
+  // setup tabs (Duties/Team) stay with the tech and Brian.
+  const ALLOWED = ["service_tech", "admin", "sales", "field", "installer_coordinator"];
+  if (!ALLOWED.includes(me.role)) {
     signOut();
     const err = document.getElementById("login-error");
     err.textContent = "This account doesn't have Autobot access.";
     err.hidden = false;
     return;
   }
+  const isSetup = me.role === "service_tech" || me.role === "admin";
   document.getElementById("login").hidden = true;
   document.getElementById("app").hidden = false;
   document.getElementById("who").textContent = me.full_name;
   // The ⠿ launcher + clickable wordmark only appear for users who can actually
   // use the office suite. Service techs have Autobot and nothing else, so they
   // never see a way out of it.
-  if (me.role === "admin") {
+  if (me.role !== "service_tech") {
     document.getElementById("suitebtn").style.display = "flex";
     const wm = document.getElementById("wordmark");
     wm.style.cursor = "pointer";
     wm.onclick = () => { location.href = "/#/suite"; };
   }
+  if (!isSetup) {
+    for (const t of ["duties", "team"]) {
+      const b = document.getElementById("tab-" + t);
+      if (b) b.style.display = "none";
+    }
+  }
   try { workers = await api("/autobot/workers"); } catch (e) { workers = []; }
+  // Default the route to the signed-in person's own loop when they're on the roster.
+  if (!isSetup) {
+    const mine = workers.find((w) => w.name === me.full_name);
+    if (mine) workerId = String(mine.id);
+  }
   showTab("route");
 }
 

@@ -44,10 +44,16 @@ from app.models import (
 
 router = APIRouter(tags=["autobot"])
 
-# Autobot is the tech's app: the service tech and Brian (admin), nobody else --
-# the rest of the company doesn't work in this arena.
-autobot_access = require_roles(Role.service_tech, Role.admin)
-autobot_write = autobot_access
+# Autobot is the tech's app, but KSRs and field crews carry their own visits
+# (field measures, post-walks) — they need to see and work their route. Setting
+# up the roster/duty chart/time off stays with the tech and Brian (admin).
+autobot_access = require_roles(
+    Role.service_tech, Role.admin, Role.sales, Role.field, Role.installer_coordinator
+)
+# Doing the work (log a visit, mark it done, log a phase) — anyone who can see it.
+autobot_do = autobot_access
+# Configuring it (roster, duty chart, time off, visit generation) — tech + admin.
+autobot_write = require_roles(Role.service_tech, Role.admin)
 
 
 class VisitOut(BaseModel):
@@ -234,7 +240,7 @@ def list_visits(
 
 @router.post("/autobot/visits", response_model=VisitOut, status_code=status.HTTP_201_CREATED)
 def create_visit(
-    payload: VisitIn, db: Session = Depends(get_db), user: User = Depends(autobot_write)
+    payload: VisitIn, db: Session = Depends(get_db), user: User = Depends(autobot_do)
 ):
     if payload.visit_type not in VISIT_TYPES:
         raise HTTPException(422, f"visit_type must be one of: {', '.join(VISIT_TYPES)}")
@@ -258,7 +264,7 @@ def patch_visit(
     visit_id: int,
     payload: VisitPatch,
     db: Session = Depends(get_db),
-    user: User = Depends(autobot_write),
+    user: User = Depends(autobot_do),
 ):
     visit = db.get(Visit, visit_id)
     if not visit:
@@ -405,7 +411,7 @@ def log_phase(
     job_id: int,
     payload: PhaseLogIn,
     db: Session = Depends(get_db),
-    user: User = Depends(autobot_write),
+    user: User = Depends(autobot_do),
 ):
     """Log a phase from the field. Logging the SAME phase is meaningful too — it
     stamps 'verified unchanged on this date' into the history."""
