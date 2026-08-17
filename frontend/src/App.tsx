@@ -11,6 +11,7 @@ import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
+import HeaderJobSearch from "./pages/HeaderJobSearch";
 import HelpPage from "./pages/HelpPage";
 import { PublicManagerReport } from "./pages/ManagerReport";
 import SetPasswordPage from "./pages/SetPasswordPage";
@@ -203,6 +204,7 @@ export default function App() {
           </a>
         </nav>
         <div className="header-right">
+          <HeaderJobSearch />
           <a className="cal-btn" href="#/schedule" title="Open the install calendar">
             📅 Install Calendar
           </a>

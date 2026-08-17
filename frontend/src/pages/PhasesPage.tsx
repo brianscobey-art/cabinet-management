@@ -34,6 +34,13 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   const [noteFor, setNoteFor] = useState<number | null>(null); // job_id with open note editor
   const [noteText, setNoteText] = useState("");
 
+  // Phones: let the app header + pickers scroll away so only the phase table's
+  // header row stays pinned while someone updates a long list of lots.
+  useEffect(() => {
+    document.body.classList.add("phases-focus");
+    return () => document.body.classList.remove("phases-focus");
+  }, []);
+
   useEffect(() => {
     getPhaseDefs().then(setPhases).catch((e) => setError(e.message));
     // only builders with active (non-closed/void) jobs — no empty names in the picker
@@ -154,15 +161,15 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
       ) : (
         <>
           <div className="table-wrap">
-            <table>
+            <table className="phases-table">
               <thead>
                 <tr>
-                  <th rowSpan={2}>Lot</th>
                   <th rowSpan={2}>Job code</th>
-                  <th rowSpan={2}>Address</th>
-                  <th rowSpan={2}>Plan</th>
                   <th rowSpan={2}>Current phase</th>
                   <th rowSpan={2}>Updated</th>
+                  <th rowSpan={2}>Plan</th>
+                  <th rowSpan={2}>Lot</th>
+                  <th rowSpan={2}>Address</th>
                   <th colSpan={2} className="group-head">
                     Field Measure
                   </th>
@@ -185,12 +192,9 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 {rows.map((row) => (
                   <Fragment key={row.job_id}>
                     <tr>
-                      <td>{row.lot_number ?? "—"}</td>
                       <td>
                         <a href={`#/jobs/${row.job_id}`}>{row.job_code ?? `#${row.job_id}`}</a>
                       </td>
-                      <td>{row.address}</td>
-                      <td>{row.plan ?? "—"}</td>
                       <td>
                         {canWrite ? (
                           // value stays neutral so picking the SAME phase still fires onChange
@@ -215,6 +219,9 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                         )}
                       </td>
                       <td>{row.phase_date ? fmtDate(row.phase_date) : "—"}</td>
+                      <td>{row.plan ?? "—"}</td>
+                      <td>{row.lot_number ?? "—"}</td>
+                      <td>{row.address}</td>
                       <td>
                         {row.measure_date ? fmtDate(row.measure_date) : "—"}
                         {row.layout_doc_id && (
