@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { getPoReceipts, PoReceiptsReport, refreshPoReceipts } from "../api";
 import { fmtDate } from "../format";
 
+// Always dollars AND cents — never rounded (Brian's rule for this report).
 const money = (n: number | null) =>
-  n == null ? "—" : "$" + Math.round(n).toLocaleString("en-US");
+  n == null
+    ? "—"
+    : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PoReceiptsView() {
   const [data, setData] = useState<PoReceiptsReport | null>(null);
@@ -92,18 +95,19 @@ export default function PoReceiptsView() {
           <table>
             <thead>
               <tr>
-                <th>Received</th><th>Job</th><th>Community</th><th>Address</th>
-                <th>PO #</th><th>Vendor</th><th className="r">Cost</th><th>Warehouse</th>
+                <th>Job</th><th>Community</th><th>Address</th>
+                <th>PO #</th><th>Received</th><th>Vendor</th>
+                <th className="r">Cost</th><th>Warehouse</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.receipt_number}>
-                  <td>{fmtDate(r.receipt_date)}</td>
                   <td>{r.job_id ? <a href={`#/jobs/${r.job_id}`}>{r.job_code}</a> : (r.job_code ?? "—")}</td>
                   <td>{r.community_name ?? "—"}</td>
                   <td>{r.address ?? "—"}</td>
                   <td>{r.order_number}</td>
+                  <td>{fmtDate(r.receipt_date)}</td>
                   <td>{r.vendor ?? r.supplier ?? "—"}</td>
                   <td className="r">{money(r.supplier_cost)}</td>
                   <td>{r.pos ?? "—"}</td>
