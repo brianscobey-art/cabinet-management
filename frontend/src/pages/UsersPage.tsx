@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
+  ActivityRow,
   createUser,
   getInviteStatus,
+  listActivity,
   listUsers,
   ManagedUser,
   resendInvite,
@@ -234,6 +236,8 @@ export default function UsersPage({ me }: { me: User }) {
         </table>
       </div>
 
+      <ActivityLogCard users={users} />
+
       <div className="card" style={{ marginTop: "1rem" }}>
         <h3>What each access level can do</h3>
         <ul>
@@ -247,6 +251,80 @@ export default function UsersPage({ me }: { me: User }) {
           New people sign in with the email and temporary password you set here, then you can reset
           it anytime. Disabling a user blocks their sign-in without deleting their history.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/** Audit trail — who changed what, newest first (admin only). */
+function ActivityLogCard({ users }: { users: ManagedUser[] }) {
+  const [rows, setRows] = useState<ActivityRow[]>([]);
+  const [who, setWho] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = (email: string) => {
+    setBusy(true);
+    listActivity({ limit: 200, user_email: email || undefined })
+      .then(setRows)
+      .catch((e) => setError(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  useEffect(() => {
+    load(who);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [who]);
+
+  const when = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return (
+      d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }) +
+      " " +
+      d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    );
+  };
+
+  return (
+    <div className="card" style={{ marginTop: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0 }}>Activity log</h3>
+        <select value={who} onChange={(e) => setWho(e.target.value)}>
+          <option value="">Everyone</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.email}>{u.full_name}</option>
+          ))}
+        </select>
+        <button className="link-btn" onClick={() => load(who)} disabled={busy}>
+          {busy ? "loading…" : "refresh"}
+        </button>
+      </div>
+      <p className="muted" style={{ margin: "6px 0 10px" }}>
+        Every change and sign-in, newest first. (Just looking at a page isn't logged.)
+      </p>
+      {error && <p className="error">{error}</p>}
+      <div className="table-wrap" style={{ maxHeight: 420 }}>
+        <table>
+          <thead>
+            <tr><th>When</th><th>Who</th><th>Action</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
+                <td>{r.user_name ?? r.user_email ?? "—"}</td>
+                <td>{r.action}</td>
+                <td style={{ color: r.status_code >= 400 ? "#c0392b" : undefined }}>
+                  {r.status_code >= 400 ? `failed (${r.status_code})` : "ok"}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={4} className="muted">No activity recorded yet.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

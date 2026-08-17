@@ -1,4 +1,5 @@
 from app.models.account import Account, AccountType
+from app.models.activity import ActivityLog
 from app.models.appsetting import AppSetting, get_setting, set_setting
 from app.models.community import Community
 from app.models.document import JobDocument
@@ -22,6 +23,7 @@ from app.models.worker import DutyAssignment, Worker, WorkerTimeOff
 __all__ = [
     "Account",
     "AccountType",
+    "ActivityLog",
     "AppSetting",
     "get_setting",
     "set_setting",

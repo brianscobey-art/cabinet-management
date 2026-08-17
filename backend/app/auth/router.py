@@ -40,15 +40,24 @@ def _send_invite(user: User) -> None:
 
 @router.post("/token", response_model=Token)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form.username.lower().strip()).first()
+    from app.activity import record
+
+    email = form.username.lower().strip()
+    user = db.query(User).filter(User.email == email).first()
     if user is None or not verify_password(form.password, user.hashed_password):
+        record(action="Sign-in failed", method="POST", path="/auth/token",
+               status_code=401, email=email, entity="session")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
+        record(action="Sign-in blocked (account disabled)", method="POST", path="/auth/token",
+               status_code=403, email=email, entity="session")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
+    record(action="Signed in", method="POST", path="/auth/token", status_code=200,
+           email=user.email, role=user.role.value, entity="session")
     return Token(access_token=create_access_token(user.email, user.role.value))
 
 
@@ -205,6 +214,40 @@ def resend_invite(user_id: int, db: Session = Depends(get_db)):
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     return {"invite_sent": True, "email": target.email}
+
+
+@router.get("/activity", dependencies=[Depends(require_roles(Role.admin))])
+def activity_log(
+    limit: int = 200,
+    user_email: str | None = None,
+    entity: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Who did what, newest first — admin only."""
+    from app.models import ActivityLog
+
+    q = db.query(ActivityLog)
+    if user_email:
+        q = q.filter(ActivityLog.user_email == user_email)
+    if entity:
+        q = q.filter(ActivityLog.entity == entity)
+    rows = q.order_by(ActivityLog.at.desc()).limit(min(limit, 1000)).all()
+    return [
+        {
+            "id": r.id,
+            "at": r.at.isoformat() if r.at else None,
+            "user_name": r.user_name,
+            "user_email": r.user_email,
+            "role": r.role,
+            "action": r.action,
+            "entity": r.entity,
+            "entity_id": r.entity_id,
+            "status_code": r.status_code,
+            "method": r.method,
+            "path": r.path,
+        }
+        for r in rows
+    ]
 
 
 @router.post("/set-password", response_model=Token)

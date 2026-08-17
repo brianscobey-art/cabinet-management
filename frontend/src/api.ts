@@ -186,6 +186,27 @@ export interface UserCreatedResult {
   invite_sent: boolean;
   invite_error: string | null;
 }
+export interface ActivityRow {
+  id: number;
+  at: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  role: string | null;
+  action: string;
+  entity: string | null;
+  entity_id: string | null;
+  status_code: number;
+  method: string;
+  path: string;
+}
+export const listActivity = (params: { limit?: number; user_email?: string } = {}) => {
+  const usp = new URLSearchParams();
+  if (params.limit) usp.set("limit", String(params.limit));
+  if (params.user_email) usp.set("user_email", params.user_email);
+  const qs = usp.toString();
+  return api<ActivityRow[]>(`/auth/activity${qs ? `?${qs}` : ""}`);
+};
+
 export const listUsers = () => api<ManagedUser[]>("/auth/users");
 export const getInviteStatus = () => api<{ email_enabled: boolean }>("/auth/invite-status");
 export const createUser = (data: {

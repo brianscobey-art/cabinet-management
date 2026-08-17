@@ -124,6 +124,32 @@ class StripApiPrefix:
 
 app.add_middleware(StripApiPrefix)
 
+
+@app.middleware("http")
+async def log_activity(request, call_next):
+    """Record every state-changing call in the activity log (best effort)."""
+    response = await call_next(request)
+    try:
+        method = request.method
+        path = request.url.path
+        if method in ("POST", "PATCH", "PUT", "DELETE"):
+            from app.activity import SKIP_PREFIXES, describe, record, user_from_token
+
+            bare = path[4:] if path.startswith("/api/") else path
+            if not bare.startswith(SKIP_PREFIXES):
+                who = user_from_token(request.headers.get("authorization"))
+                action, entity, entity_id = describe(method, path)
+                record(
+                    action=action, method=method, path=path,
+                    status_code=response.status_code,
+                    email=who.get("email"), role=who.get("role"),
+                    entity=entity, entity_id=entity_id,
+                    ip=(request.client.host if request.client else None),
+                )
+    except Exception:  # noqa: BLE001 — never let logging break a response
+        pass
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
