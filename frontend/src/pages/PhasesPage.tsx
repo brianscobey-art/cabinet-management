@@ -160,32 +160,22 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
         <p className="muted">Pick a builder and community to see its active houses.</p>
       ) : (
         <>
+          <div className="fm-caption">Field Measure</div>
           <div className="table-wrap">
             <table className="phases-table">
               <thead>
                 <tr>
-                  <th rowSpan={2}>Job code</th>
-                  <th rowSpan={2}>Current phase</th>
-                  <th rowSpan={2}>Updated</th>
-                  <th rowSpan={2}>Plan</th>
-                  <th rowSpan={2}>Lot</th>
-                  <th rowSpan={2}>Address</th>
-                  <th colSpan={2} className="group-head">
-                    Field Measure
-                  </th>
-                  <th rowSpan={2} className="fm-col">
-                    Correct
-                  </th>
-                  <th rowSpan={2} className="fm-col">
-                    Incorrect
-                  </th>
-                  <th rowSpan={2} className="fm-col">
-                    Super Notified
-                  </th>
-                </tr>
-                <tr>
+                  <th>Job code</th>
+                  <th>Current phase</th>
+                  <th>Updated</th>
+                  <th>Plan</th>
+                  <th>Lot</th>
+                  <th>Address</th>
                   <th>Requested</th>
                   <th className="fm-completed">Completed</th>
+                  <th className="fm-col">Correct</th>
+                  <th className="fm-col">Incorrect</th>
+                  <th className="fm-col">Super Notified</th>
                 </tr>
               </thead>
               <tbody>

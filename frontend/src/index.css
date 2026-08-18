@@ -1887,3 +1887,21 @@ tfoot td {
   .hdr-search { flex: 1 1 100%; order: -1; }
   .hdr-search-input { width: 100%; max-width: none; }
 }
+
+/* Phases: the "Field Measure" group label sits ABOVE the table (dark green, no
+   fill) so it can't scroll out from behind the sticky header row, which is now a
+   single tighter row. */
+.fm-caption {
+  color: var(--brand-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 4px 2px;
+}
+.phases-table th {
+  padding: 0.3rem 0.6rem;
+  line-height: 1.15;
+  /* Chrome lets a sub-pixel sliver of the scrolling rows show above a sticky
+     header; this paints the same green just above it so nothing peeks through. */
+  box-shadow: 0 -4px 0 0 var(--brand);
+}
