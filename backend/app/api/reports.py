@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.manager_report import build as build_manager_report
 from app.po_receipts import build_report as build_po_receipts, refresh_receipts
+from app.tracker_export import to_csv as tracker_export_csv
 from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_from_file
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
 from app.models import (
@@ -181,6 +182,53 @@ def list_reports(user=Depends(read_access)):
 @router.get("/reports/manager", dependencies=[Depends(finance_access)])
 def manager_report(db: Session = Depends(get_db)):
     return build_manager_report(db)
+
+
+TRACKER_EXPORT_KEY = "tracker_export_token"
+
+
+def _tracker_csv(db: Session):
+    from fastapi.responses import Response
+
+    return Response(
+        content=tracker_export_csv(db),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="cabinettron-phase-export.csv"'},
+    )
+
+
+@router.get("/reports/tracker-export", dependencies=[Depends(read_access)])
+def tracker_export(db: Session = Depends(get_db)):
+    """Phase data for the tracker's Import Data sheet (signed-in download)."""
+    return _tracker_csv(db)
+
+
+@router.get("/reports/tracker-export/public")
+def tracker_export_public(token: str = Query(...), db: Session = Depends(get_db)):
+    """Same CSV for the PC updater script — gated by the export token."""
+    from app.models import get_setting
+
+    configured = get_setting(db, TRACKER_EXPORT_KEY)
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _tracker_csv(db)
+
+
+@router.get("/reports/tracker-export/token", dependencies=[Depends(finance_access)])
+def tracker_export_token(db: Session = Depends(get_db)):
+    from app.models import get_setting
+
+    return {"token": get_setting(db, TRACKER_EXPORT_KEY) or None}
+
+
+@router.post("/reports/tracker-export/token", dependencies=[Depends(finance_access)])
+def tracker_export_token_new(db: Session = Depends(get_db)):
+    from app.models import set_setting
+
+    token = secrets.token_urlsafe(24)
+    set_setting(db, TRACKER_EXPORT_KEY, token)
+    db.commit()
+    return {"token": token}
 
 
 @router.get("/reports/po-receipts", dependencies=[Depends(read_access)])

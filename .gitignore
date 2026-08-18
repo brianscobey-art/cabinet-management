@@ -38,3 +38,6 @@ watchdog.log
 # Order Pack agent (runs on Brian's PC - its log and stop-file are local)
 agent/orderpack_agent.log
 agent/orderpack_agent.stop
+
+# local token for the tracker Import Data updater
+/tracker_export.config.json
