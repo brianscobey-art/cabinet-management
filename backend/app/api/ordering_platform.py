@@ -14,6 +14,7 @@ trigger (floor 1.2-NdOrd). Statuses outside the 1.2→2.0 window are never
 touched — if a job moved on to install/punch, this page won't drag it back.
 """
 
+from decimal import Decimal
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -156,6 +157,7 @@ class PlatformRow(BaseModel):
     so_number: str | None
     carter_po_number: str | None
     vendor: str | None
+    so_total: Decimal | None
     notes: str | None
     updated_at: datetime | None
 
@@ -188,6 +190,7 @@ def _row(job: Job, checklist: OrderingChecklist) -> PlatformRow:
         so_number=checklist.so_number,
         carter_po_number=checklist.carter_po_number,
         vendor=checklist.vendor or DEFAULT_VENDOR,
+        so_total=checklist.so_total,
         notes=checklist.notes,
         updated_at=checklist.updated_at,
     )

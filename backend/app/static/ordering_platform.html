@@ -599,13 +599,14 @@ function renderDone() {
     $("content").innerHTML = h; return;
   }
   h += '<div class="card"><div class="tablewrap"><table class="grid"><thead><tr>' +
-    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>PO #</th><th>SO #</th><th>Carter PO #</th><th>Vendor</th><th>Ordered</th></tr></thead><tbody>";
+    "<th>Job</th><th>Builder</th><th>Community / Lot</th><th>PO #</th><th>SO #</th><th>Carter PO #</th><th>Vendor</th><th>SO Amount</th><th>Ordered</th></tr></thead><tbody>";
   rows.forEach(r => {
     h += '<tr class="rowlink" onclick="openJob(' + r.job_id + ')">' +
       "<td><b>" + esc(jobTitle(r)) + "</b></td><td>" + esc(r.account_name) + "</td>" +
       "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
       "<td>" + esc(r.po_number || "") + "</td><td>" + esc(r.so_number || "") + "</td>" +
       "<td>" + esc(r.carter_po_number || "") + "</td><td>" + esc(r.vendor || "") + "</td>" +
+      "<td>" + (r.so_total != null ? "$" + Number(r.so_total).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "") + "</td>" +
       "<td>" + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</td></tr>";
   });
   h += "</tbody></table></div></div>";

@@ -128,6 +128,11 @@ def update_checklist(job_id: int, payload: ChecklistUpdate, db: Session = Depend
     return checklist
 
 
+def _is_filed(cl) -> bool:
+    """Stage 4 complete (our PO attached) and the job folder filed under Sold Jobs."""
+    return bool(cl.stage4_done and (cl.moved_to_sold_date is not None or cl.current_folder == "sold"))
+
+
 @router.get("/ordering", response_model=list[BoardRow], dependencies=[Depends(read_access)])
 def ordering_board(
     account_id: int | None = None,
@@ -164,6 +169,10 @@ def ordering_board(
     rows = []
     for job in jobs:
         checklist = checklists.get(job.id)
+        # Done and filed: our PO is attached AND the folder has been moved to the
+        # Sold Jobs file. Nothing left to work, so it drops off the board.
+        if checklist is not None and _is_filed(checklist):
+            continue
         if checklist is None:
             checklist = OrderingChecklist(job_id=job.id)
             _seed_from_documents(db, job.id, checklist)
