@@ -478,6 +478,8 @@ export interface PhaseReportRow {
   phase_label: string | null;
   phase_date: string | null;
   measure_date: string | null;
+  fm_correct: boolean;
+  fm_incorrect: boolean;
   layout_doc_id: number | null;
 }
 

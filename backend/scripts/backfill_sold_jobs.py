@@ -87,9 +87,12 @@ def main() -> None:
         folder = folder_for(job.job_code, index)
         if folder is None:
             stats["no_folder"] += 1
-            continue
-        stats["jobs"] += 1
-        files = [f for f in folder.iterdir() if f.is_file() and not f.name.startswith("~")]
+        else:
+            stats["jobs"] += 1
+        files = (
+            [f for f in folder.iterdir() if f.is_file() and not f.name.startswith("~")]
+            if folder is not None else []
+        )
 
         # 1. documents
         have = {d.file_path for d in db.query(JobDocument).filter(JobDocument.job_id == job.id)}
@@ -135,7 +138,7 @@ def main() -> None:
                     cl.so_total = total
                 stats["so_total"] += 1
 
-        if not dry and stats["jobs"] % 25 == 0:
+        if not dry and (stats["jobs"] + stats["no_folder"]) % 50 == 0:
             db.commit()
         if limit and stats["jobs"] >= limit:
             break

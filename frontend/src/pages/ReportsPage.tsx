@@ -1253,7 +1253,15 @@ function PhaseReport() {
                     <td>{r.address}</td>
                     <td>{r.plan ?? "—"}</td>
                     <td>
-                      {r.measure_date ? fmtDate(r.measure_date) : "—"}
+                      {r.fm_correct ? (
+                        <b title="Field measure verified correct">COMPL</b>
+                      ) : r.fm_incorrect ? (
+                        <b style={{ color: "#c0392b" }} title="Measured, but came back incorrect">INCOR</b>
+                      ) : r.measure_date ? (
+                        fmtDate(r.measure_date)
+                      ) : (
+                        "—"
+                      )}
                       {r.layout_doc_id && (
                         <>
                           {" "}

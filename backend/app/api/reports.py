@@ -55,6 +55,8 @@ class PhaseReportRow(BaseModel):
     phase_label: str | None
     phase_date: datetime | None
     measure_date: date | None
+    fm_correct: bool = False
+    fm_incorrect: bool = False
     layout_doc_id: int | None
 
 
@@ -79,6 +81,13 @@ def phase_report(db: Session = Depends(get_db)):
         )
         for row in db.query(PhaseUpdate).join(sub, PhaseUpdate.id == sub.c.max_id).all():
             latest[row.job_id] = row
+
+    measures: dict[int, tuple[bool, bool]] = {}
+    if jobs:
+        from app.models import FieldMeasure
+
+        for fm in db.query(FieldMeasure).filter(FieldMeasure.job_id.in_([j.id for j in jobs])).all():
+            measures[fm.job_id] = (fm.correct, fm.incorrect)
 
     layouts: dict[int, int] = {}
     if jobs:
@@ -114,6 +123,8 @@ def phase_report(db: Session = Depends(get_db)):
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,
                 phase_date=current.noted_at if current else None,
                 measure_date=job.measure_date,
+                fm_correct=measures.get(job.id, (False, False))[0],
+                fm_incorrect=measures.get(job.id, (False, False))[1],
                 layout_doc_id=layouts.get(job.id),
             )
         )
