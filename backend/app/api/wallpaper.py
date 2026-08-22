@@ -9,10 +9,12 @@ import os
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Job, JobStatus
+from app.autobot import NATIONAL_PREFIXES
+from app.models import Account, Job, JobStatus
 
 router = APIRouter(prefix="/wallpaper", tags=["wallpaper"])
 
@@ -95,10 +97,14 @@ def wallpaper_pipeline(key: str = Query(...), db: Session = Depends(get_db)):
     """Orders not yet at 2.0-Ord, so the desktop can nag about unfinished ones."""
     if key != FEED_KEY:
         raise HTTPException(status_code=403, detail="bad key")
+    # National builders only (DR Horton / Century) -- reuses Autobot's definition
+    # so "national" means the same thing everywhere in the app.
+    national = or_(*[Account.name.startswith(p) for p in NATIONAL_PREFIXES])
     rows = (
         db.query(Job)
+        .join(Account, Job.account_id == Account.id)
         .options(joinedload(Job.community))
-        .filter(Job.status.in_(PIPELINE_STAGES))
+        .filter(Job.status.in_(PIPELINE_STAGES), national)
         .order_by(Job.status, Job.job_code)
         .all()
     )
