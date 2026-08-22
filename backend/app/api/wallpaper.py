@@ -78,3 +78,52 @@ def wallpaper_installs(key: str = Query(...), db: Session = Depends(get_db)):
             for j in rows
         ],
     }
+
+
+# Pre-2.0 ordering pipeline: everything Brian still has to push over the line.
+# The four ordering stages (1.2-1.5) are the actionable worklist; 1.0/1.1 are
+# counted for context but not listed, since dozens of jobs sit in Track for weeks.
+PIPELINE_STAGES = [
+    JobStatus.track, JobStatus.preord, JobStatus.ndord,
+    JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordpo,
+]
+ACTIONABLE = [JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordpo]
+
+
+@router.get("/pipeline")
+def wallpaper_pipeline(key: str = Query(...), db: Session = Depends(get_db)):
+    """Orders not yet at 2.0-Ord, so the desktop can nag about unfinished ones."""
+    if key != FEED_KEY:
+        raise HTTPException(status_code=403, detail="bad key")
+    rows = (
+        db.query(Job)
+        .options(joinedload(Job.community))
+        .filter(Job.status.in_(PIPELINE_STAGES))
+        .order_by(Job.status, Job.job_code)
+        .all()
+    )
+    counts = {}
+    for j in rows:
+        counts[j.status.value] = counts.get(j.status.value, 0) + 1
+    today = date.today()
+
+    def age(j):
+        d = (j.updated_at.date() if j.updated_at else None) or (
+            j.created_at.date() if j.created_at else None)
+        return (today - d).days if d else None
+
+    return {
+        "counts": [{"status": s.value, "n": counts.get(s.value, 0)} for s in PIPELINE_STAGES],
+        "total": len(rows),
+        "actionable": sum(counts.get(s.value, 0) for s in ACTIONABLE),
+        "jobs": [
+            {
+                "job": j.job_code or "",
+                "community": j.community.name if j.community else "",
+                "lot": j.lot_number or "",
+                "status": j.status.value,
+                "days": age(j),
+            }
+            for j in rows if j.status in ACTIONABLE
+        ],
+    }
