@@ -58,3 +58,60 @@ def to_csv(db) -> str:
     w.writeheader()
     w.writerows(rows(db))
     return buf.getvalue()
+
+
+# --- Deliveries (PO receipts) -> the tracker's "Deliveries" sheet ------------
+# Same idea as Import Data, different payload: the receipts the Operations
+# report shows. Only receipts matched to one of our jobs through POTracker —
+# the raw DOMO list covers every Carter store and department, and the unmatched
+# rows are windows/millwork with no cabinet job behind them.
+DELIVERY_COLUMNS = [
+    "Job Code", "Receipt #", "Receipt Date", "Supplier",
+    "Supplier Cost", "Landed Cost", "Order #", "Product",
+]
+
+
+def _supplier_name(s: str | None) -> str:
+    """DOMO writes "70408: EVERYTHING BUILDING PRODUCTS LLC" — drop the code."""
+    if not s:
+        return ""
+    return s.split(":", 1)[1].strip() if ":" in s else s.strip()
+
+
+def delivery_rows(db) -> list[dict]:
+    """Matched receipts, newest first. Reuses the report's join so the sheet and
+    the Operations page can never disagree."""
+    from app.po_receipts import build_report
+
+    out = []
+    for r in build_report(db).get("rows", []):
+        if not r.get("job_code"):
+            continue  # receipt for a PO we track but a job we don't — skip
+        out.append({
+            "Job Code": r["job_code"],
+            "Receipt #": r.get("receipt_number") or "",
+            "Receipt Date": r.get("receipt_date") or "",
+            "Supplier": _supplier_name(r.get("supplier")),
+            "Supplier Cost": r.get("supplier_cost") if r.get("supplier_cost") is not None else "",
+            "Landed Cost": r.get("landed_cost") if r.get("landed_cost") is not None else "",
+            "Order #": r.get("order_number") or "",
+            "Product": r.get("product") or "",
+        })
+    return out
+
+
+def deliveries_to_csv(db) -> str:
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=DELIVERY_COLUMNS, lineterminator="\n")
+    w.writeheader()
+    w.writerows(delivery_rows(db))
+    return buf.getvalue()
+
+
+def deliveries_to_tsv(db) -> str:
+    """Tab-separated for the Excel Online route: put this on the clipboard and
+    one paste fills the sheet. Commas in supplier names would split cells in CSV."""
+    rows_ = delivery_rows(db)
+    lines = ["\t".join(DELIVERY_COLUMNS)]
+    lines.extend("\t".join(str(r[c]) for c in DELIVERY_COLUMNS) for r in rows_)
+    return "\n".join(lines)

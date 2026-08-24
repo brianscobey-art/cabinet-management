@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.manager_report import build as build_manager_report
 from app.po_receipts import build_report as build_po_receipts, refresh_receipts
+from app.tracker_export import deliveries_to_csv, deliveries_to_tsv
 from app.tracker_export import to_csv as tracker_export_csv
 from app.jobcosts import MARGIN_EXCLUDED_LABOR_CODES, pl_components, refresh_from_file
 from app.domo_txn import SNAPSHOT_SOURCE, half_range, quarter_range, refresh_domo_txns, ytd_range
@@ -240,6 +241,39 @@ def tracker_export_token_new(db: Session = Depends(get_db)):
     set_setting(db, TRACKER_EXPORT_KEY, token)
     db.commit()
     return {"token": token}
+
+
+def _deliveries(db: Session, fmt: str):
+    from fastapi.responses import Response
+
+    tsv = fmt == "tsv"
+    body = deliveries_to_tsv(db) if tsv else deliveries_to_csv(db)
+    return Response(
+        content=body,
+        media_type="text/tab-separated-values" if tsv else "text/csv",
+        headers={"Content-Disposition":
+                 f'attachment; filename="cabinettron-deliveries.{"tsv" if tsv else "csv"}"'},
+    )
+
+
+@router.get("/reports/deliveries-export", dependencies=[Depends(read_access)])
+def deliveries_export(fmt: str = Query("csv"), db: Session = Depends(get_db)):
+    """Matched PO receipts for the tracker's Deliveries sheet (signed-in download).
+    fmt=tsv is the paste-into-Excel-Online form."""
+    return _deliveries(db, fmt)
+
+
+@router.get("/reports/deliveries-export/public")
+def deliveries_export_public(
+    token: str = Query(...), fmt: str = Query("csv"), db: Session = Depends(get_db)
+):
+    """Same data for an unattended updater — shares the tracker export token."""
+    from app.models import get_setting
+
+    configured = get_setting(db, TRACKER_EXPORT_KEY)
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _deliveries(db, fmt)
 
 
 @router.get("/reports/po-receipts", dependencies=[Depends(read_access)])
