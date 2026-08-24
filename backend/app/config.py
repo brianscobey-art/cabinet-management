@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # runs a day. Default 5 AM + noon Central. Cloud runs on UTC, so the tz matters.
     feed_sync_hours: str = "5,12"
     feed_sync_tz: str = "America/Chicago"  # Central — FL Panhandle / Alabama
+    # The tracker (DATA + POTracker) is polled this often for near-live data. The
+    # sync is change-guarded, so a poll on an unchanged file costs one cheap stat
+    # and no workbook parse. 0 disables the quick poll (full syncs still run).
+    tracker_poll_minutes: int = 5
     feed_sync_enabled: bool = True
 
     @property

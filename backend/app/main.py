@@ -30,6 +30,22 @@ from app.config import get_settings
 logger = logging.getLogger("uvicorn.error")
 
 
+def _run_tracker_poll() -> None:
+    """Every few minutes: pull the tracker from R2 and re-import ONLY if the
+    workbook actually changed (see feeds._fingerprint)."""
+    from app.database import SessionLocal
+    from app.feeds import poll_tracker
+
+    try:
+        with SessionLocal() as db:
+            result = poll_tracker(db)
+        tr = result.get("tracker", {})
+        if not tr.get("unchanged"):
+            logger.info("Tracker poll: %s", result)
+    except Exception as exc:  # noqa: BLE001 — a poll failure must not kill the scheduler
+        logger.warning("Tracker poll failed: %s", exc)
+
+
 def _run_feed_sync() -> None:
     from app.database import SessionLocal
     from app.feeds import sync_all
@@ -72,6 +88,11 @@ async def lifespan(app: FastAPI):
     if settings.feed_sync_enabled and (Path(settings.vendorsuite_dir).is_dir() or settings.r2_enabled):
         for hr in settings.feed_sync_hour_list:
             jobs.append(lambda s, h=hr: s.add_job(_run_feed_sync, "cron", hour=h, minute=0))
+        if settings.tracker_poll_minutes > 0:
+            jobs.append(lambda s: s.add_job(
+                _run_tracker_poll, "interval", minutes=settings.tracker_poll_minutes
+            ))
+            logger.info("Tracker poll every %d min (change-guarded)", settings.tracker_poll_minutes)
         logger.info(
             "Feed sync scheduled at %s (%s)",
             ", ".join(f"{h:02d}:00" for h in settings.feed_sync_hour_list),

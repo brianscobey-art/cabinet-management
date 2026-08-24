@@ -504,6 +504,17 @@ def _by_mtime(directory: Path, pattern: str) -> list[Path]:
     )
 
 
+TRACKER_FINGERPRINT_KEY = "tracker_fingerprint"
+
+
+def _fingerprint(f: Path) -> str:
+    """Cheap identity for a tracker file: name + size + mtime. Reading this costs
+    one stat; parsing the 4.5 MB workbook costs seconds and a lot of memory, so
+    the poll compares fingerprints first and does nothing when nothing changed."""
+    st = f.stat()
+    return f"{f.name}:{st.st_size}:{int(st.st_mtime)}"
+
+
 def sync_tracker(db: Session) -> dict:
     """Sync jobs from the newest readable 3.0 Online Sales Tracker .xlsm — status
     (CONST LVL) + install dates. Falls back to the next copy if one is open in Excel."""
@@ -514,8 +525,13 @@ def sync_tracker(db: Session) -> dict:
     if not files:
         return {"error": "no tracker file found"}
     skipped = []
+    from app.models import get_setting, set_setting
+
     for f in files[:5]:
         try:
+            fp = _fingerprint(f)
+            if get_setting(db, TRACKER_FINGERPRINT_KEY) == fp:
+                return {"file": f.name, "unchanged": True}
             result = sync_tracker_file(db, f)
             # The same .xlsm carries POTracker (Our PO # -> Job Code) for the PO
             # receipts report; refresh that map from this file too.
@@ -525,6 +541,7 @@ def sync_tracker(db: Session) -> dict:
                 result["job_pos"] = ingest_potracker(db, f)
             except Exception as exc:  # noqa: BLE001
                 result["job_pos"] = f"error: {exc}"
+            set_setting(db, TRACKER_FINGERPRINT_KEY, fp)
             db.commit()  # sibling feed syncs each commit their own work
             return {"skipped_locked": skipped, **result}
         except PermissionError:
@@ -570,4 +587,30 @@ def sync_all(db: Session) -> dict:
         db.commit()
     except Exception as exc:  # noqa: BLE001
         result["po_receipts"] = {"error": str(exc)}
+    return result
+
+
+def poll_tracker(db: Session) -> dict:
+    """Quick tracker-only refresh for the 5-minute poll. Pulls just the tracker
+    objects from R2 (not every feed) and relies on sync_tracker's change guard,
+    so an unchanged workbook is a no-op."""
+    settings = get_settings()
+    result = {}
+    if settings.r2_enabled:
+        try:
+            from app.storage import _client, _list
+
+            client = _client(settings)
+            dest = Path(settings.tracker_dir)
+            dest.mkdir(parents=True, exist_ok=True)
+            got = 0
+            for key, size, _lm in _list(client, settings.r2_bucket, "tracker/")[:3]:
+                local = dest / Path(key).name
+                if not (local.exists() and local.stat().st_size == size):
+                    client.download_file(settings.r2_bucket, key, str(local))
+                    got += 1
+            result["pulled"] = got
+        except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
+            result["pulled"] = f"error: {exc}"
+    result["tracker"] = sync_tracker(db)
     return result
