@@ -176,6 +176,24 @@ class Settings(BaseSettings):
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
 
+    # True on the machine that OWNS the OneDrive feed folders (Brian's PC). That
+    # machine uploads TO R2 and must NEVER pull copies back down, because its feed
+    # dirs now include the folder holding the live tracker — a pull there would
+    # overwrite the workbook being typed in. Windows is the source box; Render is
+    # Linux and pulls normally. Set FEED_SOURCE explicitly if that ever changes.
+    feed_source: bool | None = None
+
+    @property
+    def is_feed_source(self) -> bool:
+        import os as _os
+
+        return self.feed_source if self.feed_source is not None else (_os.name == "nt")
+
+    @property
+    def r2_pull_enabled(self) -> bool:
+        """Pull from R2 only where the feeds are NOT already local."""
+        return self.r2_enabled and not self.is_feed_source
+
     @property
     def r2_enabled(self) -> bool:
         return bool(self.r2_endpoint and self.r2_bucket

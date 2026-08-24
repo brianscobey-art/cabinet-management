@@ -579,7 +579,7 @@ def sync_all(db: Session) -> dict:
     result = {}
     # In the cloud, pull the latest feed files from R2 into the local feed dirs
     # first (no-op when R2 isn't configured). A hiccup here must not block sync.
-    if settings.r2_enabled:
+    if settings.r2_pull_enabled:
         try:
             from app.storage import hydrate_feeds
 
@@ -635,7 +635,7 @@ def poll_slow(db: Session) -> dict:
     change-guarded look is plenty."""
     settings = get_settings()
     result = {}
-    if settings.r2_enabled:
+    if settings.r2_pull_enabled:
         try:
             _pull(settings, "vendorsuite/", Path(settings.vendorsuite_dir))
             _pull(settings, "century/", Path(settings.century_dir))
@@ -658,7 +658,7 @@ def poll_tracker(db: Session) -> dict:
     file costs a stat and no parse."""
     settings = get_settings()
     result = {}
-    if settings.r2_enabled:
+    if settings.r2_pull_enabled:
         try:
             result["pulled"] = _pull(settings, "tracker/", Path(settings.tracker_dir))
             _pull(settings, "new-orders/", Path(settings.new_orders_file).parent, keep=1)

@@ -98,8 +98,9 @@ def hydrate_feeds(settings: Settings | None = None) -> dict:
     """Cloud side: download the newest matching objects from R2 into the local
     feed dirs. Skips files already present and unchanged. No-op when R2 off."""
     s = settings or get_settings()
-    if not s.r2_enabled:
-        return {"skipped": "r2 disabled"}
+    if not s.r2_pull_enabled:
+        # On the source PC the feeds are already local; pulling would overwrite them.
+        return {"skipped": "feed source" if s.r2_enabled else "r2 disabled"}
     client = _client(s)
     result: dict[str, int] = {}
     for attr, prefix, _pattern, keep in FEED_SOURCES:
