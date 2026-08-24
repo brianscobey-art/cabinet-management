@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { fetchMe, getToken, login, runFeedSync, setToken, User } from "./api";
+import { fetchMe, getToken, login, noteUnreadCount, runFeedSync, setToken, User } from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import ServiceRequestPage from "./pages/ServiceRequestPage";
@@ -13,6 +13,7 @@ import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
 import HeaderJobSearch from "./pages/HeaderJobSearch";
 import HelpPage from "./pages/HelpPage";
+import MyStuffPage from "./pages/MyStuffPage";
 import { PublicManagerReport } from "./pages/ManagerReport";
 import SetPasswordPage from "./pages/SetPasswordPage";
 import SuitePage from "./pages/SuitePage";
@@ -21,9 +22,9 @@ import UsersPage from "./pages/UsersPage";
 function useHashRoute() {
   // Default landing is the COAST suite launcher — both on fresh login and when
   // reopening the app with a stored session (no hash in the URL).
-  const [hash, setHash] = useState(window.location.hash || "#/suite");
+  const [hash, setHash] = useState(window.location.hash || "#/my");
   useEffect(() => {
-    const onChange = () => setHash(window.location.hash || "#/suite");
+    const onChange = () => setHash(window.location.hash || "#/my");
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
@@ -43,6 +44,7 @@ export default function App() {
   const [loading, setLoading] = useState(!!getToken());
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState("");
+  const [unread, setUnread] = useState(0);
   const hash = useHashRoute();
 
   // show the sync summary saved just before the post-update reload
@@ -78,6 +80,15 @@ export default function App() {
       setTimeout(() => setToast(""), 10000);
     }
   }
+
+  // Badge for the My Stuff tab — refreshed on load and every couple of minutes.
+  useEffect(() => {
+    if (!getToken()) return;
+    const tick = () => noteUnreadCount().then((r) => setUnread(r.count)).catch(() => {});
+    tick();
+    const id = setInterval(tick, 120000);
+    return () => clearInterval(id);
+  }, [hash]);
 
   useEffect(() => {
     if (!getToken()) return;
@@ -118,6 +129,7 @@ export default function App() {
   else if (hash.startsWith("#/service-blank")) page = <BlankServiceForm />;
   else if (hash.startsWith("#/forms/service")) page = <ServiceFormsPage canWrite={canWritePhases} />;
   else if (jobMatch) page = <JobDetailPage jobId={Number(jobMatch[1])} canWrite={canWrite} />;
+  else if (hash.startsWith("#/my")) page = <MyStuffPage me={user} />;
   else if (hash.startsWith("#/suite")) page = <SuitePage />;
   else if (hash.startsWith("#/users") && user.role === "admin") page = <UsersPage me={user} />;
   else if (hash.startsWith("#/help")) page = <HelpPage me={user} />;
@@ -153,6 +165,10 @@ export default function App() {
           </button>
         )}
         <nav>
+          <a href="#/my" className={hash.startsWith("#/my") ? "active" : ""}>
+            My Stuff
+            {unread > 0 && <span className="nav-badge">{unread}</span>}
+          </a>
           <a
             href="#/jobs"
             className={
@@ -165,7 +181,8 @@ export default function App() {
               !hash.startsWith("#/forms") &&
               !hash.startsWith("#/archive") &&
               !hash.startsWith("#/users") &&
-              !hash.startsWith("#/help")
+              !hash.startsWith("#/help") &&
+              !hash.startsWith("#/my")
                 ? "active"
                 : ""
             }
@@ -242,7 +259,7 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
     try {
       // pasted addresses often carry Outlook's mailto: prefix or whitespace
       await login(email.trim().replace(/^mailto:/i, ""), password.trim());
-      window.location.hash = "#/suite"; // land on the COAST launcher
+      window.location.hash = "#/my"; // land on My Stuff (COAST tiles live there too)
       onLogin(await fetchMe());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

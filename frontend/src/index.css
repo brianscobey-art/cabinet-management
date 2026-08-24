@@ -1905,3 +1905,53 @@ tfoot td {
      header; this paints the same green just above it so nothing peeks through. */
   box-shadow: 0 -4px 0 0 var(--brand);
 }
+
+/* ===== My Stuff: COAST strip + team notes/tasks ===== */
+.coast-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.coast-chip {
+  display: flex; flex-direction: column; gap: 1px; text-decoration: none;
+  background: #fff; border: 1px solid #e0e8e6; border-radius: 10px;
+  padding: 8px 14px; min-width: 120px;
+}
+.coast-chip b { color: var(--brand); font-size: 0.92rem; }
+.coast-chip span { color: var(--gray); font-size: 0.75rem; }
+.coast-chip:hover { border-color: var(--brand); }
+.coast-more { justify-content: center; color: var(--action); font-weight: 600; }
+
+.nav-badge {
+  background: var(--action); color: #fff; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 6px;
+}
+
+.note-compose { background: #fff; border: 1px solid #e0e8e6; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.note-compose textarea { width: 100%; border: 1px solid #ccd4d8; border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical; }
+.note-compose-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.note-compose-row select, .note-compose-row input { font-size: 0.88rem; }
+.note-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.tag-chip { background: #e7efee; color: var(--brand); border: none; border-radius: 999px; padding: 2px 10px; font-size: 0.78rem; cursor: pointer; }
+.note-filters { margin: 0 0 10px; }
+
+.note-card { background: #fff; border: 1px solid #e0e8e6; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.note-card.note-unread { border-left: 4px solid var(--action); }
+.note-card.note-done { opacity: 0.62; }
+.note-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 0.8rem; }
+.note-when { margin-left: auto; color: var(--gray); }
+.note-body { margin: 6px 0; white-space: pre-wrap; }
+.note-foot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.82rem; }
+.note-job { color: var(--action); font-weight: 600; text-decoration: none; }
+.note-task { color: var(--brand); font-weight: 600; }
+.note-due { color: var(--gray); }
+.note-overdue { color: #c0392b; font-weight: 700; }
+.note-replies { border-top: 1px solid #eef2f1; margin-top: 8px; padding-top: 8px; }
+.note-reply { padding: 6px 0 6px 10px; border-left: 2px solid #e0e8e6; margin-bottom: 6px; font-size: 0.9rem; }
+.note-reply.note-unread { border-left-color: var(--action); }
+
+.note-type { border-radius: 999px; padding: 1px 9px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.note-type-urgent { background: #fdecea; color: #c0392b; }
+.note-type-action { background: #fdf1d6; color: #8a6116; }
+.note-type-fyi { background: #e7efee; color: var(--brand); }
+.note-type-question { background: #e8eefb; color: #2f5fb3; }
+.note-type-blocker { background: #f3e8fb; color: #6b3fa0; }
+/* the global label rule stacks children; keep this one on a single line */
+.note-filters label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
+.note-filters input[type="checkbox"] { width: auto; margin: 0; }

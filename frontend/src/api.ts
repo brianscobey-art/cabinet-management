@@ -955,3 +955,62 @@ export async function importServiceExcel(file: File): Promise<ServiceRequestDeta
   }
   return resp.json();
 }
+
+// --- Team notes & tasks -----------------------------------------------------
+export const NOTE_TYPES: { value: string; label: string }[] = [
+  { value: "urgent", label: "Urgent" },
+  { value: "action", label: "Action Needed" },
+  { value: "fyi", label: "FYI" },
+  { value: "question", label: "Question" },
+  { value: "blocker", label: "Blocker" },
+];
+
+export interface NoteRow {
+  id: number;
+  body: string;
+  note_type: string;
+  job_id: number | null;
+  job_code: string | null;
+  job_address: string | null;
+  author_email: string;
+  author_name: string | null;
+  assignee_email: string | null;
+  assignee_name: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  parent_id: number | null;
+  created_at: string;
+  tags: string[];
+  is_task: boolean;
+  is_overdue: boolean;
+  unread: boolean;
+  replies: NoteRow[];
+}
+
+export interface NoteInput {
+  body: string;
+  note_type?: string;
+  job_id?: number | null;
+  assignee_email?: string | null;
+  due_date?: string | null;
+  tags?: string[];
+  parent_id?: number | null;
+}
+
+export const listNotes = (params: { scope?: string; job_id?: number; show_done?: boolean } = {}) => {
+  const usp = new URLSearchParams();
+  if (params.scope) usp.set("scope", params.scope);
+  if (params.job_id != null) usp.set("job_id", String(params.job_id));
+  if (params.show_done) usp.set("show_done", "true");
+  const qs = usp.toString();
+  return api<NoteRow[]>(`/notes${qs ? `?${qs}` : ""}`);
+};
+export const createNote = (data: NoteInput) =>
+  api<NoteRow>("/notes", { method: "POST", body: JSON.stringify(data) });
+export const completeNote = (id: number, done = true) =>
+  api<NoteRow>(`/notes/${id}/complete?done=${done}`, { method: "POST" });
+export const deleteNote = (id: number) => api<void>(`/notes/${id}`, { method: "DELETE" });
+export const markNotesRead = (ids: number[]) =>
+  api<{ marked: number }>("/notes/read", { method: "POST", body: JSON.stringify(ids) });
+export const noteUnreadCount = () => api<{ count: number }>("/notes/unread-count");
