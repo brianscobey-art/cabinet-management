@@ -482,15 +482,23 @@ def sync_new_orders(db: Session, path: Path) -> dict:
     return counts
 
 
-def _sync_newest_readable(db: Session, files: list[Path], sync_fn) -> dict:
+def _sync_newest_readable(db: Session, files: list[Path], sync_fn, guard_key: str | None = None) -> dict:
     """Try files newest-first — a workbook open in Excel is unreadable, so fall
-    back to the next-most-recent copy rather than failing the whole sync."""
+    back to the next-most-recent copy rather than failing the whole sync.
+
+    With guard_key, a file that was already imported is skipped without being
+    parsed, so frequent polling costs a stat instead of a workbook read."""
     if not files:
         return {"error": "no file found"}
     skipped = []
     for f in files[:5]:
         try:
-            return {"file": f.name, "skipped_locked": skipped, **sync_fn(db, f)}
+            if guard_key and _unchanged(db, guard_key, f):
+                return {"file": f.name, "unchanged": True}
+            result = {"file": f.name, "skipped_locked": skipped, **sync_fn(db, f)}
+            if guard_key:
+                _stamp(db, guard_key, f)
+            return result
         except PermissionError:
             skipped.append(f.name)
     return {"error": "all recent files locked", "skipped_locked": skipped}
@@ -513,6 +521,20 @@ def _fingerprint(f: Path) -> str:
     the poll compares fingerprints first and does nothing when nothing changed."""
     st = f.stat()
     return f"{f.name}:{st.st_size}:{int(st.st_mtime)}"
+
+
+def _unchanged(db, key: str, f: Path) -> bool:
+    """True when this exact file was already imported under `key`."""
+    from app.models import get_setting
+
+    return get_setting(db, key) == _fingerprint(f)
+
+
+def _stamp(db, key: str, f: Path) -> None:
+    """Remember a file only AFTER its import succeeded."""
+    from app.models import set_setting
+
+    set_setting(db, key, _fingerprint(f))
 
 
 def sync_tracker(db: Session) -> dict:
@@ -590,27 +612,83 @@ def sync_all(db: Session) -> dict:
     return result
 
 
-def poll_tracker(db: Session) -> dict:
-    """Quick tracker-only refresh for the 5-minute poll. Pulls just the tracker
-    objects from R2 (not every feed) and relies on sync_tracker's change guard,
-    so an unchanged workbook is a no-op."""
+def _pull(settings, prefix: str, dest: Path, keep: int = 3) -> int:
+    """Download the newest objects under one R2 prefix. Skips same-size files."""
+    from app.storage import _client, _list
+
+    client = _client(settings)
+    dest.mkdir(parents=True, exist_ok=True)
+    got = 0
+    for key, size, _lm in _list(client, settings.r2_bucket, prefix)[:keep]:
+        local = dest / Path(key).name
+        if not (local.exists() and local.stat().st_size == size):
+            client.download_file(settings.r2_bucket, key, str(local))
+            got += 1
+    return got
+
+
+def poll_slow(db: Session) -> dict:
+    """Hourly: Vendor Suite + Century. Both are rebuilt once a day, so an hourly
+    change-guarded look is plenty."""
     settings = get_settings()
     result = {}
     if settings.r2_enabled:
         try:
-            from app.storage import _client, _list
+            _pull(settings, "vendorsuite/", Path(settings.vendorsuite_dir))
+            _pull(settings, "century/", Path(settings.century_dir))
+        except Exception as exc:  # noqa: BLE001
+            result["pull"] = f"error: {exc}"
+    result["vendorsuite"] = _sync_newest_readable(
+        db, _by_mtime(Path(settings.vendorsuite_dir), "DRH_Cabinets_Combined_*.xlsx"),
+        sync_vendorsuite, guard_key="fp_vendorsuite",
+    )
+    result["century"] = _sync_newest_readable(
+        db, century_candidates(Path(settings.century_dir)), sync_century, guard_key="fp_century",
+    )
+    db.commit()
+    return result
 
-            client = _client(settings)
-            dest = Path(settings.tracker_dir)
-            dest.mkdir(parents=True, exist_ok=True)
-            got = 0
-            for key, size, _lm in _list(client, settings.r2_bucket, "tracker/")[:3]:
-                local = dest / Path(key).name
-                if not (local.exists() and local.stat().st_size == size):
-                    client.download_file(settings.r2_bucket, key, str(local))
-                    got += 1
-            result["pulled"] = got
+
+def poll_tracker(db: Session) -> dict:
+    """Quick refresh for the 5-minute poll: the tracker (DATA + POTracker), New
+    Orders, and the DOMO PO receipts. Each is change-guarded, so an unchanged
+    file costs a stat and no parse."""
+    settings = get_settings()
+    result = {}
+    if settings.r2_enabled:
+        try:
+            result["pulled"] = _pull(settings, "tracker/", Path(settings.tracker_dir))
+            _pull(settings, "new-orders/", Path(settings.new_orders_file).parent, keep=1)
+            _pull(settings, "po-receipts/", Path(settings.po_receipt_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
+
     result["tracker"] = sync_tracker(db)
+
+    new_orders = Path(settings.new_orders_file)
+    if new_orders.is_file():
+        try:
+            if _unchanged(db, "fp_new_orders", new_orders):
+                result["new_orders"] = {"file": new_orders.name, "unchanged": True}
+            else:
+                result["new_orders"] = {"file": new_orders.name, **sync_new_orders(db, new_orders)}
+                _stamp(db, "fp_new_orders", new_orders)
+        except PermissionError:
+            result["new_orders"] = {"error": "file locked (open in Excel)"}
+
+    try:
+        from app.po_receipts import _newest_file as _newest_receipt
+        from app.po_receipts import refresh_receipts
+
+        f = _newest_receipt(Path(settings.po_receipt_folder))
+        if f is not None and _unchanged(db, "fp_po_receipts", f):
+            result["po_receipts"] = {"file": f.name, "unchanged": True}
+        else:
+            result["po_receipts"] = refresh_receipts(db)
+            if f is not None:
+                _stamp(db, "fp_po_receipts", f)
+    except Exception as exc:  # noqa: BLE001
+        result["po_receipts"] = {"error": str(exc)}
+
+    db.commit()
     return result

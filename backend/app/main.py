@@ -46,6 +46,20 @@ def _run_tracker_poll() -> None:
         logger.warning("Tracker poll failed: %s", exc)
 
 
+def _run_slow_poll() -> None:
+    """Hourly: Vendor Suite + Century, change-guarded."""
+    from app.database import SessionLocal
+    from app.feeds import poll_slow
+
+    try:
+        with SessionLocal() as db:
+            result = poll_slow(db)
+        if any(not (v or {}).get("unchanged") for v in result.values() if isinstance(v, dict)):
+            logger.info("Hourly feed poll: %s", result)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Hourly feed poll failed: %s", exc)
+
+
 def _run_feed_sync() -> None:
     from app.database import SessionLocal
     from app.feeds import sync_all
@@ -92,7 +106,17 @@ async def lifespan(app: FastAPI):
             jobs.append(lambda s: s.add_job(
                 _run_tracker_poll, "interval", minutes=settings.tracker_poll_minutes
             ))
-            logger.info("Tracker poll every %d min (change-guarded)", settings.tracker_poll_minutes)
+            logger.info(
+                "Fast poll every %d min — tracker, New Orders, PO receipts (change-guarded)",
+                settings.tracker_poll_minutes,
+            )
+        if settings.slow_poll_minutes > 0:
+            jobs.append(lambda s: s.add_job(
+                _run_slow_poll, "interval", minutes=settings.slow_poll_minutes
+            ))
+            logger.info(
+                "Slow poll every %d min — Vendor Suite, Century", settings.slow_poll_minutes
+            )
         logger.info(
             "Feed sync scheduled at %s (%s)",
             ", ".join(f"{h:02d}:00" for h in settings.feed_sync_hour_list),

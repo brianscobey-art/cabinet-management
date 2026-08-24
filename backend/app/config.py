@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # sync is change-guarded, so a poll on an unchanged file costs one cheap stat
     # and no workbook parse. 0 disables the quick poll (full syncs still run).
     tracker_poll_minutes: int = 5
+    # Vendor Suite + Century are rebuilt once a day, so an hourly guarded look
+    # is plenty. 0 disables (the twice-daily full sync still covers them).
+    slow_poll_minutes: int = 60
     feed_sync_enabled: bool = True
 
     @property
