@@ -73,12 +73,16 @@ class Settings(BaseSettings):
             if p.strip().isdigit() and 0 <= int(p.strip()) <= 23
         ]
         return hours or [self.feed_sync_hour]
-    # Folder holding the 3.0 Online Sales Tracker .xlsm versions; the newest readable
-    # one is the source of truth for job status (CONST LVL) + install dates.
+    # Folder holding the LIVE 3.0 Online Sales Tracker .xlsm — the workbook Brian
+    # actually types in. The newest readable copy here is the source of truth for
+    # job status (CONST LVL) + install dates.
+    # NOTE (8/24/26): this pointed at "...Master Plans & Pricing\Trackers\3.0 Online
+    # Sales Tracker 010726 Backup", a folder of nightly SNAPSHOTS, while the live
+    # workbook had moved to Townsend Shared File\Trackers. The app was therefore
+    # reading yesterday's copy and every status change showed up a day late.
     tracker_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Trackers"
-        r"\3.0 Online Sales Tracker 010726 Backup"
+        r"\Townsend Shared File\Trackers"
     )
     domo_export_dir: str = r"C:\Users\Brian SE6\Downloads\domo-kb-tool"  # Domo cost JSON exports land here
     domo_instance: str = "carterlumber.domo.com"

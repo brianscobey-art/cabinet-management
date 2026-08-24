@@ -18,10 +18,16 @@ from app.config import Settings, get_settings
 
 logger = logging.getLogger("uvicorn.error")
 
+# Matches "3.0 Online Sales Tracker 010726.xlsm" (live) and the dated nightly
+# copies, but not the "- Copy" / "- Cleaned" spares sitting beside them.
+TRACKER_GLOB = "3.0 Online Sales Tracker [0-9][0-9][0-9][0-9][0-9][0-9].xlsm"
+
 # (Settings attr for the local dir, R2 key prefix, glob, how many newest to keep).
 # Patterns match what feeds.py / sync_tracker already glob for.
 FEED_SOURCES = [
-    ("tracker_dir", "tracker/", "3.0 Online Sales Tracker *.xlsm", 5),
+    # Digits only: the live folder also holds "... - Copy" / "... - Cleaned"
+    # decoys that must never be mistaken for the working tracker.
+    ("tracker_dir", "tracker/", TRACKER_GLOB, 5),
     ("vendorsuite_dir", "vendorsuite/", "DRH_Cabinets_Combined_*.xlsx", 5),
     ("century_dir", "century/", "Century Cabinet Jobs - SupplyPro*.xlsx", 5),
     ("pl_reports_dir", "pl-reports/", "*.xlsx", 3),  # monthly K&B P&L (manager report)
@@ -63,9 +69,34 @@ def _list(client, bucket: str, prefix: str):
     return out
 
 
+def _fresh(local: Path, size: int, last_modified) -> bool:
+    """True when the local copy already matches the R2 object.
+
+    Size alone is NOT enough. The live tracker keeps one filename forever, and
+    Excel can rewrite it to the same byte count, so a size-only test silently
+    pins the app to a stale copy. Downloads are stamped with the object's
+    LastModified (see _download) to keep this comparison meaningful.
+    """
+    if not local.exists():
+        return False
+    st = local.stat()
+    return st.st_size == size and int(st.st_mtime) == int(last_modified.timestamp())
+
+
+def _download(client, bucket: str, key: str, local: Path, last_modified) -> None:
+    """Download and stamp the file with the object's LastModified, so the next
+    poll can tell "same file" from "changed file" — and so feeds._fingerprint
+    stays stable across re-downloads instead of forcing a needless re-import."""
+    import os
+
+    client.download_file(bucket, key, str(local))
+    ts = int(last_modified.timestamp())
+    os.utime(local, (ts, ts))
+
+
 def hydrate_feeds(settings: Settings | None = None) -> dict:
     """Cloud side: download the newest matching objects from R2 into the local
-    feed dirs. Skips files already present with the same size. No-op when R2 off."""
+    feed dirs. Skips files already present and unchanged. No-op when R2 off."""
     s = settings or get_settings()
     if not s.r2_enabled:
         return {"skipped": "r2 disabled"}
@@ -75,11 +106,11 @@ def hydrate_feeds(settings: Settings | None = None) -> dict:
         dest = Path(getattr(s, attr))
         dest.mkdir(parents=True, exist_ok=True)
         got = 0
-        for key, size, _lm in _list(client, s.r2_bucket, prefix)[:keep]:
+        for key, size, lm in _list(client, s.r2_bucket, prefix)[:keep]:
             local = dest / Path(key).name
-            if local.exists() and local.stat().st_size == size:
+            if _fresh(local, size, lm):
                 continue
-            client.download_file(s.r2_bucket, key, str(local))
+            _download(client, s.r2_bucket, key, local, lm)
             got += 1
         result[prefix] = got
     # Single New Orders file
@@ -88,9 +119,9 @@ def hydrate_feeds(settings: Settings | None = None) -> dict:
     newest = _list(client, s.r2_bucket, NEW_ORDERS_PREFIX)[:1]
     result[NEW_ORDERS_PREFIX] = 0
     if newest:
-        key, size, _lm = newest[0]
-        if not (no_path.exists() and no_path.stat().st_size == size):
-            client.download_file(s.r2_bucket, key, str(no_path))
+        key, size, lm = newest[0]
+        if not _fresh(no_path, size, lm):
+            _download(client, s.r2_bucket, key, no_path, lm)
             result[NEW_ORDERS_PREFIX] = 1
     return result
 
@@ -117,13 +148,18 @@ def upload_feeds(settings: Settings | None = None) -> dict:
         pushed = 0
         for f in files:
             key = prefix + f.name
+            # The live tracker never changes name, so "same size" does not mean
+            # "same file". Carry the source mtime as metadata and compare both.
+            src_mtime = str(int(f.stat().st_mtime))
             try:
                 head = client.head_object(Bucket=s.r2_bucket, Key=key)
-                if head["ContentLength"] == f.stat().st_size:
+                if (head["ContentLength"] == f.stat().st_size
+                        and head.get("Metadata", {}).get("src-mtime") == src_mtime):
                     continue  # already up there, unchanged
             except Exception:  # noqa: BLE001 - not present → upload
                 pass
-            client.upload_file(str(f), s.r2_bucket, key)
+            client.upload_file(str(f), s.r2_bucket, key,
+                               ExtraArgs={"Metadata": {"src-mtime": src_mtime}})
             pushed += 1
         result[prefix] = pushed
 

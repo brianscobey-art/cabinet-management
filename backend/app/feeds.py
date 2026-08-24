@@ -543,7 +543,9 @@ def sync_tracker(db: Session) -> dict:
     from scripts.import_tracker import sync_tracker_file  # app→scripts: reuse the CLI logic
 
     settings = get_settings()
-    files = _by_mtime(Path(settings.tracker_dir), "3.0 Online Sales Tracker *.xlsm")
+    from app.storage import TRACKER_GLOB  # digits only — skips the "- Copy" spares
+
+    files = _by_mtime(Path(settings.tracker_dir), TRACKER_GLOB)
     if not files:
         return {"error": "no tracker file found"}
     skipped = []
@@ -613,16 +615,17 @@ def sync_all(db: Session) -> dict:
 
 
 def _pull(settings, prefix: str, dest: Path, keep: int = 3) -> int:
-    """Download the newest objects under one R2 prefix. Skips same-size files."""
-    from app.storage import _client, _list
+    """Download the newest objects under one R2 prefix, skipping ones already
+    here unchanged (size AND source timestamp — see storage._fresh)."""
+    from app.storage import _client, _download, _fresh, _list
 
     client = _client(settings)
     dest.mkdir(parents=True, exist_ok=True)
     got = 0
-    for key, size, _lm in _list(client, settings.r2_bucket, prefix)[:keep]:
+    for key, size, lm in _list(client, settings.r2_bucket, prefix)[:keep]:
         local = dest / Path(key).name
-        if not (local.exists() and local.stat().st_size == size):
-            client.download_file(settings.r2_bucket, key, str(local))
+        if not _fresh(local, size, lm):
+            _download(client, settings.r2_bucket, key, local, lm)
             got += 1
     return got
 

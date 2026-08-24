@@ -198,7 +198,9 @@ def refresh_receipts(db, with_potracker: bool = True) -> dict:
         try:
             from app.feeds import _by_mtime
 
-            files = _by_mtime(Path(s.tracker_dir), "3.0 Online Sales Tracker *.xlsm")
+            from app.storage import TRACKER_GLOB
+
+            files = _by_mtime(Path(s.tracker_dir), TRACKER_GLOB)
             if files:
                 res["job_pos"] = ingest_potracker(db, files[0])
         except Exception as exc:  # noqa: BLE001
