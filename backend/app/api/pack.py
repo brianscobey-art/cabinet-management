@@ -568,18 +568,28 @@ def agent_scan(payload: ScanPayload, db: Session = Depends(get_db)):
     # Anything we were physically tracking that is no longer in a stage folder:
     # it either finished (filed to the sold folder) or it went missing, and
     # "missing" is a thing Brian needs to see rather than a thing to hide.
+    # "missing" is included on purpose: it used to be a dead end. A job that left
+    # the stage folders before stage 4 was recorded got stamped missing, and
+    # because missing is not a PHYSICAL_FOLDER the sweep never looked at it
+    # again — so it stayed on "Needs you" forever even once stage 4 completed
+    # and it plainly qualified as sold. Re-evaluating it fixes that. Nothing is
+    # hidden: a job with no stage-4 and no sold date still reads missing.
     tracked = (
         db.query(OrderingChecklist)
-        .filter(OrderingChecklist.current_folder.in_(tuple(PHYSICAL_FOLDERS)))
+        .filter(
+            OrderingChecklist.current_folder.in_(tuple(PHYSICAL_FOLDERS) + ("missing",))
+        )
         .all()
     )
     vanished = 0
     for cl in tracked:
         if cl.job_id in seen_job_ids:
             continue
-        cl.current_folder = "sold" if (cl.moved_to_sold_date or cl.stage4_done) else "missing"
+        landed = "sold" if (cl.moved_to_sold_date or cl.stage4_done) else "missing"
+        if landed != cl.current_folder:
+            cl.current_folder = landed
+            vanished += 1  # count real transitions only, not every stale row
         cl.last_scan_at = now
-        vanished += 1
 
     summary = {
         "scanned_at": _iso(payload.scanned_at or now),
