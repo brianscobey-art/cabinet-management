@@ -143,8 +143,10 @@ def import_receipt_file(db) -> dict:
     s = get_settings()
     folder = Path(s.po_receipt_folder)
     # Cloud: the export is uploaded to R2 by the PC — pull just that prefix down
-    # (a full hydrate would re-download every tracker on each refresh).
-    if s.r2_enabled:
+    # (a full hydrate would re-download every tracker on each refresh). Never on
+    # the source PC itself: po_receipt_folder is Brian's Downloads there, and a
+    # pull would write R2 copies over his own files.
+    if s.r2_pull_enabled:
         try:
             from app.storage import _client, _list
 
