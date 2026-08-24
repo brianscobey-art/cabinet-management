@@ -7,6 +7,7 @@ import {
   completeNote,
   createNote,
   deleteNote,
+  isOrderPackOwner,
   listJobs,
   listNotes,
   listUsers,
@@ -142,6 +143,8 @@ export default function MyStuffPage({ me }: { me: User }) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Order Pack is a private mode — the button only appears for its allowlist.
+  const [packOwner, setPackOwner] = useState(false);
 
   // compose
   const [body, setBody] = useState("");
@@ -170,6 +173,7 @@ export default function MyStuffPage({ me }: { me: User }) {
       .then((u) => setUsers(u.filter((x) => x.is_active).map((x) => ({ email: x.email, full_name: x.full_name }))))
       .catch(() => {});
     listJobs({}).then(setJobs).catch(() => {});
+    isOrderPackOwner().then(setPackOwner).catch(() => {});
   }, []);
 
   async function post(e: FormEvent) {
@@ -210,6 +214,12 @@ export default function MyStuffPage({ me }: { me: User }) {
             <span>{a.blurb}</span>
           </a>
         ))}
+        {packOwner && (
+          <a className="coast-chip coast-private" href="/ordering-platform/pack">
+            <b>Bulk Ordering</b>
+            <span>Order Pack</span>
+          </a>
+        )}
         <a className="coast-chip coast-more" href="#/suite">
           All apps →
         </a>

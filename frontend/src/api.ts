@@ -1014,3 +1014,16 @@ export const deleteNote = (id: number) => api<void>(`/notes/${id}`, { method: "D
 export const markNotesRead = (ids: number[]) =>
   api<{ marked: number }>("/notes/read", { method: "POST", body: JSON.stringify(ids) });
 export const noteUnreadCount = () => api<{ count: number }>("/notes/unread-count");
+
+/** True only for the Order Pack allowlist — /pack/meta 403s for everyone else.
+ *  Used to decide whether the private "Bulk Ordering" button is shown. */
+export async function isOrderPackOwner(): Promise<boolean> {
+  try {
+    const resp = await fetch("/api/ordering-platform/pack/meta", {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}

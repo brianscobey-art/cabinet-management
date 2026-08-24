@@ -1955,3 +1955,6 @@ tfoot td {
 /* the global label rule stacks children; keep this one on a single line */
 .note-filters label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
 .note-filters input[type="checkbox"] { width: auto; margin: 0; }
+/* Private Order Pack entry — only rendered for the owner allowlist */
+.coast-chip.coast-private { border-color: var(--action); }
+.coast-chip.coast-private b { color: var(--action); }
