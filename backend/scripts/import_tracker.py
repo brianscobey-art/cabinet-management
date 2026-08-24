@@ -211,8 +211,24 @@ def update_existing(db, job: Job, row: dict) -> str:
     return "updated" if changed else "unchanged"
 
 
+def is_real_job_code(code: str | None) -> bool:
+    """Job Codes come in many shapes — DRLICR-0113, JBDW0410, CCL-H001,
+    MANN0005.2, SHLAM, CASH1 — so the only safe rule is that a real one
+    contains at least one letter.
+
+    The DATA table ends with formula-driven template rows whose code computes
+    to "-0000" (blank community code + blank lot), with "#N/A" lookups beside
+    it. That is the row this keeps out. Do NOT tighten this into a pattern
+    like <prefix>-<digits>: checked against the live sheet 8/24/26, that would
+    have thrown away 104 genuine jobs.
+    """
+    return bool(code and any(ch.isalpha() for ch in code))
+
+
 def import_row(db, row: dict, caches: dict) -> str:
     job_code = str(clean(row["Job Code"])).strip()
+    if not is_real_job_code(job_code):
+        return "skipped_blank"
     existing = db.query(Job).filter(Job.job_code == job_code).first()
     if existing is not None:
         return update_existing(db, existing, row)
@@ -388,7 +404,7 @@ def backfill_selections(db, rows: list[dict]) -> dict:
 def run_sync(db, rows: list[dict], *, on_error=None) -> dict:
     """Upsert every tracker row into the db (caller commits). Returns outcome counts."""
     counts = {"imported": 0, "updated": 0, "unchanged": 0, "linked": 0,
-              "skipped_inactive": 0, "failed": 0}
+              "skipped_inactive": 0, "skipped_blank": 0, "failed": 0}
     caches = {"accounts": {}, "communities": {}}
     for row in rows:
         try:
