@@ -232,13 +232,14 @@ function folderPill(row) {
 }
 
 /* ================= Filters ================= */
-const F = { folder: "", q: "", builder: "", hideDone: false };
+const F = { folder: "", q: "", builder: "", status: "", hideDone: false };
 
 function visibleRows() {
   return ROWS.filter(r => {
     if (F.folder && r.current_folder !== F.folder) return false;
     if (F.hideDone && r.current_folder === "sold") return false;
     if (F.builder && r.account_name !== F.builder) return false;
+    if (F.status && r.status !== F.status) return false;
     if (F.q) {
       const hay = [r.job_code, r.community_name, r.lot_number, r.plan, r.buid,
                    r.po_number, r.so_number, r.carter_po_number, r.folder_name]
@@ -310,6 +311,15 @@ function render() {
 
 function filterBar() {
   const builders = [...new Set(ROWS.map(r => r.account_name).filter(Boolean))].sort();
+  // Optimus stages in ladder order (not alphabetical), each with how many rows.
+  const LADDER = ["1.0-Track", "1.1-PreOrd", "1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub",
+                  "1.5-OrdPO", "2.0-Ord", "2.1-Inst", "3.0-Nd QW", "3.1-Parts",
+                  "4.0-Punch", "4.1-Blue", "5.0-EPO", "6.0-Clsd", "7.0-War", "8.0-Void"];
+  const counts = {};
+  ROWS.forEach(r => { if (r.status) counts[r.status] = (counts[r.status] || 0) + 1; });
+  const present = Object.keys(counts);
+  const statuses = LADDER.filter(st => present.includes(st))
+    .concat(present.filter(st => !LADDER.includes(st)).sort());
   const folders = (META && META.folders ? META.folders.map(f => f.key) : [])
     .concat(["century", "sold", "missing"]);
   return '<div class="filters">' +
@@ -320,6 +330,10 @@ function filterBar() {
     "</select>" +
     '<select id="fbuilder"><option value="">Every builder</option>' +
       builders.map(b => '<option' + (F.builder === b ? " selected" : "") + ">" + esc(b) + "</option>").join("") +
+    "</select>" +
+    '<select id="fstatus"><option value="">Every Optimus stage</option>' +
+      statuses.map(st => '<option value="' + esc(st) + '"' + (F.status === st ? " selected" : "") + ">" +
+        esc(st) + " (" + counts[st] + ")</option>").join("") +
     "</select>" +
     '<label><input type="checkbox" id="fdone"' + (F.hideDone ? " checked" : "") + "> Hide filed jobs</label>" +
     '<span style="flex:1"></span>' +
@@ -332,7 +346,7 @@ function wireFilters() {
     el.addEventListener(prop === "checked" ? "change" : "input", () => { F[key] = el[prop]; render(); });
   };
   bind("fq", "q", "value"); bind("ffolder", "folder", "value");
-  bind("fbuilder", "builder", "value"); bind("fdone", "hideDone", "checked");
+  bind("fbuilder", "builder", "value"); bind("fstatus", "status", "value"); bind("fdone", "hideDone", "checked");
 }
 
 function boardTable(rows) {
