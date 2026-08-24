@@ -80,6 +80,10 @@ class OrderingChecklist(Base):
     po_date: Mapped[date | None] = mapped_column(Date, default=None)
     po_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     so_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    # The vendor SO's grand total, read from the SO PDF, shown on Optimus's
+    # Ordered page. Deliberately NOT so_total: that one is Order Pack's
+    # stage-4 dollar gate (SO vs Carter PO) and must stay agent-written.
+    so_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
 
     moved_to_sold_date: Mapped[date | None] = mapped_column(Date, default=None)
     installer_pay_sheet: Mapped[bool | None] = mapped_column(Boolean, default=None)

@@ -157,7 +157,7 @@ class PlatformRow(BaseModel):
     so_number: str | None
     carter_po_number: str | None
     vendor: str | None
-    so_total: Decimal | None
+    so_amount: Decimal | None
     notes: str | None
     updated_at: datetime | None
 
@@ -190,7 +190,7 @@ def _row(job: Job, checklist: OrderingChecklist) -> PlatformRow:
         so_number=checklist.so_number,
         carter_po_number=checklist.carter_po_number,
         vendor=checklist.vendor or DEFAULT_VENDOR,
-        so_total=checklist.so_total,
+        so_amount=checklist.so_amount,
         notes=checklist.notes,
         updated_at=checklist.updated_at,
     )

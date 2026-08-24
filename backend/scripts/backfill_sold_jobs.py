@@ -131,11 +131,11 @@ def main() -> None:
                 if not dry:
                     cl.carter_po_number = carter
                 stats["carter"] += 1
-        if cl.so_total is None and so_file:
+        if cl.so_amount is None and so_file:
             total = pdf_total(so_file)
             if total is not None:
                 if not dry:
-                    cl.so_total = total
+                    cl.so_amount = total
                 stats["so_total"] += 1
 
         if not dry and (stats["jobs"] + stats["no_folder"]) % 50 == 0:

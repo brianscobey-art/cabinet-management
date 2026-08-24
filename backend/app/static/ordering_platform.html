@@ -606,7 +606,7 @@ function renderDone() {
       "<td>" + esc(r.community_name || "") + (r.lot_number ? " · Lot " + esc(r.lot_number) : "") + "</td>" +
       "<td>" + esc(r.po_number || "") + "</td><td>" + esc(r.so_number || "") + "</td>" +
       "<td>" + esc(r.carter_po_number || "") + "</td><td>" + esc(r.vendor || "") + "</td>" +
-      "<td>" + (r.so_total != null ? "$" + Number(r.so_total).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "") + "</td>" +
+      "<td>" + (r.so_amount != null ? "$" + Number(r.so_amount).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "") + "</td>" +
       "<td>" + fmtDate(r.steps["s4.poFiled"] || r.updated_at) + "</td></tr>";
   });
   h += "</tbody></table></div></div>";
