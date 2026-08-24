@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Install the PO Receipts bookmarklet</title>
+<style>
+  body{font:16px/1.6 'Segoe UI',system-ui,sans-serif;max-width:760px;margin:3rem auto;
+       padding:0 1.5rem;color:#1a1a1a;background:#fafafa}
+  h1{color:#125952;font-size:1.6rem;margin-bottom:.25rem}
+  h2{color:#125952;font-size:1.15rem;margin-top:2rem}
+  .sub{color:#666;margin-top:0}
+  .bm{display:inline-block;background:#125952;color:#fff;font-weight:700;font-size:1.05rem;
+      padding:14px 26px;border-radius:8px;text-decoration:none;margin:.5rem 0;
+      box-shadow:0 4px 14px rgba(18,89,82,.3);cursor:grab}
+  .drop{border:2px dashed #125952;border-radius:10px;padding:1.5rem;text-align:center;
+        background:#fff;margin:1.5rem 0}
+  ol{padding-left:1.2rem}li{margin:.5rem 0}
+  .note{background:#fff8e1;border-left:4px solid #e0a800;padding:1rem 1.2rem;
+        border-radius:0 6px 6px 0;margin:1.5rem 0}
+  code{background:#eee;padding:2px 6px;border-radius:4px;font-size:.9em}
+  .muted{color:#666;font-size:.9rem}
+</style>
+<h1>PO Receipts &rarr; CabinetTron</h1>
+<p class="sub">Pulls the DOMO PO Receipt List with no access token &mdash; your login is the credential.</p>
+
+<div class="drop">
+  <p><strong>Drag this button up to your bookmarks bar:</strong></p>
+  <a class="bm" href="javascript:(async()=&gt;{try{ var Q=String.fromCharCode(34),NL=String.fromCharCode(10),CR=String.fromCharCode(13); var d=&quot;1f5601ba-d9a1-4ebb-aa76-ad9c5b226ea6&quot;; var q=&quot;SELECT `transaction number` AS `Receipt %23`, MAX(`transaction date`) AS `Receipt Date`, MAX(`pos`) AS `POS`, MAX(`supplier name title`) AS `Supplier`, SUM(`reported cost`) AS `Supplier Cost`, SUM(`landed cost`) AS `Landed Cost`, MAX(`order number`) AS `Order %23` FROM table WHERE `transaction code`=&#x27;RE&#x27; AND `pos` LIKE &#x27;750%25&#x27; GROUP BY `transaction number`&quot;; var r=await fetch(&quot;/api/query/v1/execute/&quot;+d,{method:&quot;POST&quot;,credentials:&quot;include&quot;,headers:{&quot;Content-Type&quot;:&quot;application/json&quot;,Accept:&quot;application/json&quot;},body:JSON.stringify({sql:q})}); if(!r.ok)throw new Error(&quot;Domo returned &quot;+r.status+&quot; - are you still signed in?&quot;); var j=await r.json(); var c=[&quot;Receipt %23&quot;,&quot;Receipt Date&quot;,&quot;POS&quot;,&quot;Supplier&quot;,&quot;Supplier Cost&quot;,&quot;Landed Cost&quot;,&quot;Order %23&quot;]; var e=function(v){v=(v===null||v===undefined)?&quot;&quot;:String(v); return (v.indexOf(Q)&gt;=0||v.indexOf(&quot;,&quot;)&gt;=0||v.indexOf(NL)&gt;=0||v.indexOf(CR)&gt;=0)?Q+v.split(Q).join(Q+Q)+Q:v;}; var csv=[c.join(&quot;,&quot;)].concat(j.rows.map(function(x){return x.map(e).join(&quot;,&quot;);})).join(CR+NL); var t=new Date(); var m=(&quot;0&quot;+(t.getMonth()+1)).slice(-2)+(&quot;0&quot;+t.getDate()).slice(-2)+String(t.getFullYear()).slice(2); var o=document.getElementById(&quot;__dlbtn&quot;);if(o)o.remove(); var b=document.createElement(&quot;a&quot;);b.id=&quot;__dlbtn&quot;; b.textContent=&quot;SAVE &quot;+j.rows.length+&quot; RECEIPTS&quot;; b.href=URL.createObjectURL(new Blob([csv],{type:&quot;text/csv&quot;})); b.download=&quot;PO Receipt List &quot;+m+&quot;.csv&quot;; b.style.cssText=&quot;position:fixed;left:50%25;top:40%25;transform:translate(-50%25,-50%25);z-index:2147483647;background:%23125952;color:%23fff;font:bold 20px sans-serif;padding:28px 44px;border-radius:10px;text-decoration:none;display:block;box-shadow:0 10px 40px rgba(0,0,0,.45);cursor:pointer&quot;; b.onclick=function(){setTimeout(function(){b.remove();},600);}; document.body.appendChild(b); }catch(err){alert(&quot;PO Receipt pull failed: &quot;+err.message);}})()">Pull PO Receipts</a>
+  <p class="muted">Press Ctrl+Shift+B first if the bookmarks bar is hidden.</p>
+</div>
+
+<h2>Using it</h2>
+<ol>
+  <li>Be signed in at <code>carterlumber.domo.com</code> &mdash; any page.</li>
+  <li>Click <strong>Pull PO Receipts</strong> in your bookmarks bar.</li>
+  <li>A green button appears in the middle of the page. <strong>Click it.</strong></li>
+</ol>
+<p>That is the whole job. The file saves to your Downloads folder, the upload task ships it
+within 5 minutes, and cabinettron.com imports it on its own.</p>
+
+<div class="note">
+  <strong>Why the second click?</strong> Chrome silently discards a download that a page
+  starts by itself &mdash; no error, no file. Only a real click counts. The bookmarklet
+  can't do that part for you, but it does tell you how many receipts it found, so you know
+  it worked before you click.
+</div>
+
+<p class="muted">Nothing happens? You're signed out of DOMO &mdash; sign in and click again.<br>
+Readable source: <code>backend/scripts/domo_receipt_pull.js</code></p>
