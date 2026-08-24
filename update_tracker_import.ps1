@@ -1,6 +1,11 @@
 # Pushes CabinetTron phase data into the 3.0 Online Sales Tracker's
-# "Import Data" sheet (table Table21: Job Code | Date Checked | Phase |
+# "Import Data" sheet (table ImportData: Job Code | Date Checked | Phase |
 # Date Measured | Full Phase).
+#
+# The table is named ImportData. It was Table21 until the workbook was cleaned
+# up around 8/19/26; ListObjects.Item('Table21') then threw DISP_E_BADINDEX
+# ('Invalid index') on every run from 8/21 on. Check the name in the workbook
+# before assuming a failure here is anything else.
 #
 # Uses Excel itself via COM so the .xlsm's macros, formatting, data validation
 # and the calculated "Full Phase" column are all preserved (openpyxl would
@@ -31,7 +36,7 @@ try {
   if (-not $rows -or $rows.Count -eq 0) { throw 'export returned no rows' }
   Log "fetched $($rows.Count) rows; target $($wbFile.Name)"
 
-  # 3. write into Table21 with Excel
+  # 3. write into ImportData with Excel
   $excel = New-Object -ComObject Excel.Application
   $excel.Visible = $false
   $excel.DisplayAlerts = $false
@@ -39,7 +44,7 @@ try {
   $wb = $excel.Workbooks.Open($wbFile.FullName, 0, $false)   # UpdateLinks=0, ReadOnly=false
   try {
     $ws = $wb.Worksheets.Item('Import Data')
-    $lo = $ws.ListObjects.Item('Table21')
+    $lo = $ws.ListObjects.Item('ImportData')
     $hdrRow = $lo.HeaderRowRange.Row
     $firstRow = $hdrRow + 1
 
@@ -64,7 +69,7 @@ try {
     $ws.Columns.Item($lo.Range.Column + 3).NumberFormat = 'm/d/yy'
 
     $wb.Save()
-    Log "wrote $($rows.Count) rows into Table21 and saved"
+    Log "wrote $($rows.Count) rows into ImportData and saved"
   } finally {
     $wb.Close($true)
     $excel.Quit()
