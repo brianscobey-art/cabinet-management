@@ -115,6 +115,8 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const [category, setCategory] = useState<Category>((nav.category as Category) || "");
   const [nationalStep, setNationalStep] = useState(Boolean(nav.nationalStep));
   const [communityChosen, setCommunityChosen] = useState(Boolean(nav.communityChosen));
+  // National builders split into divisions (DR Horton's five); pick one first.
+  const [divisionChosen, setDivisionChosen] = useState(Boolean(nav.divisionChosen));
   const [allCommunities, setAllCommunities] = useState<Community[]>([]);
   const [statusFilter, setStatusFilter] = useState((nav.statusFilter as string) || "");
   const [accountFilter, setAccountFilter] = useState((nav.accountFilter as string) || "");
@@ -131,9 +133,9 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (archived) return;
     sessionStorage.setItem(
       NAV_KEY,
-      JSON.stringify({ category, nationalStep, communityChosen, statusFilter, accountFilter, communityIds, search })
+      JSON.stringify({ category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search })
     );
-  }, [archived, category, nationalStep, communityChosen, statusFilter, accountFilter, communityIds, search]);
+  }, [archived, category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search]);
 
   async function refresh() {
     const params: Record<string, string | string[]> = {};
@@ -190,15 +192,15 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
           <>
             <h2>Which national builder?</h2>
             <div className="category-choice">
-              <button className="category-card" onClick={() => setCategory("dr_horton")}>
+              <button className="category-card" onClick={() => { setCategory("dr_horton"); setDivisionChosen(false); setAccountFilter(""); setCommunityIds([]); }}>
                 <span className="category-title">DR Horton</span>
                 <span className="muted">All five divisions</span>
               </button>
-              <button className="category-card" onClick={() => setCategory("century")}>
+              <button className="category-card" onClick={() => { setCategory("century"); setDivisionChosen(false); setAccountFilter(""); setCommunityIds([]); }}>
                 <span className="category-title">Century</span>
                 <span className="muted">Century Complete</span>
               </button>
-              <button className="category-card" onClick={() => setCategory("national_other")}>
+              <button className="category-card" onClick={() => { setCategory("national_other"); setDivisionChosen(false); setAccountFilter(""); setCommunityIds([]); }}>
                 <span className="category-title">Other</span>
                 <span className="muted">Future national builders</span>
               </button>
@@ -225,9 +227,73 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     .filter((c) => scopeAccountIds.includes(c.account_id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // National flow: after the builder, pick a community (or all of them).
+  // National flow: a builder with more than one division (DR Horton) asks which
+  // division first, so the community list isn't every community in the region.
+  if (
+    !archived &&
+    category &&
+    category !== "local" &&
+    !communityChosen &&
+    !divisionChosen &&
+    categoryAccounts.length > 1
+  ) {
+    const communityCount = (accountId: number) =>
+      allCommunities.filter((c) => c.account_id === accountId).length;
+    return (
+      <div className="center-page">
+        <h2>{CATEGORY_LABELS[category]} — which division?</h2>
+        <div className="category-choice community-grid">
+          <button
+            className="category-card"
+            onClick={() => {
+              setAccountFilter("");
+              setCommunityIds([]);
+              setDivisionChosen(true);
+            }}
+          >
+            <span className="category-title">All Divisions</span>
+            <span className="muted">every division of {CATEGORY_LABELS[category]}</span>
+          </button>
+          {categoryAccounts
+            .slice()
+            .sort((a, b) => divisionLabel(a.name).localeCompare(divisionLabel(b.name)))
+            .map((a) => (
+              <button
+                key={a.id}
+                className="category-card"
+                onClick={() => {
+                  setAccountFilter(String(a.id));
+                  setCommunityIds([]);
+                  setDivisionChosen(true);
+                }}
+              >
+                <span className="category-title">{divisionLabel(a.name)}</span>
+                <span className="muted">
+                  {communityCount(a.id)} communit{communityCount(a.id) === 1 ? "y" : "ies"}
+                </span>
+              </button>
+            ))}
+        </div>
+        <button
+          className="link-btn"
+          onClick={() => {
+            setCategory("");
+            setNationalStep(true);
+          }}
+        >
+          ← back
+        </button>
+      </div>
+    );
+  }
+
+  // National flow: after the division, pick a community (or all of them).
   if (!archived && category && category !== "local" && !communityChosen) {
-    const accountById = new Map(categoryAccounts.map((a) => [a.id, a]));
+    // Scope to the chosen division when there is one.
+    const divisionAccounts = accountFilter
+      ? categoryAccounts.filter((a) => String(a.id) === accountFilter)
+      : categoryAccounts;
+    const accountById = new Map(divisionAccounts.map((a) => [a.id, a]));
     const communities = allCommunities
       .filter((c) => accountById.has(c.account_id))
       .sort((a, b) =>
@@ -267,8 +333,13 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
         <button
           className="link-btn"
           onClick={() => {
-            setCategory("");
-            setNationalStep(true);
+            if (categoryAccounts.length > 1) {
+              setDivisionChosen(false);   // back to the division picker
+              setAccountFilter("");
+            } else {
+              setCategory("");
+              setNationalStep(true);
+            }
           }}
         >
           ← back
@@ -303,6 +374,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                       setAccountFilter("");
                       setCommunityIds([]);
                       setCommunityChosen(false); // re-offer the community choice
+                      setDivisionChosen(false);  // ...and the division choice
                     }}
                   >
                     {CATEGORY_LABELS[c]}
@@ -316,6 +388,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 setCategory("");
                 setNationalStep(false);
                 setCommunityChosen(false);
+                setDivisionChosen(false);
                 setAccountFilter("");
                 setCommunityIds([]);
               }}
