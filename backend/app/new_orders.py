@@ -192,12 +192,18 @@ def _revive(v):
     return v
 
 
-def write_workbook(path, values: dict, dry_run: bool = False) -> dict:
+def write_workbook(path, values: dict, dry_run: bool = False,
+                   resolve_conflicts: bool = False) -> dict:
     """Apply export_values() to the workbook in place.
 
     OWNED columns overwrite; FILL_ONLY columns fill blanks and report a
     conflict instead of overwriting. Nothing is written when dry_run, so a
     caller can show the diff first.
+
+    resolve_conflicts=True makes the app win the identity columns too. Brian
+    called it on 8/25/26 after reviewing the list. Note what that costs: the
+    app's Swing is an "X" placeholder on some rows where the sheet had a real
+    L/R, and its Lot # is unpadded (66, not 0066). Keep it opt-in.
     """
     wb = load_workbook(path)  # keep formulas — Status Summary depends on them
     ws = wb[SHEET]
@@ -229,9 +235,11 @@ def write_workbook(path, values: dict, dry_run: bool = False) -> dict:
             cur = ws.cell(row=r, column=ci).value
             blank = cur is None or str(cur).strip() == ""
             if name in FILL_ONLY and not blank:
-                if _s(cur) != _s(new):
-                    conflicts.append((code, headers[ci - 1], cur, new))
-                continue  # never overwrite an identity column that has a value
+                if _s(cur) == _s(new):
+                    continue
+                conflicts.append((code, headers[ci - 1], cur, new))
+                if not resolve_conflicts:
+                    continue  # leave the identity column alone; a human decides
             if isinstance(cur, datetime) and isinstance(new, datetime):
                 same = cur.date() == new.date()
             elif isinstance(cur, (int, float)) and isinstance(new, (int, float)):
