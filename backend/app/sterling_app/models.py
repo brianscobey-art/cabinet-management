@@ -1,8 +1,9 @@
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (Date, DateTime, Enum, ForeignKey, Numeric, String, Text,
+                        UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.sterling_app.database import Base
@@ -128,6 +129,31 @@ class TopPiece(Base):
     depth: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=Decimal("0"))  # depth or height
 
     tops: Mapped[PlanTops] = relationship(back_populates="pieces")
+
+
+class ContractPrice(Base):
+    """What a builder has agreed to pay for a plan, and from when.
+
+    A division reprices on a date; POs written on or after it should carry the
+    new number. Keeping `prior_price` alongside is what lets the reprice check
+    tell "someone used the superseded price" apart from "this PO is just odd" —
+    an amount matching the old price to the dollar is not a coincidence.
+    """
+
+    __tablename__ = "contract_prices"
+    __table_args__ = (
+        UniqueConstraint("division", "plan", "effective_from", name="uq_contract_price"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    division: Mapped[str] = mapped_column(String(100), index=True)
+    plan: Mapped[str] = mapped_column(String(120), index=True)
+    effective_from: Mapped[date] = mapped_column(Date, index=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    color_upcharge: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    prior_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    source: Mapped[str | None] = mapped_column(String(255), default=None)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
 class PriceSnapshot(Base):

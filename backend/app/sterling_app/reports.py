@@ -234,7 +234,157 @@ def _newest_vs() -> str | None:
     return str(files[0]) if files else None
 
 
+# --------------------------------------------------------------------------
+# Reprice compliance — POs written after a price change, at the old price
+# --------------------------------------------------------------------------
+REPRICE_COLUMNS = [
+    ("job_code", "Job", "text"),
+    ("division", "Division", "text"),
+    ("plan", "Plan", "text"),
+    ("po_date", "PO date", "text"),
+    ("po_number", "PO #", "text"),
+    ("po_amount", "PO amount", "money"),
+    ("expected", "Should be", "money"),
+    ("prior", "Old price", "money"),
+    ("short", "Short by", "money"),
+    ("verdict", "Verdict", "text"),
+]
+
+TOL = 1.0   # a dollar — these are whole-dollar contract prices
+
+
+def build_reprice_check(db, vs_path: str | None = None, **_) -> dict:
+    """Every PO dated on or after a reprice, checked against the agreed price.
+
+    Matching the SUPERSEDED price to the dollar is the tell: it means the old
+    number was used, not that the house was unusual. Anything else is reported
+    as "check" rather than accused of anything.
+    """
+    from app.sterling_app.models import ContractPrice
+
+    prices = collections.defaultdict(list)
+    for cp in db.query(ContractPrice).all():
+        prices[(cp.division, cp.plan)].append(cp)
+    if not prices:
+        raise ValueError("No contract prices loaded — import a pricing matrix first.")
+    for v in prices.values():
+        v.sort(key=lambda c: c.effective_from)
+
+    if not vs_path:
+        vs_path = _newest_vs()
+    if not vs_path:
+        raise ValueError("No Vendor Suite combined report found.")
+
+    from openpyxl import load_workbook
+
+    wb = load_workbook(vs_path, data_only=True, read_only=True)
+    name = next((n for n in wb.sheetnames if n.startswith("DRH Cabinets Combined")), None)
+    ws = wb[name]
+    raw = list(ws.iter_rows(min_row=2, values_only=True))
+    hdr = [str(h).strip() if h else "" for h in raw[0]]
+    ix = {h: i for i, h in enumerate(hdr)}
+    # Keep the date PER LINE. Using the job's earliest date hides exactly the
+    # case this report exists for: a base PO written after a reprice with an
+    # earlier-dated change order beside it, which drags the job's min date back
+    # before the cutoff and drops it from the check.
+    jobs = collections.defaultdict(list)
+    for r in raw[1:]:
+        b = r[ix["Job Number"]]
+        if b:
+            jobs[str(b).strip()].append(
+                (r[ix["PO Number"]], r[ix["PO Amount"]], r[ix["PO Date"]]))
+    wb.close()
+
+    from app.database import SessionLocal as CtSession
+    from app.models import Job as CtJob, OrderingChecklist
+
+    with CtSession() as ct:
+        info = {
+            str(c.buid).strip(): (j.job_code or "", (j.plan or "").strip())
+            for j, c in ct.query(CtJob, OrderingChecklist)
+            .join(OrderingChecklist, OrderingChecklist.job_id == CtJob.id).all()
+            if c.buid
+        }
+
+    rows = []
+    checked = 0
+    for buid, lines in jobs.items():
+        code, plan = info.get(buid, ("", ""))
+        if not plan:
+            continue
+        match = next((k for k in prices if k[1] == plan), None)
+        if match is None:
+            continue
+
+        # The base PO is the largest line; the rest are change orders and
+        # backcharges, which should not be judged against a contract price.
+        priced_lines = [(n, float(a), d) for n, a, d in lines
+                        if isinstance(a, (int, float))]
+        if not priced_lines:
+            continue
+        base_po, base, base_date = max(priced_lines, key=lambda x: x[1])
+        if not hasattr(base_date, "year"):
+            continue
+        po_date = base_date.date() if hasattr(base_date, "date") else base_date
+
+        in_force = [c for c in prices[match] if c.effective_from <= po_date]
+        if not in_force:
+            continue
+        cp = in_force[-1]
+        checked += 1
+        expected = float(cp.price)
+        upch = float(cp.color_upcharge or 0)
+        prior = float(cp.prior_price) if cp.prior_price is not None else None
+
+        if abs(base - expected) <= TOL or (upch and abs(base - (expected + upch)) <= TOL):
+            continue                                   # correct, nothing to report
+        if prior is not None and abs(base - prior) <= TOL:
+            verdict = "Old price used"
+        else:
+            verdict = "Check — matches neither"
+        rows.append({
+            "job_code": code or buid, "division": cp.division, "plan": plan,
+            "po_date": f"{po_date.month}/{po_date.day}/{po_date:%y}",
+            "po_number": str(base_po or ""), "po_amount": round(base, 2),
+            "expected": round(expected, 2),
+            "prior": round(prior, 2) if prior is not None else None,
+            "short": round(base - expected, 2), "verdict": verdict,
+        })
+
+    rows.sort(key=lambda r: r["short"])
+    short_total = -sum(r["short"] for r in rows if r["short"] < 0)
+    old_used = sum(1 for r in rows if r["verdict"] == "Old price used")
+    eff = {f"{k[0]}": max(c.effective_from for c in v) for k, v in prices.items()}
+    meta = {
+        "source": Path(vs_path).name,
+        "checked": checked,
+        "flagged": len(rows),
+        "effective": ", ".join(f"{d} from {e}" for d, e in sorted(set(eff.items()))),
+        "headline": [
+            ("POs checked", str(checked), "dated on/after a reprice"),
+            ("Old price used", str(old_used), "matches the superseded price exactly"),
+            ("Needs a look", str(len(rows) - old_used), "matches neither price"),
+            ("Under-billed", f"-${short_total:,.0f}", "against the agreed price"),
+        ],
+    }
+    return {"meta": meta, "rows": rows}
+
+
 REPORTS: dict[str, Report] = {
+    "reprice-check": Report(
+        key="reprice-check",
+        title="Reprice Compliance",
+        blurb="POs raised after a price change that were not written at the new price.",
+        columns=REPRICE_COLUMNS,
+        build=build_reprice_check,
+        notes=(
+            "Only the base PO is judged — the largest line on a job. Change orders "
+            "and backcharges are separate and are not compared to a contract price. "
+            "A PO matching the SUPERSEDED price to the dollar is reported as the old "
+            "price being used; anything else is flagged for a look rather than "
+            "assumed wrong."
+        ),
+    ),
     "plan-margin": Report(
         key="plan-margin",
         title="Plan Margin vs Actual PO",
