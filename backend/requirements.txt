@@ -16,3 +16,4 @@ boto3>=1.34  # Cloudflare R2 (S3-compatible) feed storage bridge
 xlrd>=2.0
 pypdf>=4.0
 httpx>=0.27
+python-pptx>=1.0        # Sterling report -> PowerPoint export

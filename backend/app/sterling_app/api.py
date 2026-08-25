@@ -1657,3 +1657,64 @@ def export_to_cabinettron(job_id: int, db: Session = Depends(get_db)):
     job.exported_at = datetime.now(timezone.utc)
     db.commit()
     return result
+
+
+# ---------------------------------------------------------------------------
+# Reports — one definition per report, rendered to screen, Excel or PowerPoint.
+# The .xlsx / .pptx routes are declared BEFORE /reports/{key} because FastAPI
+# matches in declaration order and {key} would otherwise swallow the extension.
+# ---------------------------------------------------------------------------
+def _report_or_404(key: str, db: Session):
+    from app.sterling_app import reports
+
+    try:
+        return reports.run(key, db)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"No report '{key}'")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+def _download(buf, filename: str, media: str):
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(
+        buf, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports")
+def list_reports():
+    from app.sterling_app import reports
+
+    return reports.catalog()
+
+
+@router.get("/reports/{key}.xlsx")
+def report_xlsx(key: str, db: Session = Depends(get_db)):
+    from app.sterling_app.report_export import to_xlsx
+
+    data = _report_or_404(key, db)
+    name = f"{data['report']['title']} {data['meta'].get('generated', '')}".strip()
+    return _download(
+        to_xlsx(data), f"{name}.xlsx".replace("/", "-"),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get("/reports/{key}.pptx")
+def report_pptx(key: str, db: Session = Depends(get_db)):
+    from app.sterling_app.report_export import to_pptx
+
+    data = _report_or_404(key, db)
+    name = f"{data['report']['title']} {data['meta'].get('generated', '')}".strip()
+    return _download(
+        to_pptx(data), f"{name}.pptx".replace("/", "-"),
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+
+
+@router.get("/reports/{key}")
+def report_data(key: str, db: Session = Depends(get_db)):
+    return _report_or_404(key, db)

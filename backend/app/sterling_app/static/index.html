@@ -141,6 +141,24 @@
     body { background: #fff; }
     main { margin: 0; max-width: none; }
   }
+
+  .rhead { display:flex; gap:20px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+  .rexport { display:flex; gap:8px; flex-shrink:0; }
+  .btn.ghost { background:transparent; border:1px solid var(--mint); color:var(--mint); }
+  table.rtable { border-collapse:collapse; width:100%; min-width:900px; }
+  table.rtable th { position:sticky; top:0; background:#fff; text-align:left; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; color:#6b7a76; padding:12px 12px 9px;
+    border-bottom:1px solid #e3e9e7; white-space:nowrap; }
+  table.rtable th.r, table.rtable td.r { text-align:right; font-variant-numeric:tabular-nums; }
+  table.rtable td { padding:9px 12px; border-bottom:1px solid #eef2f1; font-size:13.5px; }
+  table.rtable td:first-child { border-left:3px solid transparent; font-weight:500; }
+  table.rtable tr.r-loss td:first-child { border-left-color:#9e2b25; }
+  table.rtable tr.r-under td:first-child { border-left-color:#b07d21; }
+  table.rtable tr.r-ok td:first-child { border-left-color:#2f6f5e; }
+  table.rtable td.negv { color:#9e2b25; }
+  .rpill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:20px;
+    background:#eef2f1; color:#6b7a76; white-space:nowrap; }
+  .rpill.fixed { background:#f3e2e0; color:#9e2b25; }
 </style>
 </head>
 <body>
@@ -156,6 +174,7 @@
     <a href="#/catalog" data-page="catalog">Catalog</a>
     <a href="#/add-items" data-page="add-items">Add Items</a>
     <a href="#/bids" data-page="bids">Plan Bids</a>
+    <a href="#/reports" data-page="reports">Reports</a>
     <a href="#/settings" data-page="settings">Settings</a>
   </nav>
   <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#cfe3df">KSR
@@ -238,6 +257,7 @@ const routes = {
   catalog: renderCatalog,
   "add-items": renderAddItems,
   bids: renderBids,
+  reports: renderReports,
   settings: renderSettings,
 };
 async function route() {
@@ -2357,7 +2377,8 @@ function printCoverSheet(s) {
     .grid { display:flex; gap:10px; align-items:flex-start; }
     .grid > div { flex:1; }
     .sum td { font-weight:700; }
-  </style></head><body>
+  
+</style></head><body>
     <h1>SALES ORDER COVER SHEET</h1>
     <div class="sub">Carter Kitchen &amp; Bath &nbsp;|&nbsp; ${esc(s.job_code || "")} &nbsp;|&nbsp; ${esc(s.sale_date || "")}</div>
     <div class="grid">
@@ -2799,6 +2820,97 @@ api("/settings").then(s => {
   window._defaultMult = Number(s.default_multiplier);
   initKsr();
 }).finally(route);
+
+// ---------- Reports ----------
+// A report renders from whatever columns the server sends, so adding a column
+// in reports.py needs no change here — and the Excel and PowerPoint exports
+// come from that same definition, which is why they cannot drift apart.
+const REPORT_FMT = {
+  money: v => (v === null || v === undefined || v === "") ? "—"
+    : (Number(v) < 0 ? "-$" : "$") + Math.abs(Number(v)).toLocaleString("en-US",
+        {minimumFractionDigits: 0, maximumFractionDigits: 0}),
+  pct: v => (v === null || v === undefined || v === "") ? "—" : (Number(v) * 100).toFixed(1) + "%",
+  num: v => (v === null || v === undefined) ? "—" : String(v),
+  text: v => esc(v ?? ""),
+  pill: v => `<span class="rpill${String(v).startsWith("Fixed") ? " fixed" : ""}">${esc(v ?? "")}</span>`,
+};
+
+async function renderReports(key) {
+  const list = await api("/reports");
+  if (!key) {
+    $("#main").innerHTML = `<h1>Reports</h1>
+      <div class="row">${list.map(r => `
+        <div class="card" style="flex:1 1 320px">
+          <h3 style="margin:0 0 6px">${esc(r.title)}</h3>
+          <p class="muted" style="margin:0 0 14px; font-size:13px">${esc(r.blurb)}</p>
+          <a class="btn" href="#/reports/${encodeURIComponent(r.key)}">Run report</a>
+        </div>`).join("")}</div>`;
+    return;
+  }
+
+  $("#main").innerHTML = `<div class="card empty">Building report…</div>`;
+  let d;
+  try {
+    d = await api(`/reports/${encodeURIComponent(key)}`);
+  } catch (e) {
+    $("#main").innerHTML = `<h1>Reports</h1><div class="card empty">${esc(e.message)}</div>
+      <p><a href="#/reports">Back to reports</a></p>`;
+    return;
+  }
+
+  const cols = d.report.columns;
+  const base = `${API_BASE}/reports/${encodeURIComponent(key)}`;
+  const tiles = (d.meta.headline || []).map(([label, value, note]) => `
+    <div class="card stat"><div class="label">${esc(label)}</div>
+      <div class="value">${esc(value)}</div>
+      <div class="muted" style="font-size:12px">${esc(note)}</div></div>`).join("");
+
+  const head = cols.map(c =>
+    `<th class="${c.kind === "text" || c.kind === "pill" ? "" : "r"}">${esc(c.label)}</th>`).join("");
+  const body = d.rows.map(row => {
+    const st = String(row.status || "");
+    const cls = st.startsWith("Below cost") ? "r-loss" : st.startsWith("Below") ? "r-under" : "r-ok";
+    return `<tr class="${cls}">` + cols.map(c => {
+      const fmt = REPORT_FMT[c.kind] || REPORT_FMT.text;
+      const v = row[c.key];
+      const neg = (c.kind === "money" || c.kind === "pct") && Number(v) < 0;
+      const align = (c.kind === "text" || c.kind === "pill") ? "" : " r";
+      return `<td class="${align}${neg ? " negv" : ""}">${fmt(v)}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
+
+  const skipped = Object.entries(d.meta.skipped || {})
+    .map(([k, v]) => `${v} ${esc(k)}`).join(", ");
+
+  $("#main").innerHTML = `
+    <div class="rhead">
+      <div>
+        <h1 style="margin-bottom:4px">${esc(d.report.title)}</h1>
+        <p class="muted" style="margin:0">${esc(d.report.blurb)}</p>
+        <p class="muted" style="margin:6px 0 0; font-size:12.5px">
+          ${esc(d.meta.period || "")} &middot; ${esc(d.meta.source || "")}
+          &middot; generated ${esc(d.meta.generated || "")}</p>
+      </div>
+      <div class="rexport">
+        <button class="btn" id="expXlsx">Export Excel</button>
+        <button class="btn ghost" id="expPptx">Export PowerPoint</button>
+      </div>
+    </div>
+    <div class="row" style="margin:16px 0">${tiles}</div>
+    <div class="card" style="padding:0; overflow-x:auto">
+      <table class="rtable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    </div>
+    <p class="muted" style="font-size:12.5px; margin-top:14px; max-width:88ch">
+      <b>How this is measured.</b> ${esc(d.report.notes || "")}
+      ${skipped ? " Excluded: " + skipped + "." : ""}</p>
+    <p style="margin-top:10px"><a href="#/reports">&larr; All reports</a></p>`;
+
+  // The API is bearer-authenticated, so a plain <a href> download would 401.
+  // downloadFile() fetches with the auth header and hands back a blob.
+  const stem = `${d.report.title} ${d.meta.generated || ""}`.trim().replace(/[\/:*?"<>|]/g, "-");
+  $("#expXlsx").onclick = () => downloadFile(`${base}.xlsx`, `${stem}.xlsx`);
+  $("#expPptx").onclick = () => downloadFile(`${base}.pptx`, `${stem}.pptx`);
+}
 </script>
 </body>
 </html>
