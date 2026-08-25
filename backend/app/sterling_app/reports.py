@@ -55,6 +55,13 @@ MARGIN_COLUMNS = [
 ]
 
 
+def xround(x, digits: int = 0) -> float:
+    """Excel ROUND is half-away-from-zero; Python's round() is banker's."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    return float(Decimal(str(x)).quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP))
+
+
 ADJUST_BELOW = 0.10   # a division under this needs its pricing revisited
 
 
@@ -370,7 +377,119 @@ def build_reprice_check(db, vs_path: str | None = None, **_) -> dict:
     return {"meta": meta, "rows": rows}
 
 
+# --------------------------------------------------------------------------
+# Reprice proposal — what a set of plans should cost at a chosen margin
+# --------------------------------------------------------------------------
+REPRICE_TARGETS_KEY = "reprice_targets"   # Setting: {"plan name": 0.12, ...}
+
+PROPOSAL_COLUMNS = [
+    ("plan", "Plan", "text"),
+    ("division", "Division", "text"),
+    ("n", "Houses", "num"),
+    ("current_po", "Current PO", "money"),
+    ("cogs", "Our cost", "money"),
+    ("current_margin", "Margin now", "pct"),
+    ("target", "Target", "pct"),
+    ("new_price", "New price", "money"),
+    ("change", "Change / house", "money"),
+    ("impact", "12-month impact", "money"),
+    ("direction", "Direction", "text"),
+]
+
+
+def build_reprice_proposal(db, **kwargs) -> dict:
+    """Price a named set of plans to a chosen margin, and show what it moves.
+
+    Targets live in the `reprice_targets` setting so the list survives and can
+    be edited without touching code. New price uses the same formula Sterling
+    prices with — cost / (1 - margin), rounded like the workbook — so a plan
+    repriced here lands exactly where the pricing sheet would put it.
+    """
+    import json
+
+    from app.sterling_app.models import Setting
+
+    row = db.query(Setting).filter(Setting.key == REPRICE_TARGETS_KEY).first()
+    targets = json.loads(row.value) if row and row.value else {}
+    if not targets:
+        raise ValueError("No reprice targets set — nothing to propose.")
+
+    base = build_plan_margin(db, **kwargs)
+    by_plan = {r["plan"]: r for r in base["rows"]}
+
+    rows, missing = [], []
+    for plan, target in targets.items():
+        r = by_plan.get(plan)
+        if r is None:
+            missing.append(plan)
+            continue
+        target = float(target)
+        target = target / 100 if target > 1 else target
+        cogs = r["cogs"]
+        new_price = float(xround(cogs / (1 - target), 0)) if target < 1 else cogs
+        change = new_price - r["avg"]
+        rows.append({
+            "plan": plan, "division": r["division"], "n": r["n"],
+            "current_po": r["avg"], "cogs": cogs,
+            "current_margin": r["margin"], "target": round(target, 4),
+            "new_price": new_price, "change": round(change, 2),
+            "impact": round(change * r["n"], 2),
+            "direction": "Increase" if change > 0.5 else "Decrease" if change < -0.5 else "No change",
+        })
+    rows.sort(key=lambda r: -r["impact"])
+
+    up = sum(r["impact"] for r in rows if r["impact"] > 0)
+    down = -sum(r["impact"] for r in rows if r["impact"] < 0)
+    houses = sum(r["n"] for r in rows)
+
+    # what it does to the divisions these plans sit in
+    affected = {r["division"] for r in rows}
+    before_rev = before_cost = after_rev = 0.0
+    newp = {r["plan"]: r["new_price"] for r in rows}
+    for r in base["rows"]:
+        if r["division"] not in affected:
+            continue
+        before_rev += r["avg"] * r["n"]
+        before_cost += r["cogs"] * r["n"]
+        after_rev += newp.get(r["plan"], r["avg"]) * r["n"]
+    m_before = (before_rev - before_cost) / before_rev if before_rev else 0
+    m_after = (after_rev - before_cost) / after_rev if after_rev else 0
+
+    meta = {
+        "source": base["meta"]["source"],
+        "period": base["meta"]["period"],
+        "plans": len(rows),
+        "houses": houses,
+        "missing": missing,
+        "division_margin_before": round(m_before, 4),
+        "division_margin_after": round(m_after, 4),
+        "headline": [
+            ("Plans repriced", str(len(rows)), f"{houses} houses in 12 months"),
+            ("Added", f"+${up:,.0f}", "from increases"),
+            ("Given back", f"-${down:,.0f}", "from decreases"),
+            ("Net, 12 months", f"+${up - down:,.0f}", "at the same volume"),
+        ],
+    }
+    return {"meta": meta, "rows": rows}
+
+
 REPORTS: dict[str, Report] = {
+    "reprice-proposal": Report(
+        key="reprice-proposal",
+        title="Reprice Proposal",
+        blurb="What a named set of plans should cost at a chosen margin, and what it moves.",
+        columns=PROPOSAL_COLUMNS,
+        build=build_reprice_proposal,
+        # No group_by: rollup() reads the margin report's column names, and this
+        # report has its own. One division's worth of plans needs no split.
+        notes=(
+            "New price is cost / (1 - target margin), rounded the way the pricing "
+            "sheet rounds, so a plan repriced here lands where Sterling would put "
+            "it. Impact assumes the same volume as the last 12 months. A plan "
+            "already above its target shows as a DECREASE — that is real money "
+            "given back, not a rounding artefact."
+        ),
+    ),
     "reprice-check": Report(
         key="reprice-check",
         title="Reprice Compliance",
