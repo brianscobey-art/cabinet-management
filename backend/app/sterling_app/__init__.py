@@ -13,6 +13,37 @@ from fastapi.responses import FileResponse
 from sqlalchemy import event
 
 
+def _ensure_columns(engine) -> None:
+    """Add columns that create_all() cannot.
+
+    Sterling has no migration tool — Base.metadata.create_all() creates missing
+    TABLES but never alters an existing one, so a new column on a model that is
+    already in the SQLite file is silently absent until someone deletes the db.
+    Each ALTER is idempotent and additive; nothing here drops or rewrites.
+    """
+    from sqlalchemy import inspect, text
+
+    wanted = {
+        "plan_tops": [
+            ("k_cutouts", "INTEGER"),
+            ("v_cutouts", "INTEGER"),
+            ("k_sink_rate", "NUMERIC(8, 2)"),
+            ("k_cutout_rate", "NUMERIC(8, 2)"),
+            ("v_sink_rate", "NUMERIC(8, 2)"),
+            ("v_cutout_rate", "NUMERIC(8, 2)"),
+        ],
+    }
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in wanted.items():
+            if not insp.has_table(table):
+                continue
+            have = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols:
+                if name not in have:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
 def _seed_cover_refs(SessionLocal) -> None:
     """First run only: the PO-type presets and superintendents from Brian's
     cover-sheet workbook. Both are editable in the app (and in the workbook)."""
@@ -73,6 +104,7 @@ def mount(app: FastAPI) -> None:
     from app.sterling_app.database import Base, SessionLocal, engine
 
     Base.metadata.create_all(bind=engine)
+    _ensure_columns(engine)
     # every committed change debounce-saves the workbook
     event.listens_for(SessionLocal, "after_commit")(lambda session: xlsx_store.mark_dirty())
     xlsx_store.startup()  # seed/load the workbook into the cache

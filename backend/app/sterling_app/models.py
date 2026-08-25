@@ -94,8 +94,20 @@ class PlanTops(Base):
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), index=True, default=None)
     material: Mapped[str] = mapped_column(String(100), default="Laminate")
     rate_sqft: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), default=None)  # blank = $26
-    k_sinks: Mapped[int] = mapped_column(default=0)  # kitchen sinks (cutouts match)
-    v_sinks: Mapped[int] = mapped_column(default=0)  # vanity sinks (cutouts match)
+    k_sinks: Mapped[int] = mapped_column(default=0)  # kitchen sinks
+    v_sinks: Mapped[int] = mapped_column(default=0)  # vanity sinks
+    # Cutouts normally match the sink count, but not always (EX1 Bowen has
+    # cutouts with no sink). None = same as the sink count.
+    k_cutouts: Mapped[int | None] = mapped_column(default=None)
+    v_cutouts: Mapped[int | None] = mapped_column(default=None)
+    # The Top Pricing Sheet is supposed to pull sink and cutout prices from the
+    # builder-tier table, but on 33 of 68 plans they were typed in by hand and
+    # differ from the tier (DRH Carol STD charges 100/25/40/25 where the tier
+    # says 60/40/25/40). Blank = use the settings rate.
+    k_sink_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), default=None)
+    k_cutout_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), default=None)
+    v_sink_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), default=None)
+    v_cutout_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), default=None)
 
     pieces: Mapped[list["TopPiece"]] = relationship(
         back_populates="tops", cascade="all, delete-orphan", order_by="TopPiece.id"

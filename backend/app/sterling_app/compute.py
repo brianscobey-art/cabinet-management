@@ -201,18 +201,28 @@ def sku_unit_counts(db: Session, job: Job) -> tuple[int | None, int | None]:
 def tops_total(db: Session, tops) -> dict:
     """Top Pricing Sheet math: per-area sqft (rounded to whole) x rate + sinks
     + cutouts. Rate is already the charge rate — tops add to sale after margin."""
+    def per_plan(attr, key):
+        """The plan's own rate when it has one, else the global setting."""
+        val = getattr(tops, attr, None)
+        return Decimal(val) if val is not None else matrix_rate(db, key)
+
     rate = Decimal(tops.rate_sqft) if tops.rate_sqft is not None else matrix_rate(db, "top_rate")
-    k_sink = matrix_rate(db, "top_k_sink")
-    v_sink = matrix_rate(db, "top_v_sink")
-    cutout = matrix_rate(db, "top_cutout")
+    k_sink = per_plan("k_sink_rate", "top_k_sink")
+    v_sink = per_plan("v_sink_rate", "top_v_sink")
+    k_cutout = per_plan("k_cutout_rate", "top_cutout")
+    v_cutout = per_plan("v_cutout_rate", "top_cutout")
+    k_cuts = getattr(tops, "k_cutouts", None)
+    v_cuts = getattr(tops, "v_cutouts", None)
+    k_cuts = tops.k_sinks if k_cuts is None else k_cuts
+    v_cuts = tops.v_sinks if v_cuts is None else v_cuts
     sqft = {"Kitchen": Decimal("0"), "Vanity": Decimal("0")}
     for p in tops.pieces:
         area = "Vanity" if p.area == "Vanity" else "Kitchen"
         sqft[area] += Decimal(p.qty) * Decimal(p.width) * Decimal(p.depth) / Decimal("144")
     k_sqft = sqft["Kitchen"].quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     v_sqft = sqft["Vanity"].quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-    kitchen = money(k_sqft * rate + tops.k_sinks * (k_sink + cutout))
-    vanity = money(v_sqft * rate + tops.v_sinks * (v_sink + cutout))
+    kitchen = money(k_sqft * rate + tops.k_sinks * k_sink + k_cuts * k_cutout)
+    vanity = money(v_sqft * rate + tops.v_sinks * v_sink + v_cuts * v_cutout)
     return {
         "rate": rate, "k_sqft": k_sqft, "v_sqft": v_sqft,
         "kitchen": kitchen, "vanity": vanity, "total": money(kitchen + vanity),
