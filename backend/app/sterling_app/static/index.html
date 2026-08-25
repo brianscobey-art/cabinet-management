@@ -2879,6 +2879,29 @@ async function renderReports(key) {
     }).join("") + "</tr>";
   }).join("");
 
+  // Division summary — the same rollup the Excel Summary tab and the deck use.
+  const gcols = d.report.group_columns || [];
+  const groups = d.groups || [];
+  const gtable = !groups.length ? "" : `
+    <h2 style="margin:22px 0 8px; font-size:18px">By division</h2>
+    <p class="muted" style="margin:0 0 10px; font-size:13px">Margin is dollar-weighted,
+      so a plan built once does not swing a division like one built twenty times.
+      Under 10% needs pricing adjusted.</p>
+    <div class="card" style="padding:0; overflow-x:auto; margin-bottom:22px">
+      <table class="rtable"><thead><tr>${gcols.map(c =>
+        `<th class="${c.kind === "text" ? "" : "r"}">${esc(c.label)}</th>`).join("")}
+      </tr></thead><tbody>${groups.map(g => {
+        const low = Number(g.margin) < 0.10;
+        return `<tr class="${low ? "r-loss" : "r-ok"}">` + gcols.map(c => {
+          const fmt = REPORT_FMT[c.kind] || REPORT_FMT.text;
+          const align = c.kind === "text" ? "" : " r";
+          const hot = low && (c.key === "margin" || c.key === "action");
+          return `<td class="${align}${hot ? " negv" : ""}"><b style="font-weight:${hot ? 600 : 400}">${
+            fmt(g[c.key])}</b></td>`;
+        }).join("") + "</tr>";
+      }).join("")}</tbody></table>
+    </div>`;
+
   const skipped = Object.entries(d.meta.skipped || {})
     .map(([k, v]) => `${v} ${esc(k)}`).join(", ");
 
@@ -2897,6 +2920,8 @@ async function renderReports(key) {
       </div>
     </div>
     <div class="row" style="margin:16px 0">${tiles}</div>
+    ${gtable}
+    <h2 style="margin:0 0 8px; font-size:18px">Every plan</h2>
     <div class="card" style="padding:0; overflow-x:auto">
       <table class="rtable"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
     </div>

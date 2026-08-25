@@ -16,82 +16,118 @@ PCT_FMT = '0.0%'
 
 
 # ---------------------------------------------------------------- Excel -----
-def to_xlsx(data: dict) -> io.BytesIO:
-    from openpyxl import Workbook
+def _sheet(wb, title, cols, rows, *, heading=None, subtitle=None, notes=None,
+           first=False):
+    """One formatted sheet: heading, header band, rows, autofilter, notes."""
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
-    rep, meta, rows = data["report"], data["meta"], data["rows"]
-    cols = rep["columns"]
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Report"
+    ws = wb.active if first else wb.create_sheet()
+    # Excel caps sheet names at 31 chars and forbids : \ / ? * [ ]
+    safe = title[:31]
+    for ch in (":", chr(92), "/", "?", "*", "[", "]"):
+        safe = safe.replace(ch, "-")
+    ws.title = safe
 
     head = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
     fill = PatternFill("solid", fgColor=CARTER_GREEN)
     thin = Side(style="thin", color="D9D9D9")
 
-    ws["A1"] = rep["title"]
-    ws["A1"].font = Font(name="Calibri", size=16, bold=True, color=CARTER_GREEN)
-    bits = [b for b in (meta.get("period"), meta.get("source"),
-                        f"generated {meta.get('generated', '')}") if b]
-    ws["A2"] = "  |  ".join(bits)
-    ws["A2"].font = Font(name="Calibri", size=10, color="666666")
+    r = 1
+    if heading:
+        ws.cell(row=1, column=1, value=heading).font = Font(
+            name="Calibri", size=15, bold=True, color=CARTER_GREEN)
+        r = 2
+        if subtitle:
+            ws.cell(row=2, column=1, value=subtitle).font = Font(
+                name="Calibri", size=10, color="666666")
+            r = 3
+        r += 1
 
-    # Headline figures across row 4 — the same tiles the screen shows.
-    r = 4
-    for i, (label, value, sub) in enumerate(meta.get("headline", [])):
-        c = 1 + i * 3
-        ws.cell(row=r, column=c, value=label).font = Font(name="Calibri", size=9, bold=True, color="666666")
-        cell = ws.cell(row=r + 1, column=c, value=value)
-        cell.font = Font(name="Calibri", size=14, bold=True, color=CARTER_GREEN)
-        ws.cell(row=r + 2, column=c, value=sub).font = Font(name="Calibri", size=9, color="999999")
-
-    header_row = 8
+    header_row = r
     for i, col in enumerate(cols, start=1):
         cell = ws.cell(row=header_row, column=i, value=col["label"])
         cell.font = head
         cell.fill = fill
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
+    status_key = "action" if any(c["key"] == "action" for c in cols) else "status"
     for j, row in enumerate(rows, start=header_row + 1):
         for i, col in enumerate(cols, start=1):
-            v = row.get(col["key"])
-            cell = ws.cell(row=j, column=i, value=v)
+            cell = ws.cell(row=j, column=i, value=row.get(col["key"]))
             cell.border = Border(bottom=thin)
-            kind = col["kind"]
-            if kind == "money":
+            if col["kind"] == "money":
                 cell.number_format = MONEY_FMT
-                cell.alignment = Alignment(horizontal="right")
-            elif kind == "pct":
+            elif col["kind"] == "pct":
                 cell.number_format = PCT_FMT
+            if col["kind"] in ("money", "pct", "num"):
                 cell.alignment = Alignment(horizontal="right")
-            elif kind == "num":
-                cell.alignment = Alignment(horizontal="right")
-        status = str(row.get("status", ""))
-        if status:
-            colour = NEG if status.startswith("Below cost") else WARN if status.startswith("Below") else POS
-            ws.cell(row=j, column=len(cols)).font = Font(name="Calibri", size=11, bold=True, color=colour)
+        state = str(row.get(status_key, ""))
+        if state:
+            colour = (NEG if state.startswith(("Below cost", "Adjust"))
+                      else WARN if state.startswith(("Below", "Watch")) else POS)
+            idx = next(i for i, c in enumerate(cols, start=1) if c["key"] == status_key)
+            ws.cell(row=j, column=idx).font = Font(name="Calibri", size=11, bold=True, color=colour)
 
-    widths = {"text": 26, "num": 9, "money": 14, "pct": 10, "pill": 15}
+    widths = {"text": 26, "num": 11, "money": 14, "pct": 11, "pill": 15}
     for i, col in enumerate(cols, start=1):
         ws.column_dimensions[get_column_letter(i)].width = widths.get(col["kind"], 14)
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
-    ws.auto_filter.ref = (f"A{header_row}:"
-                          f"{get_column_letter(len(cols))}{header_row + len(rows)}")
-
-    if rep.get("notes"):
+    if rows:
+        ws.auto_filter.ref = (f"A{header_row}:"
+                              f"{get_column_letter(len(cols))}{header_row + len(rows)}")
+    if notes:
         n = header_row + len(rows) + 2
         ws.cell(row=n, column=1, value="How this is measured").font = Font(
             name="Calibri", size=10, bold=True)
-        ws.cell(row=n + 1, column=1, value=rep["notes"]).font = Font(
+        ws.cell(row=n + 1, column=1, value=notes).font = Font(
             name="Calibri", size=9, color="666666")
-        skipped = meta.get("skipped") or {}
-        if skipped:
-            txt = "Excluded: " + ", ".join(f"{v} {k}" for k, v in skipped.items())
-            ws.cell(row=n + 2, column=1, value=txt).font = Font(
-                name="Calibri", size=9, color="666666")
+    return ws
+
+
+def to_xlsx(data: dict) -> io.BytesIO:
+    """Summary tab, every plan, then one tab per division."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    rep, meta, rows = data["report"], data["meta"], data["rows"]
+    groups = data.get("groups") or []
+    cols = rep["columns"]
+    gcols = rep.get("group_columns") or []
+
+    wb = Workbook()
+    period = "  |  ".join(b for b in (meta.get("period"), meta.get("source"),
+                                      f"generated {meta.get('generated', '')}") if b)
+
+    # --- Summary: divisions, worst margin first -----------------------------
+    if groups:
+        ws = _sheet(wb, "Summary", gcols, groups, heading=rep["title"],
+                    subtitle=period, first=True)
+        n = len(groups) + 6
+        ws.cell(row=n, column=1, value="Divisions under 10% need pricing adjusted.").font = Font(
+            name="Calibri", size=10, bold=True, color=NEG)
+        for i, (label, value, note) in enumerate(meta.get("headline", [])):
+            ws.cell(row=n + 2 + i, column=1, value=label).font = Font(name="Calibri", size=10)
+            ws.cell(row=n + 2 + i, column=2, value=value).font = Font(
+                name="Calibri", size=10, bold=True, color=CARTER_GREEN)
+            ws.cell(row=n + 2 + i, column=3, value=note).font = Font(
+                name="Calibri", size=9, color="999999")
+        _sheet(wb, "All plans", cols, rows, heading="Every plan",
+               subtitle=period, notes=rep.get("notes"))
+    else:
+        _sheet(wb, "Report", cols, rows, heading=rep["title"], subtitle=period,
+               notes=rep.get("notes"), first=True)
+
+    # --- one tab per division ----------------------------------------------
+    gkey = rep.get("group_by")
+    if gkey and groups:
+        for g in groups:
+            name = g["division"]
+            sub = [r for r in rows if (r.get(gkey) or "—") == name]
+            _sheet(wb, name, cols, sub, heading=name,
+                   subtitle=(f"{g['plans']} plans · {g['houses']} houses · "
+                             f"margin {g['margin'] * 100:.1f}% · "
+                             f"{g['below10']} under 10% · {g['action']}"))
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -161,6 +197,46 @@ def to_pptx(data: dict, top_n: int = 12) -> io.BytesIO:
             textbox(s, left, Inches(2.0), w, Inches(0.4), label.upper(), 12, color=grey)
             textbox(s, left, Inches(2.4), w, Inches(1.0), value, 34, bold=True, color=green)
             textbox(s, left, Inches(3.4), w, Inches(0.6), note, 11, color=grey)
+
+    # --- 2b. divisions ------------------------------------------------------
+    groups = data.get("groups") or []
+    if groups:
+        s = prs.slides.add_slide(blank)
+        textbox(s, Inches(0.9), Inches(0.5), Inches(11.5), Inches(0.6),
+                "By division", 30, bold=True, color=green)
+        textbox(s, Inches(0.9), Inches(1.15), Inches(11.5), Inches(0.4),
+                "Margin is dollar-weighted. Anything under 10% needs pricing adjusted.",
+                13, color=grey)
+        gcols = [c for c in (rep.get("group_columns") or [])
+                 if c["key"] in ("division", "plans", "houses", "avg_po",
+                                 "margin", "below10", "action")]
+        tbl = s.shapes.add_table(len(groups) + 1, len(gcols), Inches(0.9), Inches(1.8),
+                                 Inches(11.5), Inches(0.45 + 0.42 * len(groups))).table
+        for i, c in enumerate(gcols):
+            cell = tbl.cell(0, i)
+            cell.text = c["label"]
+            para = cell.text_frame.paragraphs[0]
+            para.font.size = Pt(12)
+            para.font.bold = True
+            para.font.color.rgb = RGBColor.from_string("FFFFFF")
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = green
+        for r_i, g in enumerate(groups, start=1):
+            for c_i, c in enumerate(gcols):
+                v = g.get(c["key"])
+                if c["kind"] == "money":
+                    txt = ("-$" if float(v) < 0 else "$") + f"{abs(float(v)):,.0f}"
+                elif c["kind"] == "pct":
+                    txt = f"{float(v) * 100:.1f}%"
+                else:
+                    txt = str(v)
+                cell = tbl.cell(r_i, c_i)
+                cell.text = txt
+                para = cell.text_frame.paragraphs[0]
+                para.font.size = Pt(12)
+                if c["key"] in ("margin", "action") and g["margin"] < 0.10:
+                    para.font.bold = True
+                    para.font.color.rgb = neg
 
     # --- 3. worst offenders chart ------------------------------------------
     worst = [r for r in rows if float(r.get("exp", 0)) < 0][:top_n]

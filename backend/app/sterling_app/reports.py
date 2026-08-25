@@ -33,6 +33,7 @@ class Report:
     build: Callable
     notes: str = ""
     inputs: list[dict] = field(default_factory=list)
+    group_by: str | None = None   # column to split into per-group tabs
 
 
 # --------------------------------------------------------------------------
@@ -51,6 +52,57 @@ MARGIN_COLUMNS = [
     ("margin", "Margin", "pct"),
     ("target", "Target", "pct"),
     ("status", "Status", "text"),
+]
+
+
+ADJUST_BELOW = 0.10   # a division under this needs its pricing revisited
+
+
+def rollup(rows: list[dict], group_key: str, target_default: float = 0.15) -> list[dict]:
+    """Group plan rows into a per-division summary.
+
+    Margin is DOLLAR-WEIGHTED, not the mean of the plan margins: a plan built
+    once should not move a division as much as one built twenty times, and the
+    mean would let a single bad one-off drag the whole division under.
+    """
+    groups: dict[str, list[dict]] = collections.defaultdict(list)
+    for r in rows:
+        groups[r.get(group_key) or "—"].append(r)
+
+    out = []
+    for name, rs in groups.items():
+        houses = sum(r["n"] for r in rs)
+        revenue = sum(r["avg"] * r["n"] for r in rs)
+        cost = sum(r["cogs"] * r["n"] for r in rs)
+        margin = (revenue - cost) / revenue if revenue else 0.0
+        target = max((r.get("target") or target_default) for r in rs) if rs else target_default
+        below = sum(1 for r in rs if r["margin"] < ADJUST_BELOW)
+        action = ("Adjust pricing" if margin < ADJUST_BELOW
+                  else "Watch" if margin < target else "OK")
+        out.append({
+            "division": name, "plans": len(rs), "houses": houses,
+            "revenue": round(revenue, 2), "cost": round(cost, 2),
+            "avg_po": round(revenue / houses, 2) if houses else 0.0,
+            "margin": round(margin, 4), "target": round(target, 4),
+            "below10": below,
+            "exposure": round(sum(r["exp"] for r in rs), 2),
+            "action": action,
+        })
+    out.sort(key=lambda g: g["margin"])
+    return out
+
+
+DIVISION_COLUMNS = [
+    ("division", "Division", "text"),
+    ("plans", "Plans", "num"),
+    ("houses", "Houses", "num"),
+    ("avg_po", "Avg PO", "money"),
+    ("revenue", "Revenue", "money"),
+    ("cost", "Cost", "money"),
+    ("margin", "Avg margin", "pct"),
+    ("below10", "Plans under 10%", "num"),
+    ("exposure", "12-month", "money"),
+    ("action", "Action", "text"),
 ]
 
 
@@ -190,6 +242,7 @@ REPORTS: dict[str, Report] = {
               "ranked by 12-month exposure.",
         columns=MARGIN_COLUMNS,
         build=build_plan_margin,
+        group_by="division",
         notes=(
             "PO amounts are summed per job — a house can carry a change order or "
             "backcharge as a second PO line. Margin is against cabinet cost, not "
@@ -206,9 +259,13 @@ def run(key: str, db, **kwargs) -> dict:
         raise KeyError(key)
     data = rep.build(db, **kwargs)
     data["report"] = {"key": rep.key, "title": rep.title, "blurb": rep.blurb,
-                      "notes": rep.notes,
+                      "notes": rep.notes, "group_by": rep.group_by,
                       "columns": [{"key": k, "label": lb, "kind": kd}
-                                  for k, lb, kd in rep.columns]}
+                                  for k, lb, kd in rep.columns],
+                      "group_columns": [{"key": k, "label": lb, "kind": kd}
+                                        for k, lb, kd in DIVISION_COLUMNS]}
+    if rep.group_by:
+        data["groups"] = rollup(data["rows"], rep.group_by)
     today = date.today()
     # %-m is glibc-only; this app runs on Windows too.
     data["meta"]["generated"] = f"{today.month}/{today.day}/{today:%y}"
