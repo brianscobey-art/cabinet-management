@@ -172,10 +172,19 @@ def main() -> None:
         else:
             status = "OK"
 
+        # Cost is stable and 24 of 32 repeat plans carry an IDENTICAL PO every
+        # time, so a gap is not drift or variance — it is a fixed contract price
+        # that repeats on every future house. Exposure is what that costs over
+        # the 12 months of POs in this report.
+        spread = max(amounts) - min(amounts)
+        fixed = "Fixed" if spread < 1 else f"Varies ${spread:,.0f}"
+        gap_house = avg_po - sale
+        exposure = gap_house * len(jobs)
+
         row = [
-            p["division"], plan, len(jobs),
+            p["division"], plan, len(jobs), fixed,
             round(avg_po, 2), round(min(amounts), 2), round(max(amounts), 2),
-            round(cogs, 2), round(sale, 2), round(avg_po - sale, 2),
+            round(cogs, 2), round(sale, 2), round(gap_house, 2), round(exposure, 2),
             round(actual, 4), round(target, 4), round(actual - target, 4),
             round(gap_total, 2), status,
         ]
@@ -183,15 +192,16 @@ def main() -> None:
         if status != "OK":
             review_rows.append(row)
 
-    summary_rows.sort(key=lambda r: r[9])
-    review_rows.sort(key=lambda r: r[9])
+    summary_rows.sort(key=lambda r: r[10])      # worst 12-month exposure first
+    review_rows.sort(key=lambda r: r[10])
 
-    headers = ["Division", "Plan", "Jobs", "Avg PO", "Min PO", "Max PO",
-               "Sterling COGS", "Sterling Sale", "Avg PO vs Sale",
-               "Actual Margin", "Target", "Margin Gap", "$ Short (all jobs)", "Status"]
-    widths = [17, 28, 6, 12, 12, 12, 14, 14, 15, 13, 9, 12, 17, 18]
-    money = (4, 5, 6, 7, 8, 9, 13)
-    pct = (10, 11, 12)
+    headers = ["Division", "Plan", "Houses (12mo)", "PO price", "Avg PO",
+               "Min PO", "Max PO", "Sterling COGS", "Sterling Sale",
+               "Gap / house", "12-month exposure", "Actual Margin", "Target",
+               "Margin Gap", "$ Short vs target", "Status"]
+    widths = [17, 28, 14, 14, 12, 12, 12, 14, 14, 13, 18, 13, 9, 12, 17, 18]
+    money = (5, 6, 7, 8, 9, 10, 11, 15)
+    pct = (12, 13, 14)
 
     wb1 = Workbook()
     write_sheet(wb1.active, headers, widths, summary_rows, money, pct)
@@ -203,7 +213,7 @@ def main() -> None:
     write_sheet(wb2.active, headers, widths, review_rows, money, pct)
     wb2.active.title = "Needs Review"
     for r in range(2, wb2.active.max_row + 1):
-        if str(wb2.active.cell(row=r, column=14).value).startswith("LOSS"):
+        if str(wb2.active.cell(row=r, column=16).value).startswith("LOSS"):
             for c in range(1, len(headers) + 1):
                 wb2.active.cell(row=r, column=c).font = Font(name="Calibri", size=11, color=RED, bold=True)
     f2 = out / f"Plans Needing Margin Review {stamp}.xlsx"
@@ -215,12 +225,14 @@ def main() -> None:
           f"{no_plan} job has no plan, {not_priced} plan not priced in Sterling")
     print(f"\nplans below target: {len(review_rows)} of {len(summary_rows)}")
     print(f"total annualised shortfall on these POs: ${total_gap:,.0f}")
-    print(f"\nwrote:\n  {f1}\n  {f2}")
-
-    print(f"\n{'plan':<28}{'n':>3}{'avg PO':>10}{'cogs':>10}{'actual':>9}{'target':>8}  status")
+    under = sum(r[10] for r in summary_rows if r[10] < 0)
+    over = sum(r[10] for r in summary_rows if r[10] > 0)
+    print(f"")
+    print(f"below our sale price: ${-under:,.0f} | above: ${over:,.0f} | NET ${-(under + over):,.0f}")
+    print(f"")
+    print(f"{'plan':<28}{'n':>4}{'PO':>14}{'gap/house':>11}{'12-month':>11}")
     for r in review_rows[:12]:
-        print(f"{r[1][:27]:<28}{r[2]:>3}{r[3]:>10,.0f}{r[6]:>10,.0f}"
-              f"{r[9]*100:>8.1f}%{r[10]*100:>7.1f}%  {r[13]}")
+        print(f"{r[1][:27]:<28}{r[2]:>4}{str(r[3]):>14}{r[9]:>11,.0f}{r[10]:>11,.0f}")
 
 
 if __name__ == "__main__":
