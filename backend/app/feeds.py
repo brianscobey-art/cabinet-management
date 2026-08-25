@@ -18,6 +18,7 @@ import re
 import shutil
 import tempfile
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -428,6 +429,7 @@ def sync_new_orders(db: Session, path: Path) -> dict:
     rows = wb["New Orders"].iter_rows(min_row=2, values_only=True)
     headers = [str(h).replace("\n", " ").strip() if h else "" for h in next(rows)]
     idx = {h: i for i, h in enumerate(headers)}
+    norm = {" ".join(h.split()).lower(): h for h in headers if h}
 
     def col(prefix: str) -> str | None:
         return next((h for h in headers if h.startswith(prefix)), None)
@@ -462,6 +464,50 @@ def sync_new_orders(db: Session, path: Path) -> dict:
                 setattr(checklist, f"{stage}_done", True)
                 setattr(checklist, f"{stage}_date", done_date)
                 changed = True
+
+        # --- adopt the columns the workbook was the only home for ----------
+        # CabinetTron generates this sheet now, so these have to live in the db
+        # or regenerating it would blank them. Fill-blanks-only: a value already
+        # in the app always wins, and re-importing our own output is a no-op.
+        # Headers carry stray double spaces ("Install  Pay $"), so match on the
+        # space-collapsed name rather than the literal string.
+        def get(name: str):
+            key = norm.get(" ".join(name.split()).lower())
+            return row.get(key) if key else None
+
+        def adopt(attr: str, value, cast=None):
+            nonlocal changed
+            if value in (None, "") or getattr(checklist, attr) is not None:
+                return
+            try:
+                setattr(checklist, attr, cast(value) if cast else value)
+            except (TypeError, ValueError):
+                return
+            changed = True
+
+        def _int(v):
+            return int(float(str(v).strip()))
+
+        adopt("setup_date", _as_date(get("Setup Date")))
+        adopt("carter_po_number", get("Carter PO #"), lambda v: str(v).strip()[:50])
+        adopt("carter_so_number", get("Carter SO #"), lambda v: str(v).strip()[:50])
+        adopt("carter_po_date", _as_date(get("Carter PO Date")))
+        adopt("so_number", get("Everluxe SO #"), lambda v: str(v).strip()[:50])
+        adopt("so_amount", get("Everluxe SO $"), lambda v: Decimal(str(v)))
+        adopt("lumber_2x4x8", get("2x4x8 SYP #2"), _int)
+        adopt("lumber_1x4x8", get("1x4x8 SYP #2"), _int)
+        adopt("lumber_1x6x8", get("1x6x8 SYP #2"), _int)
+        adopt("plywood_half", get('1/2" Plywood'), _int)
+        adopt("misc_materials", get("Misc"), lambda v: str(v).strip()[:200])
+        adopt("folder_name", get("Folder Name"), lambda v: str(v).strip()[:200])
+        adopt("po_total", get("Total PO ($)"), lambda v: Decimal(str(v)))
+        # Install pay is never invented — but this is the workbook's own number
+        # coming home, not a guess, and dropping it would lose 93 rows.
+        adopt("install_pay", get("Install Pay $"), lambda v: Decimal(str(v)))
+        packet = get("Install Packet in Folder")
+        if packet not in (None, "") and checklist.installer_pay_sheet is None:
+            checklist.installer_pay_sheet = str(packet).strip().lower() in ("yes", "y", "true", "1")
+            changed = True
 
         bits = []
         if row.get(col("Carter PO")):

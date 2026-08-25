@@ -276,6 +276,27 @@ def deliveries_export_public(
     return _deliveries(db, fmt)
 
 
+@router.get("/reports/new-orders-export", dependencies=[Depends(read_access)])
+def new_orders_export(db: Session = Depends(get_db)):
+    """Everything CabinetTron knows about the New Orders Status sheet, keyed by
+    Job Code. The PC-side writer consumes this — see scripts/write_new_orders.py."""
+    from app.new_orders import export_values
+
+    return export_values(db)
+
+
+@router.get("/reports/new-orders-export/public")
+def new_orders_export_public(token: str = Query(...), db: Session = Depends(get_db)):
+    """Same payload for the unattended writer — shares the tracker export token."""
+    from app.models import get_setting
+    from app.new_orders import export_values
+
+    configured = get_setting(db, TRACKER_EXPORT_KEY)
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return export_values(db)
+
+
 @router.get("/reports/po-receipts", dependencies=[Depends(read_access)])
 def po_receipts_report(db: Session = Depends(get_db)):
     return build_po_receipts(db)

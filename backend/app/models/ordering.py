@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -84,6 +84,19 @@ class OrderingChecklist(Base):
     # Ordered page. Deliberately NOT so_total: that one is Order Pack's
     # stage-4 dollar gate (SO vs Carter PO) and must stay agent-written.
     so_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+
+    # --- the rest of the New Orders Status sheet -----------------------
+    # CabinetTron generates that workbook now, so the columns it used to be the
+    # only home for live here. Lumber counts come off the floorplan callouts
+    # ("1-2x4-8" -> 1); anything outside the four named buckets goes to Misc.
+    setup_date: Mapped[date | None] = mapped_column(Date, default=None)
+    carter_so_number: Mapped[str | None] = mapped_column(String(50), default=None)
+    carter_po_date: Mapped[date | None] = mapped_column(Date, default=None)
+    lumber_2x4x8: Mapped[int | None] = mapped_column(Integer, default=None)
+    lumber_1x4x8: Mapped[int | None] = mapped_column(Integer, default=None)
+    lumber_1x6x8: Mapped[int | None] = mapped_column(Integer, default=None)
+    plywood_half: Mapped[int | None] = mapped_column(Integer, default=None)
+    misc_materials: Mapped[str | None] = mapped_column(String(200), default=None)
 
     moved_to_sold_date: Mapped[date | None] = mapped_column(Date, default=None)
     installer_pay_sheet: Mapped[bool | None] = mapped_column(Boolean, default=None)
