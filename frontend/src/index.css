@@ -1286,16 +1286,12 @@ tr.line-done td:nth-child(4) {
 .ms-opt input {
   margin: 0;
 }
-@media (prefers-color-scheme: dark) {
-  .ms-btn,
-  .ms-menu {
-    background: #1e2626;
-    border-color: #3a4646;
-  }
-  .ms-opt:hover {
-    background: #2a3535;
-  }
-}
+/* NO dark-mode override here on purpose. This app is a light-only design — the
+   page background, text and every other control are fixed light values. A
+   prefers-color-scheme block used to darken .ms-btn / .ms-menu alone, so on a
+   machine set to dark the community picker rendered #1e2626 behind the app's
+   normal #262626 text: about 1.05:1, an unreadable black box, while everything
+   around it stayed light. Restore this only as part of theming the whole app. */
 
 /* Forms → Service Request: current requests in the selected community */
 .community-sr {
