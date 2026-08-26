@@ -258,6 +258,7 @@ const routes = {
   "add-items": renderAddItems,
   bids: renderBids,
   reports: renderReports,
+  projections: renderProjections,
   settings: renderSettings,
 };
 async function route() {
@@ -1849,23 +1850,6 @@ async function renderEverluxe() {
       <div class="totals-card" id="evxTotals" style="margin-top:10px"></div>
       <div id="evxLayoutInfo"></div>
     </div>
-    <div class="card" style="padding:0">
-      <div class="toolbar" style="padding:12px 14px 0">
-        <h2>Cabinet Demand Projections</h2>
-        <span class="muted" style="font-size:12px">Total qty per SKU across job line items</span>
-        <div class="spacer"></div>
-        <label class="f">Stages
-          <select id="evxStages">
-            <option value="Lead,Design,Quoted,Revision,Sold">Active pipeline</option>
-            <option value="Sold">Sold only</option>
-            <option value="Quoted,Revision,Sold">Quoted and later</option>
-            <option value="Lead,Design,Quoted,Revision,Sold,Lost">Everything</option>
-          </select></label>
-      </div>
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>SKU</th><th>Description</th><th class="num">Total Qty</th><th class="num">Jobs</th></tr></thead>
-        <tbody id="evxProj"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-      </table></div>
     </div>`;
   loadSkuList();
   const showLayoutInfo = d => {
@@ -2118,6 +2102,29 @@ async function renderEverluxe() {
     location.hash = "#/job/" + job.id;
   };
   reprice();
+}
+
+// ---------- Cabinet demand projections (own page — it is a report, not pricing) ----------
+async function renderProjections() {
+  $("#main").innerHTML = `
+    <h1>Cabinet Demand Projections</h1>
+    <div class="card" style="padding:0">
+      <div class="toolbar" style="padding:12px 14px 0">
+        <span class="muted" style="font-size:12.5px">Total qty per SKU across job line items — what to have on the ground.</span>
+        <div class="spacer"></div>
+        <label class="f">Stages
+          <select id="evxStages">
+            <option value="Lead,Design,Quoted,Revision,Sold">Active pipeline</option>
+            <option value="Sold">Sold only</option>
+            <option value="Quoted,Revision,Sold">Quoted and later</option>
+            <option value="Lead,Design,Quoted,Revision,Sold,Lost">Everything</option>
+          </select></label>
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>SKU</th><th>Description</th><th class="num">Total Qty</th><th class="num">Jobs</th></tr></thead>
+        <tbody id="evxProj"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+      </table></div>
+    </div>`;
   const proj = async () => {
     const d = await api("/everluxe/projections?stages=" + encodeURIComponent($("#evxStages").value));
     $("#evxProj").innerHTML = d.rows.length ? d.rows.map(r => `<tr>
@@ -3043,7 +3050,12 @@ async function renderReports(key) {
           <h3 style="margin:0 0 6px">${esc(r.title)}</h3>
           <p class="muted" style="margin:0 0 14px; font-size:13px">${esc(r.blurb)}</p>
           <a class="btn" href="#/reports/${encodeURIComponent(r.key)}">Run report</a>
-        </div>`).join("")}</div>`;
+        </div>`).join("")}
+        <div class="card" style="flex:1 1 320px">
+          <h3 style="margin:0 0 6px">Cabinet Demand Projections</h3>
+          <p class="muted" style="margin:0 0 14px; font-size:13px">Total qty per SKU across every job line item, by stage — what to have on the ground.</p>
+          <a class="btn" href="#/projections">Run report</a>
+        </div></div>`;
     return;
   }
 
