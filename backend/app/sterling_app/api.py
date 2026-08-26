@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
@@ -958,6 +958,23 @@ class EvxPriceIn(BaseModel):
     lines: list[EvxLine]
 
 
+def _everluxe_item(db: Session, sku: str) -> CatalogItem | None:
+    """Catalog row for a SKU, falling back to the un-handed base (B18L -> B18):
+    layouts draw the handing, the catalog carries one row for both hands."""
+    from app.sterling_app.layout_parse import base_sku
+
+    def hit(s: str):
+        return (
+            db.query(CatalogItem)
+            .filter(CatalogItem.vendor == "Everluxe", CatalogItem.sku.ilike(s))
+            .order_by(CatalogItem.list_price == 0, CatalogItem.id)
+            .first()
+        )
+
+    sku = sku.strip()
+    return hit(sku) or (hit(base_sku(sku.upper())) if base_sku(sku.upper()) != sku.upper() else None)
+
+
 @router.post("/everluxe/price")
 def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
     """Price an ad-hoc Everluxe SKU list with the full matrix (like the workbook):
@@ -1007,12 +1024,7 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
         out, list_total = [], Decimal("0")
         hw_qty = boxes = units = 0
         for ln in lines:
-            item = (
-                db.query(CatalogItem)
-                .filter(CatalogItem.vendor == "Everluxe", CatalogItem.sku.ilike(ln.sku.strip()))
-                .order_by(CatalogItem.list_price == 0, CatalogItem.id)
-                .first()
-            )
+            item = _everluxe_item(db, ln.sku)
             each = compute.group_price(item, group) if item else Decimal("0")
             ext = money(each * ln.qty)
             list_total += ext
@@ -1020,6 +1032,11 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
                 hw_qty += (item.doors + item.drawers) * ln.qty
                 boxes += (item.assemble_value or 0) * ln.qty
                 units += (item.install_value or 0) * ln.qty
+            # Per-line labor, so the sheet shows exactly how install was earned:
+            # boxes/units come from the Everluxe Install-Hardware values on the SKU.
+            asm_each = (item.assemble_value or 0) if item else 0
+            inst_each = (item.install_value or 0) if item else 0
+            pcs_each = (item.doors + item.drawers) if item else 0
             out.append({
                 "sku": ln.sku.strip().upper(), "qty": ln.qty, "found": item is not None,
                 "description": item.description if item else None,
@@ -1027,6 +1044,12 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
                 "list_each": str(each), "ext_list": str(ext),
                 "dealer_each": str(money(each * payload.multiplier)),
                 "dealer_ext": str(money(ext * payload.multiplier)),
+                "install_group": (item.install_group if item else None),
+                "assem_each": asm_each, "assem_units": asm_each * ln.qty,
+                "assembly": str(money(Decimal(asm_each * ln.qty) * assem_rate)),
+                "install_each": inst_each, "install_units": inst_each * ln.qty,
+                "install": str(money(Decimal(inst_each * ln.qty) * install_rate)),
+                "hw_each": pcs_each, "hw_pieces": pcs_each * ln.qty,
             })
         cabinets = money(list_total * payload.multiplier)
         # Assembly ($10/box) belongs with the Everluxe materials; freight is on
@@ -1054,6 +1077,7 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
             "assembly_boxes": boxes, "assembly": str(assembly),
             "install_units": units, "install": str(install),
             "cogs": str(cogs), "margin_pct": str(payload.margin_pct), "sale": str(sale),
+            "assem_rate": str(assem_rate), "install_rate": str(install_rate),
         }
 
     out_lines, totals = price_subset(payload.lines)
@@ -1101,6 +1125,46 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
         "hardware_options": options,
         "grand": {"sale": str(grand_sale), "cogs": str(grand_cogs)},
     }
+
+
+# --- Layout -> quote (drop in the 2020 Design layout, get the SKU list) ---
+
+@router.post("/everluxe/parse-layout")
+async def everluxe_parse_layout(
+    file: UploadFile | None = None,
+    text: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Read a cabinet layout (PDF upload, or its text pasted in) and hand back a
+    quote-ready SKU list with descriptions and quantities already counted."""
+    from app.sterling_app.layout_parse import parse_layout
+
+    raw = await file.read() if file is not None else None
+    if not raw and not (text or "").strip():
+        raise HTTPException(status_code=400, detail="Attach a layout PDF or paste its text")
+
+    catalog = {
+        i.sku.upper(): i
+        for i in db.query(CatalogItem).filter(CatalogItem.vendor == "Everluxe").all()
+    }
+    try:
+        parsed = parse_layout(raw=raw, text=text, known_skus=set(catalog))
+    except Exception as exc:  # a scanned/image-only PDF has no text to read
+        raise HTTPException(status_code=422, detail=f"Could not read this layout: {exc}")
+    if not parsed["lines"]:
+        raise HTTPException(
+            status_code=422,
+            detail="No cabinet SKUs found. If the layout is a scanned image, paste the SKU list instead.",
+        )
+
+    from app.sterling_app.layout_parse import base_sku
+
+    for line in parsed["lines"]:
+        item = catalog.get(line["sku"]) or catalog.get(base_sku(line["sku"]))
+        line["description"] = item.description if item else None
+    # Cabinets first (biggest counts on top), then the callout extras.
+    parsed["lines"].sort(key=lambda l: (l["notes"] == "callout list", -l["qty"], l["sku"]))
+    return parsed
 
 
 # --- Saved Everluxe SKU lists (the Floorplan SKU tab, kept in the app) ---

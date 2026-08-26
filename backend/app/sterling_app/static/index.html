@@ -1825,13 +1825,19 @@ async function renderEverluxe() {
           <select id="evxSaved" style="width:190px"><option value="">— open a saved list —</option></select></label>
         <div class="spacer"></div>
         <button class="ghost" id="evxClear">Clear</button>
+        <button class="gray" id="evxLayout" title="Drop in a 2020 Design layout PDF (or paste its text) and it builds the SKU list">Import Layout</button>
         <button class="gray" id="evxSave" title="Save this SKU list under the plan / job name">Save List</button>
         <button class="gray" id="evxPrint">Print Pricing Sheet</button>
         <button class="orange" id="evxJob">Create Job From List</button>
       </div>
       <div style="overflow-x:auto"><table>
         <thead><tr><th class="num">Qty</th><th>SKU</th><th>Description</th><th>Fin End</th><th>Area</th>
-          <th class="num">List Ea</th><th class="num">Ext List</th><th class="num">Dealer Ext</th><th>Notes</th><th></th></tr></thead>
+          <th class="num">List Ea</th><th class="num">Ext List</th><th class="num">Dealer Ext</th>
+          <th class="num" title="Install group on the SKU (Everluxe Install-Hardware file)">Grp</th>
+          <th class="num" title="Assembly boxes for the line = per-cabinet value × qty">Asm Bx</th>
+          <th class="num" title="Install boxes for the line = per-cabinet value × qty">Inst Bx</th>
+          <th class="num" title="Install boxes × the install rate">Install $</th>
+          <th>Notes</th><th></th></tr></thead>
         <tbody id="evxRows"></tbody>
       </table></div>
       <div class="addline">
@@ -1841,6 +1847,7 @@ async function renderEverluxe() {
         <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
       </div>
       <div class="totals-card" id="evxTotals" style="margin-top:10px"></div>
+      <div id="evxLayoutInfo"></div>
     </div>
     <div class="card" style="padding:0">
       <div class="toolbar" style="padding:12px 14px 0">
@@ -1861,6 +1868,22 @@ async function renderEverluxe() {
       </table></div>
     </div>`;
   loadSkuList();
+  const showLayoutInfo = d => {
+    if (!d) { $("#evxLayoutInfo").innerHTML = ""; return; }
+    const chip = (label, body) => body
+      ? `<div style="min-width:150px"><div class="label" style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)">${label}</div>
+           <div style="font-size:12.5px">${body}</div></div>` : "";
+    const lum = Object.entries(d.lumber || {}).map(([k, v]) => `${v} × ${esc(k)}`).join("<br>");
+    $("#evxLayoutInfo").innerHTML = `
+      <div style="display:flex; gap:22px; flex-wrap:wrap; border-top:1px dashed var(--line); margin-top:10px; padding-top:10px">
+        ${chip("From the layout", `${esc(d.plan || "—")}${d.door_style ? " · " + esc(d.door_style) : ""}`)}
+        ${chip("Not priced (appliance)", d.excluded.map(e => esc(e.sku)).join("<br>"))}
+        ${chip("Cut from F642", d.cut_stock.map(c => `${c.qty} × ${esc(c.sku)}`).join("<br>"))}
+        ${chip("Lumber on the plan", lum)}
+        ${chip("Hardware called out", d.hardware_pieces ? d.hardware_pieces + " pieces" : "")}
+        ${chip("Not in the catalog", d.unknown.map(u => `<span style="color:var(--orange)">${esc(u)}</span>`).join("<br>"))}
+      </div>`;
+  };
   const hwSeparate = () => $("#evxHdwMode").value === "sep";
   const hwOptionSkus = () => ["evxHdw1","evxHdw2","evxHdw3"]
     .map(id => $("#" + id).value.trim().toUpperCase()).filter(Boolean);
@@ -1897,6 +1920,10 @@ async function renderEverluxe() {
       <td class="num">${money(l.list_each)}</td>
       <td class="num">${money(l.ext_list)}</td>
       <td class="num">${money(l.dealer_ext)}</td>
+      <td class="num muted">${esc(l.install_group ?? "")}</td>
+      <td class="num muted" title="${l.assem_each} per cabinet">${l.assem_units || ""}</td>
+      <td class="num muted" title="${l.install_each} per cabinet">${l.install_units || ""}</td>
+      <td class="num">${l.install_units ? money(l.install) : ""}</td>
       <td><input class="evx-notes" data-i="${i}" style="width:150px" value="${esc(l.notes ?? "")}"></td>
       <td><button class="danger small evx-del" data-i="${i}">✕</button></td></tr>`).join("");
     const byArea = $("#evxMode").value === "by_area" && res.areas.length > 1;
@@ -1987,7 +2014,43 @@ async function renderEverluxe() {
   $("#evxHdwMode").addEventListener("change", () => { syncHwMode(); reprice(); });
   syncHwMode();
   loadHardwareList();
-  $("#evxClear").onclick = () => { _evxLines = []; reprice(); };
+  $("#evxClear").onclick = () => { _evxLines = []; window._evxLayout = null; showLayoutInfo(null); reprice(); };
+
+  // Layout -> quote. Everything it finds lands in the editable list, so the
+  // quantities and any missing SKU can be fixed before the sheet prints.
+  $("#evxLayout").onclick = () => openDialog("Import Layout", `
+    <label class="f">Layout PDF<input type="file" id="lyFile" accept=".pdf,application/pdf"></label>
+    <label class="f">…or paste the layout text
+      <textarea id="lyText" rows="6" placeholder="B33&#10;B33&#10;W3336&#10;3-F630&#10;1-TUK"
+        style="width:100%; font-family:ui-monospace,Consolas,monospace; font-size:12px"></textarea></label>
+    <label style="display:flex; gap:8px; align-items:center; font-size:13px">
+      <input type="checkbox" id="lyReplace" checked> Replace the current list</label>
+    <p class="muted" style="font-size:12px; margin:0">Counts each SKU drawn on the plan and reads the
+      qty callouts (3-F630, 1-TUK). Appliance placeholders are skipped and cut-stock fillers are
+      reported separately, never priced twice.</p>`, async () => {
+    const f = $("#lyFile").files[0], txt = $("#lyText").value.trim();
+    if (!f && !txt) throw new Error("Attach a layout PDF or paste its text");
+    const fd = new FormData();
+    if (f) fd.append("file", f);
+    if (txt) fd.append("text", txt);
+    const replace = $("#lyReplace").checked;
+    const d = await api("/everluxe/parse-layout", {method: "POST", body: fd});
+    const add = d.lines.map(l => ({sku: l.sku, qty: l.qty, notes: null}));
+    if (replace) _evxLines = add;
+    else for (const l of add) {
+      const hit = _evxLines.find(x => x.sku.toUpperCase() === l.sku);
+      if (hit) hit.qty += l.qty; else _evxLines.unshift(l);
+    }
+    if (d.plan && !$("#evxPlan").value.trim()) $("#evxPlan").value = d.plan;
+    if (d.door_style) {
+      const opt = [...$("#evxStyle").options].find(o => o.text.toLowerCase().includes(d.door_style.toLowerCase()));
+      if (opt) $("#evxStyle").value = opt.value;
+    }
+    window._evxLayout = d;
+    await reprice();
+    showLayoutInfo(d);
+    toast(`${add.length} SKUs from the layout` + (d.unknown.length ? ` · ${d.unknown.length} not in the catalog` : ""));
+  });
 
   // Saved SKU lists — stored with the builder plan lists, so a saved list also
   // shows up under Create Job From Plan.
@@ -2105,16 +2168,21 @@ function printEverluxeSheet(res, opts) {
     </tr></table>
     <table>
       <thead><tr><th class="num">Qty</th><th>SKU</th><th>Description</th><th>Fin End</th><th>Area</th>
-        <th class="num">List Each</th><th class="num">List Ext</th><th class="num">Dealer Each</th><th class="num">Dealer Ext</th><th>Notes</th></tr></thead>
+        <th class="num">List Each</th><th class="num">List Ext</th><th class="num">Dealer Each</th><th class="num">Dealer Ext</th>
+        <th class="num">Asm Bx</th><th class="num">Inst Bx</th><th class="num">Install $</th><th>Notes</th></tr></thead>
       <tbody>
         ${res.lines.map(l => `<tr>
           <td class="num">${l.qty}</td><td><strong>${esc(l.sku)}</strong></td><td>${esc(l.description ?? "")}</td>
           <td>${esc(l.fin_end ?? "")}</td><td>${esc(l.area ?? "")}</td>
           <td class="num">${money(l.list_each)}</td><td class="num">${money(l.ext_list)}</td>
           <td class="num">${money(l.dealer_each)}</td><td class="num">${money(l.dealer_ext)}</td>
+          <td class="num">${l.assem_units || ""}</td><td class="num">${l.install_units || ""}</td>
+          <td class="num">${l.install_units ? money(l.install) : ""}</td>
           <td>${esc(l.notes ?? "")}</td></tr>`).join("")}
         <tr class="sub-t"><td colspan="6">CABINET SUBTOTAL</td>
-          <td class="num">${money(t.list)}</td><td></td><td class="num">${money(t.cabinets)}</td><td></td></tr>
+          <td class="num">${money(t.list)}</td><td></td><td class="num">${money(t.cabinets)}</td>
+          <td class="num">${t.assembly_boxes}</td><td class="num">${t.install_units}</td>
+          <td class="num">${money(t.install)}</td><td></td></tr>
       </tbody>
     </table>
     <table class="meta"><tr><td style="vertical-align:top; width:3.6in">
@@ -2650,6 +2718,9 @@ async function renderCatalog() {
         <thead><tr><th>SKU</th><th>Description</th><th>Vendor</th><th>Category</th>
           <th class="num">List</th><th class="num" title="Everluxe price groups 1-5">G1–G5</th>
           <th class="num" title="Doors + drawers per cabinet">Drs/Drw</th>
+          <th class="num" title="Install group from the Everluxe Install-Hardware file — editable">Install Grp</th>
+          <th class="num" title="Assembly boxes per cabinet — editable">Asm</th>
+          <th class="num" title="Install boxes per cabinet — editable; every quote reprices off this">Inst</th>
           <th class="num">Mult</th><th class="num">Net</th><th></th></tr></thead>
         <tbody>
         ${items.length ? items.map(i => {
@@ -2664,17 +2735,35 @@ async function renderCatalog() {
             <td class="num">${money(i.list_price)}</td>
             <td class="num muted" style="font-size:11.5px">${gstr}</td>
             <td class="num muted">${i.doors || i.drawers ? i.doors + "/" + i.drawers : ""}</td>
+            <td class="num"><input class="cat-edit inline-edit" data-id="${i.id}" data-f="install_group"
+              style="width:74px" value="${esc(i.install_group ?? "")}"></td>
+            <td class="num"><input class="cat-edit inline-edit" data-id="${i.id}" data-f="assemble_value"
+              type="number" min="0" step="1" style="width:52px" value="${i.assemble_value ?? ""}"></td>
+            <td class="num"><input class="cat-edit inline-edit" data-id="${i.id}" data-f="install_value"
+              type="number" min="0" step="1" style="width:52px" value="${i.install_value ?? ""}"></td>
             <td class="num muted">${i.multiplier ?? "default"}</td>
             <td class="num">${money(Number(i.list_price) * Number(mult))}</td>
             <td><button class="ghost small" onclick='catalogDialog(${JSON.stringify(i).replace(/'/g,"&#39;")})'>Edit</button>
                 <button class="danger small" onclick="delCatalog(${i.id})">✕</button></td>
           </tr>`; }).join("")
-        : `<tr><td colspan="10" class="empty">Catalog is empty — import the DRH workbook or a price sheet, or add SKUs by hand.</td></tr>`}
+        : `<tr><td colspan="13" class="empty">Catalog is empty — import the DRH workbook or a price sheet, or add SKUs by hand.</td></tr>`}
         </tbody>
       </table>
     </div>`;
   $("#cq").addEventListener("input", e => { catFilter = e.target.value;
     clearTimeout(renderCatalog._t); renderCatalog._t = setTimeout(renderCatalog, 300); });
+  // Install group / assembly / install boxes edit in place. Quotes price live off
+  // the catalog, so changing a value here changes every sheet that uses the SKU.
+  $$(".cat-edit").forEach(inp => inp.addEventListener("change", async e => {
+    const el = e.target, field = el.dataset.f, raw = el.value.trim();
+    const value = field === "install_group" ? (raw || null) : (raw === "" ? null : Number(raw));
+    try {
+      await api("/catalog/" + el.dataset.id, {method:"PUT", body: {[field]: value}});
+      el.style.borderColor = "var(--green)";
+      setTimeout(() => el.style.borderColor = "", 900);
+      toast("Saved — quotes using this SKU reprice on their next open");
+    } catch (err) { toast(err.message, true); renderCatalog(); }
+  }));
   $("#addSku").onclick = () => catalogDialog();
   $("#impIH").onclick = async () => {
     const btn = $("#impIH"); btn.disabled = true; btn.textContent = "Importing…";
