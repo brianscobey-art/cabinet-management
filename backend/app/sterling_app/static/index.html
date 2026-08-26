@@ -67,8 +67,8 @@
   td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   tr.click { cursor: pointer; }
   tr.click:hover td { background: #eef7f5; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  th.num { text-align: right; }
+  .num { text-align: center; font-variant-numeric: tabular-nums; }
+  th.num { text-align: center; }
   .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .chip.Lead     { background: #e3ecea; color: #3f5d57; }
   .chip.Design   { background: #d7ecff; color: #1c5d8f; }
@@ -149,7 +149,7 @@
   table.rtable th { position:sticky; top:0; background:#fff; text-align:left; font-size:11px;
     text-transform:uppercase; letter-spacing:.06em; color:#6b7a76; padding:12px 12px 9px;
     border-bottom:1px solid #e3e9e7; white-space:nowrap; }
-  table.rtable th.r, table.rtable td.r { text-align:right; font-variant-numeric:tabular-nums; }
+  table.rtable th.r, table.rtable td.r { text-align:center; font-variant-numeric:tabular-nums; }
   table.rtable td { padding:9px 12px; border-bottom:1px solid #eef2f1; font-size:13.5px; }
   table.rtable td:first-child { border-left:3px solid transparent; font-weight:500; }
   table.rtable tr.r-loss td:first-child { border-left-color:#9e2b25; }
@@ -925,10 +925,20 @@ function bindRoomHandlers(job) {
 async function loadSkuList() {
   if ($("#skuList")) return;
   const items = await api("/catalog");
+  window._skuIndex = items.map(i => String(i.sku).toUpperCase());
   const dl = document.createElement("datalist");
   dl.id = "skuList";
   dl.innerHTML = items.map(i => `<option value="${esc(i.sku)}">${esc(i.description ?? "")}</option>`).join("");
   document.body.appendChild(dl);
+}
+const skuExists = t => (window._skuIndex || []).includes(String(t).toUpperCase());
+// Top recommendation for a partial SKU: shortest catalog SKU that starts with what
+// was typed, falling back to the shortest that merely contains it.
+function bestSku(typed) {
+  const t = String(typed).toUpperCase();
+  const all = window._skuIndex || [];
+  const pick = list => list.sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+  return pick(all.filter(s => s.startsWith(t))) || pick(all.filter(s => s.includes(t))) || null;
 }
 
 async function loadHardwareList() {
@@ -1185,7 +1195,7 @@ function contractHtml(j, hwFinish = "") {
     .colhead { background: #d9d9d9; color: #111; font-weight: 600; text-align: center; }
     /* pricing stays hidden until a payment schedule is selected */
     body.no-price .price { visibility: hidden; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .num { text-align: center; font-variant-numeric: tabular-nums; }
     .ctr { text-align: center; }
     .tot { font-weight: 800; }
     .validity { font-size: 11.5px; text-align: center; }
@@ -1385,7 +1395,7 @@ function quoteHtml(j, mode = "detailed") {
     table { width:100%; border-collapse: collapse; margin-top: 6px; }
     th { text-align:left; font-size:11px; text-transform:uppercase; color:#64807a; border-bottom:2px solid #dde5e3; padding:6px 8px; }
     td { padding: 4px 8px; border-bottom: 1px solid #eef2f1; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .num { text-align: center; font-variant-numeric: tabular-nums; }
     .total-row { font-size: 16px; font-weight: 800; color: #125952; }
     .sub td { font-weight: 700; color: #125952; border-top: 2px solid #dde5e3; }
     .ex td { color: #a3b5b0; }
@@ -1736,7 +1746,7 @@ function printPriceSheet(data, filt) {
     th:first-child { text-align:left; }
     td { padding: 5px 10px; border-bottom: 1px solid #e3ebe9; }
     tr:nth-child(even) td { background: #f7faf9; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .num { text-align: center; font-variant-numeric: tabular-nums; }
     .tot { font-weight: 800; color: #125952; }
     .foot { margin-top: 26px; color:#64807a; font-size: 10.5px; border-top: 1px solid #dde5e3; padding-top: 8px; }
   </style></head><body>
@@ -1792,15 +1802,30 @@ async function renderEverluxe() {
         <label class="f">Fuel % <span class="muted">(optional)</span>
           <input id="evxFuel" type="number" min="0" step="0.1" class="inline-edit" value="0" placeholder="1.8"></label>
         <label class="f">Hardware
+          <select id="evxHdwMode" style="width:150px"
+            title="In the price = one hardware SKU inside the job cost. Priced separately = cabinets without hardware, plus up to three hardware options quoted on their own.">
+            <option value="in">In the price</option>
+            <option value="sep">Priced separately</option>
+          </select></label>
+        <label class="f" id="evxHdwWrap">SKU
           <input id="evxHdw" list="hwList" style="width:110px" placeholder="3910MB / 156MB"
             title="3910 = knob ($1 labor) · 156 = handle ($2 labor) — letters are the color"></label>
+        <label class="f evx-hopt" style="display:none">Option 1
+          <input id="evxHdw1" list="hwList" style="width:110px" placeholder="3910MB"></label>
+        <label class="f evx-hopt" style="display:none">Option 2
+          <input id="evxHdw2" list="hwList" style="width:110px" placeholder="156MB"></label>
+        <label class="f evx-hopt" style="display:none">Option 3
+          <input id="evxHdw3" list="hwList" style="width:110px" placeholder="3910PC"></label>
         <label class="f">Pricing
           <select id="evxMode" title="By area = each area priced completely separately; Merged = one combined total">
             <option value="merged">Merged — one total</option>
             <option value="by_area">By area — separate</option>
           </select></label>
+        <label class="f">Saved lists
+          <select id="evxSaved" style="width:190px"><option value="">— open a saved list —</option></select></label>
         <div class="spacer"></div>
         <button class="ghost" id="evxClear">Clear</button>
+        <button class="gray" id="evxSave" title="Save this SKU list under the plan / job name">Save List</button>
         <button class="gray" id="evxPrint">Print Pricing Sheet</button>
         <button class="orange" id="evxJob">Create Job From List</button>
       </div>
@@ -1813,7 +1838,7 @@ async function renderEverluxe() {
         <input id="evx_qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
         <input id="evx_sku" list="skuList" placeholder="SKU" style="width:200px">
         <button class="small" id="evx_add">Add</button>
-        <span class="muted" style="font-size:12px">Qty, then SKU — Enter adds the line. The matrix prices the list live.</span>
+        <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
       </div>
       <div class="totals-card" id="evxTotals" style="margin-top:10px"></div>
     </div>
@@ -1836,6 +1861,13 @@ async function renderEverluxe() {
       </table></div>
     </div>`;
   loadSkuList();
+  const hwSeparate = () => $("#evxHdwMode").value === "sep";
+  const hwOptionSkus = () => ["evxHdw1","evxHdw2","evxHdw3"]
+    .map(id => $("#" + id).value.trim().toUpperCase()).filter(Boolean);
+  const syncHwMode = () => {
+    $("#evxHdwWrap").style.display = hwSeparate() ? "none" : "";
+    $$(".evx-hopt").forEach(el => el.style.display = hwSeparate() ? "" : "none");
+  };
   const reprice = async () => {
     const lines = _evxLines.filter(l => l.sku.trim());
     if (!lines.length) { $("#evxRows").innerHTML = ""; $("#evxTotals").innerHTML = ""; return; }
@@ -1844,7 +1876,9 @@ async function renderEverluxe() {
       multiplier: Number($("#evxMult").value),
       margin_pct: Number($("#evxMargin").value) || 0,
       fuel_pct: Number($("#evxFuel").value) || 0,
-      hardware_sku: $("#evxHdw").value.trim() || null,
+      hardware_sku: hwSeparate() ? null : ($("#evxHdw").value.trim() || null),
+      include_hardware: !hwSeparate(),
+      hardware_options: hwSeparate() ? hwOptionSkus() : [],
       lines,
     }});
     window._evxLast = res;
@@ -1872,9 +1906,12 @@ async function renderEverluxe() {
       <div class="t"><div class="label">Cabinets</div><div class="value" style="font-size:16px">${money(t.cabinets)}</div></div>
       <div class="t"><div class="label">Assembly (${t.assembly_boxes} bx × $10)</div><div class="value" style="font-size:16px">${money(t.assembly)}</div></div>
       <div class="t"><div class="label">Freight</div><div class="value" style="font-size:16px">${money(t.freight)}</div></div>
-      <div class="t"><div class="label">Hdw (${t.hardware_qty} pc)</div><div class="value" style="font-size:16px">${money(t.hardware_material)}</div></div>
+      ${res.include_hardware === false
+        ? `<div class="t"><div class="label">Hardware (${t.hardware_qty} pc)</div><div class="value" style="font-size:16px; color:var(--muted)">separate</div></div>
+      <div class="t"><div class="label">Tax</div><div class="value" style="font-size:16px">${money(t.tax)}</div></div>`
+        : `<div class="t"><div class="label">Hdw (${t.hardware_qty} pc)</div><div class="value" style="font-size:16px">${money(t.hardware_material)}</div></div>
       <div class="t"><div class="label">Tax</div><div class="value" style="font-size:16px">${money(t.tax)}</div></div>
-      <div class="t"><div class="label">${t.hardware_kind === "handle" ? "Handle" : "Knob"} Labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</div><div class="value" style="font-size:16px">${money(t.hardware_labor)}</div></div>
+      <div class="t"><div class="label">${t.hardware_kind === "handle" ? "Handle" : "Knob"} Labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</div><div class="value" style="font-size:16px">${money(t.hardware_labor)}</div></div>`}
       <div class="t"><div class="label">Install (${t.install_units} bx × $25)</div><div class="value" style="font-size:16px">${money(t.install)}</div></div>
       <div class="t"><div class="label">COGS</div><div class="value">${money(t.cogs)}</div></div>
       <div class="spacer"></div>
@@ -1888,6 +1925,17 @@ async function renderEverluxe() {
              <div class="t"><div class="label">Total Sale</div><div class="value" style="color:var(--orange); font-size:24px">${money(res.grand.sale)}</div></div>
            </div>`
       : band(res.totals);
+    if ((res.hardware_options || []).length) {
+      const base = Number(res.totals.sale);
+      $("#evxTotals").insertAdjacentHTML("beforeend",
+        `<div class="totals-card" style="border-top:1px dashed var(--line); padding-top:8px; width:100%">
+           <div class="t" style="min-width:120px; text-align:left"><div class="label">Hardware options</div>
+             <div class="value" style="font-size:14px">${res.hardware_options[0].qty} pc each</div></div>
+           ${res.hardware_options.map(o => `<div class="t"><div class="label">${esc(o.sku)} · ${o.kind === "handle" ? "handle" : "knob"}</div>
+             <div class="value" style="font-size:16px; color:var(--orange)">${money(o.sale)}</div>
+             <div class="label" style="font-size:10px">with cabinets ${money(base + Number(o.sale))}</div></div>`).join("")}
+         </div>`);
+    }
     $$(".evx-qty").forEach(inp => inp.addEventListener("change", e => {
       _evxLines[Number(e.target.dataset.i)].qty = Number(e.target.value) || 1; reprice();
     }));
@@ -1916,17 +1964,66 @@ async function renderEverluxe() {
     if (!qty || qty < 1) { toast("Enter a quantity first", true); $("#evx_qty").focus(); return; }
     const existing = _evxLines.find(l => l.sku.toUpperCase() === sku.toUpperCase());
     if (existing) existing.qty += qty;
-    else _evxLines.push({sku, qty});
+    else _evxLines.unshift({sku, qty});   // newest line on top
     $("#evx_sku").value = ""; $("#evx_qty").value = ""; $("#evx_qty").focus();
     reprice();
   };
   _evxLines = _evxLines.filter(l => l.sku.trim());
   $("#evx_add").onclick = addLine;
-  $("#evx_sku").addEventListener("keydown", e => { if (e.key === "Enter") addLine(); });
+  // Enter on a partial SKU fills in the rest from the top catalog match (prefix
+  // first, then anywhere in the SKU); a second Enter adds the completed line.
+  $("#evx_sku").addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    const typed = e.target.value.trim().toUpperCase();
+    if (typed && !skuExists(typed)) {
+      const hit = bestSku(typed);
+      if (hit) { e.target.value = hit; e.target.select(); return; }
+    }
+    addLine();
+  });
   $("#evx_qty").addEventListener("keydown", e => { if (e.key === "Enter") $("#evx_sku").focus(); });
-  ["evxStyle","evxMult","evxMargin","evxFuel","evxMode","evxHdw"].forEach(id => $("#" + id).addEventListener("change", reprice));
+  ["evxStyle","evxMult","evxMargin","evxFuel","evxMode","evxHdw",
+   "evxHdw1","evxHdw2","evxHdw3"].forEach(id => $("#" + id).addEventListener("change", reprice));
+  $("#evxHdwMode").addEventListener("change", () => { syncHwMode(); reprice(); });
+  syncHwMode();
   loadHardwareList();
   $("#evxClear").onclick = () => { _evxLines = []; reprice(); };
+
+  // Saved SKU lists — stored with the builder plan lists, so a saved list also
+  // shows up under Create Job From Plan.
+  const loadSaved = async (keep) => {
+    const all = await api("/plan-templates").catch(() => []);
+    $("#evxSaved").innerHTML = '<option value="">— open a saved list —</option>'
+      + all.map(t => `<option value="${esc(t.division)}|${esc(t.plan)}">${esc(t.plan)}${
+          t.division === "Saved" ? "" : " · " + esc(t.division)} (${t.line_count})</option>`).join("");
+    if (keep) $("#evxSaved").value = keep;
+  };
+  loadSaved();
+  $("#evxSave").onclick = async () => {
+    const lines = _evxLines.filter(l => l.sku.trim());
+    if (!lines.length) return toast("Add some SKUs first", true);
+    let name = $("#evxPlan").value.trim();
+    if (!name) {
+      name = (prompt("Save this SKU list as:", "") || "").trim();
+      if (!name) return;
+      $("#evxPlan").value = name;
+    }
+    await api("/everluxe/lists", {method:"POST", body: {plan: name, lines}});
+    await loadSaved("Saved|" + name);
+    toast(`Saved "${name}" — ${lines.length} line${lines.length === 1 ? "" : "s"}`);
+  };
+  $("#evxSaved").addEventListener("change", async e => {
+    const v = e.target.value;
+    if (!v) return;
+    const [division, plan] = v.split("|");
+    if (_evxLines.filter(l => l.sku.trim()).length
+        && !confirm(`Replace the current list with "${plan}"?`)) { e.target.value = ""; return; }
+    const d = await api("/everluxe/lists/items?division=" + encodeURIComponent(division)
+                        + "&plan=" + encodeURIComponent(plan));
+    _evxLines = d.lines.map(l => ({sku: l.sku, qty: l.qty, area: l.area || null}));
+    $("#evxPlan").value = plan;
+    reprice();
+  });
   $("#evxPrint").onclick = () => {
     if (!window._evxLast || !window._evxLast.lines.length) return toast("Add some SKUs first", true);
     printEverluxeSheet(window._evxLast, {
@@ -1978,6 +2075,8 @@ function printEverluxeSheet(res, opts) {
   const today = new Date();
   const dstr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
   const cogs = Number(t.cogs);
+  const hwOpts = res.hardware_options || [];
+  const hwSep = res.include_hardware === false;
   const margins = [...new Set([12, 15, 17, 20, Math.round(Number(t.margin_pct))])].sort((a,b) => a-b);
   const w = window.open("", "_blank", "width=810,height=1050");
   w.document.write(`<!DOCTYPE html><html><head><title>${esc(opts.plan || "Everluxe Pricing")} — Job Pricing</title><style>
@@ -1990,12 +2089,11 @@ function printEverluxeSheet(res, opts) {
     table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
     td, th { border: 1px solid #444; padding: 3px 6px; }
     th { background: #125952; color: #fff; text-align: left; font-size: 10.5px; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .num { text-align: center; font-variant-numeric: tabular-nums; }
     .meta td { border: none; padding: 1px 6px; }
     .meta b { display: inline-block; min-width: 70px; color: #125952; }
     .sub-t td { font-weight: 800; background: #eaf2f0; color: #125952; }
     .roll { width: 3.4in; }
-    .notes { font-size: 10.5px; color: #333; }
   </style></head><body>
     <h1>${esc((opts.plan || "Everluxe Pricing").toUpperCase())}</h1>
     <div class="sub">Carter Kitchen &amp; Bath &nbsp;|&nbsp; Cabinet Item List and Job Pricing</div>
@@ -2026,9 +2124,10 @@ function printEverluxeSheet(res, opts) {
         <tr><td>Assembly (${t.assembly_boxes} boxes × $10)</td><td class="num">${money(t.assembly)}</td></tr>
         <tr><td>Freight (${Math.round(Number(t.freight_pct)*1000)/10}% of cabinets)</td><td class="num">${money(t.freight)}</td></tr>
         ${Number(t.fuel) ? `<tr><td>Fuel surcharge (${t.fuel_pct}%)</td><td class="num">${money(t.fuel)}</td></tr>` : ""}
-        <tr><td>Hardware (${t.hardware_qty} pc)</td><td class="num">${money(t.hardware_material)}</td></tr>
+        ${hwSep ? "" : `<tr><td>Hardware (${t.hardware_qty} pc)</td><td class="num">${money(t.hardware_material)}</td></tr>`}
         <tr><td>Sales tax (7% materials)</td><td class="num">${money(t.tax)}</td></tr>
-        <tr><td>${t.hardware_kind === "handle" ? "Handle" : "Knob"} install labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</td><td class="num">${money(t.hardware_labor)}</td></tr>
+        ${hwSep ? `<tr><td>Hardware (${t.hardware_qty} pc)</td><td class="num">priced separately</td></tr>`
+                : `<tr><td>${t.hardware_kind === "handle" ? "Handle" : "Knob"} install labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</td><td class="num">${money(t.hardware_labor)}</td></tr>`}
         <tr><td>Install (${t.install_units} boxes × $25)</td><td class="num">${money(t.install)}</td></tr>
         <tr class="sub-t"><td>TOTAL COST</td><td class="num">${money(t.cogs)}</td></tr>
       </table>
@@ -2041,13 +2140,24 @@ function printEverluxeSheet(res, opts) {
             <td>${m}%</td><td class="num">${money(s)}</td><td class="num">${money(s - cogs)}</td></tr>`; }).join("")}
       </table>
     </td></tr></table>
-    <div class="band">Notes and Assumptions</div>
-    <div class="notes" style="border:1px solid #444; border-top:none; padding:6px 8px">
-      Priced from the Everluxe catalog at ${esc(opts.door_style || "the base price group")} · dealer multiplier ×${esc(String(opts.multiplier))}.
-      Appliance placeholders (RANGE1.30, REF.2D.36, DISHW24) are never priced or ordered.
-      Hardware count = doors + drawers per SKU; assembly/install units per the Everluxe Install-Hardware values.
-      Freight on dealer cabinet cost; sales tax on materials. Pricing valid (14) calendar days.
-    </div>
+    ${hwOpts.length ? `
+    <div class="band">Hardware Options — priced separately (${hwOpts[0].qty} pieces)</div>
+    <table>
+      <thead><tr><th>Option</th><th>Description</th><th class="num">Pieces</th>
+        <th class="num">Material</th><th class="num">Install Labor</th><th class="num">Cost</th>
+        <th class="num">Price</th><th class="num">Cabinets + Hardware</th></tr></thead>
+      <tbody>
+        ${hwOpts.map(o => `<tr>
+          <td><strong>${esc(o.sku)}</strong></td>
+          <td>${esc(o.description ?? (o.kind === "handle" ? "Handle" : "Knob"))}</td>
+          <td class="num">${o.qty}</td>
+          <td class="num">${money(o.material)}</td>
+          <td class="num">${money(o.labor)}</td>
+          <td class="num">${money(o.cogs)}</td>
+          <td class="num"><strong>${money(o.sale)}</strong></td>
+          <td class="num">${money(Number(t.sale) + Number(o.sale))}</td></tr>`).join("")}
+      </tbody>
+    </table>` : ""}
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
@@ -2193,7 +2303,7 @@ async function renderCoverSheet(id) {
           <tbody>
             ${[["sale_cabinets","Cabinets"],["sale_countertops","Countertops"],["sale_other","Other"]].map(([k,l]) => `
             <tr><td>${l}</td><td class="num"><input class="cv money" data-k="${k}"
-              value="${Number(s[k]) ? money(s[k]) : ""}" placeholder="$0.00" style="width:120px; text-align:right"></td></tr>`).join("")}
+              value="${Number(s[k]) ? money(s[k]) : ""}" placeholder="$0.00" style="width:120px; text-align:center"></td></tr>`).join("")}
             <tr class="sub"><td><strong>Total Sale</strong></td><td class="num" id="cvSale"><strong>${money(s.totals.sale)}</strong></td></tr>
           </tbody>
         </table>
@@ -2372,7 +2482,7 @@ function printCoverSheet(s) {
     th { background:#125952; color:#fff; text-align:left; font-size:10.5px; }
     .band { background:#125952; color:#fff; font-weight:700; padding:3px 8px; font-size:11px; }
     .lbl { background:#eaf2f0; color:#125952; font-weight:600; width:38%; }
-    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .num { text-align:center; font-variant-numeric:tabular-nums; }
     .tot { font-weight:700; }
     .grid { display:flex; gap:10px; align-items:flex-start; }
     .grid > div { flex:1; }

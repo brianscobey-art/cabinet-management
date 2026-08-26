@@ -190,13 +190,13 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             col = _cell(ws, rr, col, PO_SPANS[3], p.get("po_type"), size=10, shrink=True)
             col = _cell(ws, rr, col, PO_SPANS[4],
                         float(p["amount1"]) if p.get("amount1") else None,
-                        align="right", fmt=MONEY, size=10, shrink=True)
+                        align="center", fmt=MONEY, size=10, shrink=True)
             col = _cell(ws, rr, col, PO_SPANS[5],
                         float(p["amount2"]) if p.get("amount2") else None,
-                        align="right", fmt=MONEY, size=10, shrink=True)
+                        align="center", fmt=MONEY, size=10, shrink=True)
             a1, a2 = get_column_letter(MONEY_COL_1), get_column_letter(MONEY_COL_2)
             _cell(ws, rr, col, PO_SPANS[6], f"={a1}{rr}+{a2}{rr}",
-                  align="right", fmt=MONEY, size=10, shrink=True)
+                  align="center", fmt=MONEY, size=10, shrink=True)
         last = first + count - 1
         tr = last + 1
         ws.row_dimensions[tr].height = ROW_TABLE
@@ -204,7 +204,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
               align="right", size=9.5, shrink=True)
         tcol = get_column_letter(TOTAL_COL)
         _cell(ws, tr, TOTAL_COL, PO_SPANS[6], f"=SUM({tcol}{first}:{tcol}{last})",
-              bold=True, align="right", fmt=MONEY_HARD, size=10)
+              bold=True, align="center", fmt=MONEY_HARD, size=10)
         return tr
 
     prod_total_row = po_table(r, "PO's Needed — Products", products,
@@ -242,12 +242,12 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             f"={mat_ref}*{CV}{tax_row}",
             f"={CV}{r}+{CV}{r + 1}+{CV}{r + 2}",
         )[i]
-        _cell(ws, rr, cost_val_col, COST_V, formula, align="right",
+        _cell(ws, rr, cost_val_col, COST_V, formula, align="center",
               fmt=MONEY_HARD, bold=(i == 3), size=10, shrink=True)
     ws.row_dimensions[tax_row].height = ROW_TABLE
     _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9, shrink=True)
     _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 7) / 100,
-          align="right", fmt="0.0%", size=10)
+          align="center", fmt="0.0%", size=10)
 
     contract_val_col = contract_c + CONTRACT_L
     KV = get_column_letter(contract_val_col)
@@ -259,11 +259,11 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         _cell(ws, rr, contract_c, CONTRACT_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5, shrink=True)
         if i < 3:
             v = float(val) if val not in (None, "") and float(val) else None
-            _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="right", fmt=MONEY,
+            _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="center", fmt=MONEY,
                   size=10, shrink=True)
         else:
             _cell(ws, rr, contract_val_col, CONTRACT_V, f"=SUM({KV}{r}:{KV}{r + 2})",
-                  bold=True, align="right", fmt=MONEY_HARD, size=10)
+                  bold=True, align="center", fmt=MONEY_HARD, size=10)
     sale_cell = f"{KV}{r + 3}"
     cogs_cell = f"{CV}{r + 3}"
 
@@ -275,7 +275,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             f"={sale_cell}-{cogs_cell}",
             f'=IF({sale_cell}=0,"",({sale_cell}-{cogs_cell})/{sale_cell})',
         )[i]
-        _cell(ws, rr, margin_val_col, MARGIN_V, formula, align="right",
+        _cell(ws, rr, margin_val_col, MARGIN_V, formula, align="center",
               fmt=(MONEY_HARD if i == 0 else PCT), bold=True, size=10, shrink=True)
     # square off the margin block against the taller cost/contract columns
     for i in (2, 3):

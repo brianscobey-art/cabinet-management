@@ -952,6 +952,9 @@ class EvxPriceIn(BaseModel):
     margin_pct: Decimal = Field(default=Decimal("15"), ge=0, lt=100)
     fuel_pct: Decimal = Field(default=Decimal("0"), ge=0, lt=100)  # optional fuel surcharge % of dealer cost
     hardware_sku: str | None = None  # 3910*=knob ($1 labor), 156*=handle ($2); material from the item
+    include_hardware: bool = True    # False = cabinets priced WITHOUT hardware
+    # Up to three hardware choices priced as separate adders (they print on the sheet)
+    hardware_options: list[str] = Field(default_factory=list, max_length=3)
     lines: list[EvxLine]
 
 
@@ -975,22 +978,29 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
     from decimal import ROUND_HALF_UP as _RH
 
     # Hardware: material from the chosen item; labor $1 knob / $2 handle by family
-    hw_unit, hw_labor_rate = knob_mat, knob_labor
-    hw_kind = compute.hardware_kind(payload.hardware_sku)
-    if payload.hardware_sku:
-        hw_item = (
-            db.query(CatalogItem)
-            .filter(CatalogItem.sku.ilike(payload.hardware_sku.strip()))
-            .order_by(CatalogItem.list_price == 0, CatalogItem.id)
-            .first()
-        )
-        if hw_item:
-            hw_unit = money(
-                Decimal(hw_item.list_price)
-                * (Decimal(hw_item.multiplier) if hw_item.multiplier is not None else Decimal("1"))
+    def resolve_hardware(sku: str | None):
+        """(unit cost, labor rate, kind, description) for a hardware SKU."""
+        unit, labor_rate = knob_mat, knob_labor
+        kind = compute.hardware_kind(sku)
+        desc = None
+        if sku:
+            item = (
+                db.query(CatalogItem)
+                .filter(CatalogItem.sku.ilike(sku.strip()))
+                .order_by(CatalogItem.list_price == 0, CatalogItem.id)
+                .first()
             )
-        if hw_kind == "handle":
-            hw_labor_rate = compute.matrix_rate(db, "handle_labor")
+            if item:
+                unit = money(
+                    Decimal(item.list_price)
+                    * (Decimal(item.multiplier) if item.multiplier is not None else Decimal("1"))
+                )
+                desc = item.description
+            if kind == "handle":
+                labor_rate = compute.matrix_rate(db, "handle_labor")
+        return unit, labor_rate, kind, desc
+
+    hw_unit, hw_labor_rate, hw_kind, _ = resolve_hardware(payload.hardware_sku)
 
     def price_subset(lines):
         """Full matrix over a set of lines -> (out_lines, totals dict)."""
@@ -1024,8 +1034,10 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
         assembly = money(Decimal(boxes) * assem_rate)
         freight = money(cabinets * freight_pct)
         fuel = money(cabinets * payload.fuel_pct / 100)
-        hw_material = money(hw_qty * hw_unit)
-        hw_labor = money(hw_qty * hw_labor_rate)
+        # Priced separately -> no hardware money in the job cost; the piece count
+        # still rides along, because that is what each option gets priced on.
+        hw_material = money(hw_qty * hw_unit) if payload.include_hardware else Decimal("0.00")
+        hw_labor = money(hw_qty * hw_labor_rate) if payload.include_hardware else Decimal("0.00")
         tax = money((cabinets + hw_material) * tax_pct)
         install = money(Decimal(units) * install_rate)
         cogs = money(cabinets + assembly + freight + fuel + hw_material + tax + hw_labor + install)
@@ -1059,12 +1071,85 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
         areas.append({"area": a, "totals": at})
     grand_sale = money(sum((Decimal(a["totals"]["sale"]) for a in areas), Decimal("0")))
     grand_cogs = money(sum((Decimal(a["totals"]["cogs"]) for a in areas), Decimal("0")))
+
+    # Hardware priced as its own line: same piece count, same margin, so the
+    # customer can pick a knob or a handle without repricing the cabinets.
+    hw_pieces = totals["hardware_qty"]
+    options = []
+    for sku in [s.strip() for s in payload.hardware_options if s and s.strip()][:3]:
+        unit, labor_rate, kind, desc = resolve_hardware(sku)
+        material = money(hw_pieces * unit)
+        opt_tax = money(material * tax_pct)
+        labor = money(hw_pieces * labor_rate)
+        opt_cogs = money(material + opt_tax + labor)
+        opt_sale = (
+            money(compute.sell_from_margin(opt_cogs, payload.margin_pct).quantize(Decimal("1"), rounding=_RH))
+            if opt_cogs else Decimal("0.00")
+        )
+        options.append({
+            "sku": sku.upper(), "description": desc, "kind": kind or "knob",
+            "qty": hw_pieces, "unit": str(unit), "material": str(material),
+            "labor_rate": str(labor_rate), "labor": str(labor), "tax": str(opt_tax),
+            "cogs": str(opt_cogs), "sale": str(opt_sale),
+        })
+
     return {
         "lines": out_lines,
         "totals": totals,
         "areas": areas,
+        "include_hardware": payload.include_hardware,
+        "hardware_options": options,
         "grand": {"sale": str(grand_sale), "cogs": str(grand_cogs)},
     }
+
+
+# --- Saved Everluxe SKU lists (the Floorplan SKU tab, kept in the app) ---
+
+SAVED_DIVISION = "Saved"
+
+
+class EvxSaveIn(BaseModel):
+    plan: str = Field(min_length=1, max_length=100)          # list / plan name
+    division: str = Field(default=SAVED_DIVISION, max_length=100)
+    lines: list[EvxLine]
+
+
+@router.get("/everluxe/lists/items")
+def everluxe_list_items(plan: str, division: str = SAVED_DIVISION,
+                        db: Session = Depends(get_db)):
+    """The saved lines of one list, in entry order, for reloading into the pricer."""
+    items = (
+        db.query(PlanTemplateItem)
+        .filter(PlanTemplateItem.division == division, PlanTemplateItem.plan == plan)
+        .order_by(PlanTemplateItem.id)
+        .all()
+    )
+    if not items:
+        raise HTTPException(status_code=404, detail="Saved list not found")
+    return {"division": division, "plan": plan, "lines": [
+        {"sku": i.sku, "qty": i.qty,
+         "area": None if (i.area or "All").strip().lower() == "all" else i.area}
+        for i in items
+    ]}
+
+
+@router.post("/everluxe/lists", status_code=201)
+def everluxe_save_list(payload: EvxSaveIn, db: Session = Depends(get_db)):
+    """Save (or overwrite) a SKU list under a name — same store as the imported
+    builder plan lists, so a saved list also feeds Create Job From Plan."""
+    if not payload.lines:
+        raise HTTPException(status_code=400, detail="Nothing to save")
+    division, plan = payload.division.strip() or SAVED_DIVISION, payload.plan.strip()
+    db.query(PlanTemplateItem).filter(
+        PlanTemplateItem.division == division, PlanTemplateItem.plan == plan
+    ).delete(synchronize_session=False)
+    for ln in payload.lines:
+        db.add(PlanTemplateItem(
+            division=division, plan=plan, sku=ln.sku.strip().upper(),
+            qty=ln.qty, area=(ln.area or None),
+        ))
+    db.commit()
+    return {"division": division, "plan": plan, "line_count": len(payload.lines)}
 
 
 @router.get("/everluxe/projections")

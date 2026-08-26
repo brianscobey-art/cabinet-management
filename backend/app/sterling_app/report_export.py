@@ -61,7 +61,7 @@ def _sheet(wb, title, cols, rows, *, heading=None, subtitle=None, notes=None,
             elif col["kind"] == "pct":
                 cell.number_format = PCT_FMT
             if col["kind"] in ("money", "pct", "num"):
-                cell.alignment = Alignment(horizontal="right")
+                cell.alignment = Alignment(horizontal="center")
         state = str(row.get(status_key, ""))
         if state:
             colour = (NEG if state.startswith(("Below cost", "Adjust"))
