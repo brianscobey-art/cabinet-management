@@ -1533,6 +1533,40 @@ td.fm-col input[type="checkbox"] {
   white-space: pre-wrap;
 }
 
+/* Current phase, sitting above the field measure detail in the same card.
+   Separated by a rule rather than a fill so it reads as part of the widget
+   rather than a banner stuck on top of it. */
+.fm-phase {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #e4ebec;
+}
+
+.fm-phase-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray);
+  width: 100%;
+}
+
+.fm-phase-name {
+  color: var(--brand-ink);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.fm-phase-when {
+  color: var(--gray);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .fm-card dl {
   margin-bottom: 0.5rem;
 }

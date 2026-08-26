@@ -427,6 +427,19 @@ export interface PhaseBoardRow {
   fm_notes: FieldMeasureNote[];
 }
 
+export interface PhaseEntry {
+  id: number;
+  job_id: number;
+  phase: string;
+  source: string;
+  noted_by: string | null;
+  noted_at: string;
+}
+
+/** Phase history for one job, newest first — [0] is the current phase. */
+export const getJobPhases = (jobId: number) =>
+  api<PhaseEntry[]>(`/jobs/${jobId}/phases`);
+
 export const getPhaseDefs = () => api<PhaseDef[]>("/phases");
 export const getPhaseBoard = (communityId: number) =>
   api<PhaseBoardRow[]>(`/phase-board?community_id=${communityId}`);

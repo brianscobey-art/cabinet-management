@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { FieldMeasureDetail, getFieldMeasure } from "../api";
+import {
+  FieldMeasureDetail,
+  PhaseDef,
+  PhaseEntry,
+  getFieldMeasure,
+  getJobPhases,
+  getPhaseDefs,
+} from "../api";
 import { fmtDate } from "../format";
 import { initials } from "./PhasesPage";
 
@@ -20,13 +27,41 @@ export default function FieldMeasureSection({
   redMeasureDate: string | null;
 }) {
   const [fm, setFm] = useState<FieldMeasureDetail | null>(null);
+  const [phase, setPhase] = useState<PhaseEntry | null>(null);
+  const [defs, setDefs] = useState<PhaseDef[]>([]);
 
   useEffect(() => {
     getFieldMeasure(jobId).then(setFm).catch(() => {});
+    // History comes back newest first, so [0] is where the house is now.
+    getJobPhases(jobId)
+      .then((rows) => setPhase(rows[0] ?? null))
+      .catch(() => {});
   }, [jobId]);
+
+  useEffect(() => {
+    getPhaseDefs().then(setDefs).catch(() => {});
+  }, []);
+
+  // Fall back to the raw code rather than showing nothing if the defs are slow
+  // or the code is one the list does not carry.
+  const phaseLabel = phase
+    ? defs.find((d) => d.code === phase.phase)?.label ?? phase.phase
+    : null;
 
   return (
     <div className="card fm-card">
+      <div className="fm-phase">
+        <span className="fm-phase-label">Current phase</span>
+        {phase ? (
+          <>
+            <strong className="fm-phase-name">{phaseLabel}</strong>
+            <span className="fm-phase-when">updated {fmtDate(phase.noted_at)}</span>
+          </>
+        ) : (
+          <strong className="fm-phase-name muted">Not set</strong>
+        )}
+      </div>
+
       <h3>Field Measure</h3>
       <dl>
         <dt>Red field measure</dt>
