@@ -942,7 +942,8 @@ function breakdownCard(j) {
       ${row("Cabinets", money(b.cabinets), true)}
       ${Number(b.hardware_material) || b.hardware_qty ? row(`Hardware (${b.hardware_qty} pc)`, money(b.hardware_material), true) : ""}
       ${Number(b.lumber) ? row("Lumber", money(b.lumber), true) : ""}
-      ${Number(b.freight) ? row("Freight", money(b.freight), true) : ""}
+      ${row("Freight", Number(b.freight) ? money(b.freight)
+        : `<span class="muted">none · Simple model</span>`, true)}
       ${row("Sales tax", money(b.tax), true)}
       ${row("Assembly · install", money(Number(b.assembly) + Number(b.install)), true)}
       ${Number(b.pia) ? row("PIA", money(b.pia), true) : ""}
