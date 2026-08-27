@@ -980,6 +980,14 @@ function roomCard(r) {
       <button class="ghost small r-edit no-print">Edit</button>
       <button class="danger small r-del no-print">Remove</button>
     </div>
+    <div class="addline no-print">
+      <input class="al-qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
+      <input class="al-sku" placeholder="SKU" style="width:200px" list="skuList">
+      <input class="al-desc" placeholder="Description (optional)" style="flex:1; min-width:120px">
+      <input class="al-list" type="number" min="0" step="0.01" placeholder="List $ (blank = catalog)" style="width:150px">
+      <button class="small al-add">Add</button>
+      <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
+    </div>
     <div style="overflow-x:auto"><table>
       <thead><tr>
         <th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">List</th>
@@ -1000,16 +1008,12 @@ function roomCard(r) {
         ${!r.lines.length ? `<tr><td colspan="8" class="muted" style="text-align:center; padding:14px">No line items</td></tr>` : ""}
       </tbody>
     </table></div>
-    <div class="addline no-print">
-      <input class="al-qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
-      <input class="al-sku" placeholder="SKU" style="width:200px" list="skuList">
-      <input class="al-desc" placeholder="Description (optional)" style="flex:1; min-width:120px">
-      <input class="al-list" type="number" min="0" step="0.01" placeholder="List $ (blank = catalog)" style="width:150px">
-      <button class="small al-add">Add</button>
-      <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
-    </div>
   </div>`;
 }
+
+// Adding a line re-renders the page, which would otherwise throw you back to
+// the top. Remember which room was being typed into and land right back there.
+let _resumeEntry = null;
 
 function bindRoomHandlers(job) {
   $$("#rooms .room-card").forEach(card => {
@@ -1033,6 +1037,7 @@ function bindRoomHandlers(job) {
         qty,
         list_price: listRaw === "" ? null : Number(listRaw),
       }});
+      _resumeEntry = roomId;   // re-render scrolls back to this room's entry row
       renderJobDetail(job.id);
     };
     // Enter on a partial SKU fills in the top catalog match; Enter again adds it.
@@ -1057,6 +1062,14 @@ function bindRoomHandlers(job) {
     });
   });
   loadSkuList();
+  if (_resumeEntry !== null) {
+    const back = $(`#rooms .room-card[data-room="${_resumeEntry}"] .al-qty`);
+    _resumeEntry = null;
+    if (back) {
+      back.closest(".addline").scrollIntoView({block: "center", behavior: "instant"});
+      back.focus();
+    }
+  }
 }
 
 async function loadSkuList() {
