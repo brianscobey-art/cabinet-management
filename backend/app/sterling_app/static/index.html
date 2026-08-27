@@ -640,8 +640,13 @@ async function renderJobDetail(id) {
     </div>
 
     <div class="card no-print" style="margin-bottom:16px">
-      <div class="set-title" style="margin-bottom:8px">Pricing selections</div>
-      <div class="settings-grid no-print">
+      <div style="display:flex; align-items:center; gap:10px; cursor:pointer" id="selHead"
+           title="Show or hide the pricing selections">
+        <button class="ghost small" id="selCaret" style="width:26px; padding:2px 0">▾</button>
+        <div class="set-title" style="margin:0">Pricing selections</div>
+        <span class="muted" id="selSummary" style="font-size:12.5px"></span>
+      </div>
+      <div class="settings-grid no-print" id="selBody" style="margin-top:8px">
           <div class="set-group">
             <div class="set-title">Pricing</div>
             <div class="set-row"><span>Margin %</span>
@@ -729,6 +734,35 @@ async function renderJobDetail(id) {
     await api("/jobs/" + j.id, {method:"DELETE"});
     toast("Job deleted"); location.hash = "#/jobs";
   };
+  // Collapsed, the selections show a one-line summary of what is driving price.
+  const selBits = () => {
+    const inst = {none:"No install", cabinet_only:"Cabinet only",
+                  with_knobs:"With knobs", with_handles:"With handles"}[j.install_mode] || j.install_mode;
+    const bits = [
+      (j.margin_pct !== null ? Math.round(Number(j.margin_pct)) : Math.round(Number(window._settings?.default_margin_pct ?? 15))) + "% margin",
+      j.stage,
+      j.cost_model === "matrix" ? "Matrix" : "Simple",
+      "×" + String(Number(j.multiplier_effective)).replace(/^0/, ""),
+      inst,
+    ];
+    if (j.install_mode !== "none") {
+      bits.push("$" + num(j.install_rate_effective, 25).toFixed(0) + "/ea");
+      if (j.install_mode !== "cabinet_only") bits.push("$" + num(j.hardware_rate_effective, 1).toFixed(0) + " hdw");
+    }
+    if (Number(j.assembly)) bits.push("$" + num(j.assembly_rate_effective, 10).toFixed(0) + "/box");
+    if (j.hardware_sku) bits.push(esc(j.hardware_sku));
+    if (Number(j.job_pia)) bits.push("PIA " + money(j.job_pia));
+    return bits.join(" · ");
+  };
+  const setSel = collapsed => {
+    $("#selBody").style.display = collapsed ? "none" : "";
+    $("#selCaret").textContent = collapsed ? "▸" : "▾";
+    $("#selSummary").innerHTML = collapsed ? selBits() : "";
+    localStorage.setItem("ckb_sel_collapsed", collapsed ? "1" : "");
+  };
+  setSel(localStorage.getItem("ckb_sel_collapsed") === "1");
+  $("#selHead").onclick = () => setSel($("#selBody").style.display !== "none");
+
   $("#dupJob").onclick = async () => {
     const copy = await api(`/jobs/${j.id}/duplicate`, {method:"POST"});
     toast("Job duplicated"); location.hash = "#/job/" + copy.id;
