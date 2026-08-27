@@ -112,6 +112,33 @@ def _room_list(room: Room) -> Decimal:
     return money(sum((Decimal(l.list_price) * l.qty for l in room.lines), Decimal("0")))
 
 
+def catalog_by_sku(db: Session, vendor: str | None = "Everluxe") -> dict:
+    """Catalog keyed by SKU *and* by its un-handed base, so a layout's B18L
+    finds the B18 the catalog actually carries. The exact SKU always wins."""
+    from app.sterling_app.layout_parse import base_sku
+
+    q = db.query(CatalogItem)
+    if vendor:
+        q = q.filter(CatalogItem.vendor == vendor)
+    items = q.all()
+    out: dict[str, CatalogItem] = {}
+    for item in items:                      # bases first, exact SKUs overwrite
+        base = base_sku(item.sku.upper())
+        if base != item.sku.upper():
+            out.setdefault(base, item)
+    for item in items:
+        out[item.sku.upper()] = item
+    return out
+
+
+def catalog_lookup(catalog: dict, sku: str):
+    """Exact SKU, else the same cabinet without its L/R handing."""
+    from app.sterling_app.layout_parse import base_sku
+
+    key = sku.strip().upper()
+    return catalog.get(key) or catalog.get(base_sku(key))
+
+
 def is_lumber_room(room: Room) -> bool:
     return room.name.strip().lower() == "lumber"
 
@@ -161,19 +188,13 @@ def hardware_qty(db: Session, job: Job) -> int:
     """Knob/pull count = doors + drawers across all cabinet lines."""
     if job.hardware_qty_override is not None:
         return job.hardware_qty_override
-    skus = {line.sku.strip() for room in job.rooms for line in room.lines}
-    if not skus:
+    if not any(room.lines for room in job.rooms):
         return 0
-    items = {
-        i.sku: i
-        for i in db.query(CatalogItem)
-        .filter(CatalogItem.vendor == "Everluxe", CatalogItem.sku.in_(skus))
-        .all()
-    }
+    catalog = catalog_by_sku(db)
     total = 0
     for room in job.rooms:
         for line in room.lines:
-            item = items.get(line.sku.strip())
+            item = catalog_lookup(catalog, line.sku)
             if item:
                 total += (item.doors + item.drawers) * line.qty
     return total
@@ -183,19 +204,14 @@ def sku_unit_counts(db: Session, job: Job) -> tuple[int | None, int | None]:
     """(assembly boxes, install units) summed from per-SKU catalog values
     (Everluxe Install-Hardware file: value = boxes). None when no line item
     has per-SKU data — callers then fall back to the plan template."""
-    skus = {line.sku.strip().upper() for room in job.rooms for line in room.lines}
-    if not skus:
+    if not any(room.lines for room in job.rooms):
         return None, None
-    items = {
-        i.sku.upper(): i
-        for i in db.query(CatalogItem).filter(CatalogItem.vendor == "Everluxe").all()
-        if i.sku.upper() in skus
-    }
+    catalog = catalog_by_sku(db)
     boxes = install = 0
     found = False
     for room in job.rooms:
         for line in room.lines:
-            item = items.get(line.sku.strip().upper())
+            item = catalog_lookup(catalog, line.sku)
             if item and (item.assemble_value is not None or item.install_value is not None):
                 found = True
                 boxes += (item.assemble_value or 0) * line.qty
@@ -399,10 +415,7 @@ def _room_components(db: Session, job: Job, fallback: Decimal) -> dict[int, dict
     bought for it and the PIA it earned. Job-level overrides are reconciled
     afterwards in job_totals, so the rooms always foot to the job.
     """
-    items = {
-        i.sku.upper(): i
-        for i in db.query(CatalogItem).filter(CatalogItem.vendor == "Everluxe").all()
-    }
+    items = catalog_by_sku(db)
     # Lumber is entered in its own room but bought FOR a room.
     lumber_for: dict[int | None, Decimal] = {}
     for room in job.rooms:
@@ -418,7 +431,7 @@ def _room_components(db: Session, job: Job, fallback: Decimal) -> dict[int, dict
             continue
         hw = boxes = install_units = 0
         for line in room.lines:
-            item = items.get(line.sku.strip().upper())
+            item = catalog_lookup(items, line.sku)
             if not item:
                 continue
             hw += (item.doors + item.drawers) * line.qty

@@ -532,6 +532,18 @@ def add_line(room_id: int, payload: schemas.LineCreate, db: Session = Depends(ge
             .order_by(CatalogItem.list_price == 0, CatalogItem.id)
             .first()
         )
+        if match is None:
+            # Layouts draw the handing (B18L); the catalog carries one B18.
+            from app.sterling_app.layout_parse import base_sku
+
+            base = base_sku(data["sku"].strip().upper())
+            if base != data["sku"].strip().upper():
+                match = (
+                    db.query(CatalogItem)
+                    .filter(CatalogItem.sku.ilike(base))
+                    .order_by(CatalogItem.list_price == 0, CatalogItem.id)
+                    .first()
+                )
         if match:
             group = compute.resolve_price_group(db, room.door_style)
             data["list_price"] = compute.group_price(match, group)
