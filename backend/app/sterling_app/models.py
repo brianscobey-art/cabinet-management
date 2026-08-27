@@ -122,7 +122,8 @@ class TopPiece(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tops_id: Mapped[int] = mapped_column(ForeignKey("plan_tops.id"), index=True)
-    area: Mapped[str] = mapped_column(String(20), default="Kitchen")  # Kitchen | Vanity
+    # Kitchen | Vanity historically; now the room name the top belongs to.
+    area: Mapped[str] = mapped_column(String(100), default="Kitchen")
     kind: Mapped[str] = mapped_column(String(20), default="top")  # top | backsplash | side_splash
     qty: Mapped[int] = mapped_column(default=1)
     width: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=Decimal("0"))
@@ -309,6 +310,8 @@ class Job(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+    # Stamped when the job is opened, so "last activity" means touched, not only edited.
+    last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     rooms: Mapped[list["Room"]] = relationship(
         back_populates="job", cascade="all, delete-orphan", order_by="Room.id"
@@ -330,10 +333,13 @@ class Room(Base):
     finish: Mapped[str | None] = mapped_column(String(100), default=None)
     wood_species: Mapped[str | None] = mapped_column(String(100), default=None)
     notes: Mapped[str | None] = mapped_column(Text, default=None)
+    # PIA rides with the room that earned it, so the room total is the real cost.
+    pia_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
 
     job: Mapped[Job] = relationship(back_populates="rooms")
     lines: Mapped[list["LineItem"]] = relationship(
-        back_populates="room", cascade="all, delete-orphan", order_by="LineItem.id"
+        back_populates="room", cascade="all, delete-orphan", order_by="LineItem.id",
+        foreign_keys="LineItem.room_id",   # for_room_id also points here
     )
 
 
@@ -349,8 +355,11 @@ class LineItem(Base):
     # Blank = catalog/default multiplier at time of pricing.
     multiplier: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), default=None)
     notes: Mapped[str | None] = mapped_column(String(500), default=None)
+    # Lumber lives in its own room but is bought FOR a room — this points at the
+    # room it belongs to so its cost lands in that room's total. None = the job.
+    for_room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), default=None)
 
-    room: Mapped[Room] = relationship(back_populates="lines")
+    room: Mapped[Room] = relationship(back_populates="lines", foreign_keys=[room_id])
 
 
 class CoverVendor(Base):

@@ -98,6 +98,7 @@ def line_out(line: LineItem, fallback_multiplier: Decimal) -> LineOut:
         list_price=line.list_price,
         multiplier=line.multiplier,
         notes=line.notes,
+        for_room_id=line.for_room_id,
         effective_multiplier=mult,
         net_each=Decimal("0") if excluded else net_each(line.list_price, mult),
         cost=cost,
@@ -109,6 +110,10 @@ def _room_list(room: Room) -> Decimal:
     """Extended Everluxe list (all lines, incl. appliance placeholders) — matches
     the 2020 quote's net total for verification."""
     return money(sum((Decimal(l.list_price) * l.qty for l in room.lines), Decimal("0")))
+
+
+def is_lumber_room(room: Room) -> bool:
+    return room.name.strip().lower() == "lumber"
 
 
 def _room_cost(room: Room, fallback_multiplier: Decimal) -> Decimal:
@@ -229,6 +234,76 @@ def tops_total(db: Session, tops) -> dict:
     }
 
 
+VANITY_WORDS = ("vanity", "bath", "powder")
+
+
+def tops_area_class(area: str | None) -> str:
+    """Which rate table a top belongs to. Anything bath-ish prices as a vanity."""
+    a = (area or "").strip().lower()
+    return "Vanity" if any(w in a for w in VANITY_WORDS) else "Kitchen"
+
+
+def tops_by_room(db: Session, tops) -> list[dict]:
+    """Job tops, one row per room the pieces were measured in.
+
+    Sqft rounds per room — that is the point of measuring by room — so a job
+    with two kitchen-class rooms can land a dollar or two off the old single
+    Kitchen rounding. Sinks and cutouts are counted for the whole job and ride
+    on the first room of their rate class.
+    """
+    if not tops:
+        return []
+    rate = Decimal(tops.rate_sqft) if tops.rate_sqft is not None else matrix_rate(db, "top_rate")
+
+    def per_plan(attr, key):
+        val = getattr(tops, attr, None)
+        return Decimal(val) if val is not None else matrix_rate(db, key)
+
+    k_cuts = tops.k_sinks if tops.k_cutouts is None else tops.k_cutouts
+    v_cuts = tops.v_sinks if tops.v_cutouts is None else tops.v_cutouts
+    extras = {
+        "Kitchen": money(tops.k_sinks * per_plan("k_sink_rate", "top_k_sink")
+                         + k_cuts * per_plan("k_cutout_rate", "top_cutout")),
+        "Vanity": money(tops.v_sinks * per_plan("v_sink_rate", "top_v_sink")
+                        + v_cuts * per_plan("v_cutout_rate", "top_cutout")),
+    }
+    sink_counts = {"Kitchen": tops.k_sinks + k_cuts, "Vanity": tops.v_sinks + v_cuts}
+
+    order: list[str] = []
+    sqft: dict[str, Decimal] = {}
+    for piece in tops.pieces:
+        area = (piece.area or "Kitchen").strip() or "Kitchen"
+        if area not in sqft:
+            sqft[area] = Decimal("0")
+            order.append(area)
+        sqft[area] += Decimal(piece.qty) * Decimal(piece.width) * Decimal(piece.depth) / Decimal("144")
+
+    rows = []
+    claimed: set[str] = set()
+    for area in order:
+        cls = tops_area_class(area)
+        sf = sqft[area].quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        extra = Decimal("0.00")
+        extra_qty = 0
+        if cls not in claimed:                 # sinks land on the first room of the class
+            claimed.add(cls)
+            extra, extra_qty = extras[cls], sink_counts[cls]
+        rows.append({
+            "room": area, "rate_class": cls, "sqft": sf, "rate": rate,
+            "surface": money(sf * rate), "extras": extra, "extra_qty": extra_qty,
+            "total": money(sf * rate + extra),
+        })
+    # A rate class with sinks but no measured piece still has to be charged.
+    for cls in ("Kitchen", "Vanity"):
+        if cls not in claimed and extras[cls]:
+            rows.append({
+                "room": cls, "rate_class": cls, "sqft": Decimal("0"), "rate": rate,
+                "surface": Decimal("0.00"), "extras": extras[cls],
+                "extra_qty": sink_counts[cls], "total": extras[cls],
+            })
+    return rows
+
+
 def national_pricing_rows(db: Session, division: str | None, door_style: str | None) -> list[dict]:
     """The workbook's Pricing Sheet, computed live: every plan's COGS -> sale.
 
@@ -316,6 +391,59 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
     return rows
 
 
+def _room_components(db: Session, job: Job, fallback: Decimal) -> dict[int, dict]:
+    """Raw per-room drivers before any job-level override is applied.
+
+    Everything here is genuinely the room's own: its cabinet cost, the hardware
+    its doors and drawers call for, its assembly and install boxes, the lumber
+    bought for it and the PIA it earned. Job-level overrides are reconciled
+    afterwards in job_totals, so the rooms always foot to the job.
+    """
+    items = {
+        i.sku.upper(): i
+        for i in db.query(CatalogItem).filter(CatalogItem.vendor == "Everluxe").all()
+    }
+    # Lumber is entered in its own room but bought FOR a room.
+    lumber_for: dict[int | None, Decimal] = {}
+    for room in job.rooms:
+        if not is_lumber_room(room):
+            continue
+        for line in room.lines:
+            key = line.for_room_id
+            lumber_for[key] = lumber_for.get(key, Decimal("0")) + line_out(line, fallback).cost
+
+    out: dict[int, dict] = {}
+    for room in job.rooms:
+        if is_lumber_room(room):
+            continue
+        hw = boxes = install_units = 0
+        for line in room.lines:
+            item = items.get(line.sku.strip().upper())
+            if not item:
+                continue
+            hw += (item.doors + item.drawers) * line.qty
+            boxes += (item.assemble_value or 0) * line.qty
+            install_units += (item.install_value or 0) * line.qty
+        out[room.id] = {
+            "room": room,
+            "list": _room_list(room),
+            "cabinets": _room_cost(room, fallback),
+            "lumber": money(lumber_for.get(room.id, Decimal("0"))),
+            "hardware_qty": hw,
+            "boxes": boxes,
+            "install_units": install_units,
+            "pia": money(room.pia_amount) if room.pia_amount else Decimal("0.00"),
+        }
+    return out
+
+
+def _share(part: int | Decimal, whole: int | Decimal, amount: Decimal) -> Decimal:
+    """A room's slice of a job-level number, by its share of the driver."""
+    if not whole:
+        return Decimal("0.00")
+    return money(Decimal(amount) * Decimal(part) / Decimal(whole))
+
+
 def job_totals(db: Session, job: Job) -> dict:
     """All computed money on a job.
 
@@ -326,6 +454,7 @@ def job_totals(db: Session, job: Job) -> dict:
     """
     fallback = job_multiplier(db, job)
     room_costs = {room.id: _room_cost(room, fallback) for room in job.rooms}
+    parts = _room_components(db, job, fallback)
     # "Lumber" room(s) = Carter-supplied material: taxed like any material but
     # never gets Everluxe freight, and shows as its own section above Cabinets.
     lumber_cost = money(
@@ -414,7 +543,10 @@ def job_totals(db: Session, job: Job) -> dict:
 
     # PIA: flat add-on to install (difficult jobs), applied on top of whatever
     # the install computed to — even a flat install price.
-    pia = money(job.pia_amount) if job.pia_amount else Decimal("0.00")
+    # PIA is entered on the room that earned it; the old job-level field still
+    # counts for quotes priced before rooms carried their own.
+    room_pia = money(sum((p["pia"] for p in parts.values()), Decimal("0")))
+    pia = money((money(job.pia_amount) if job.pia_amount else Decimal("0.00")) + room_pia)
     # Reported install = cabinet install + hardware install labor + PIA
     # (matches the workbook's "Install w/ Knobs / Handles" convention).
     install_cost = money(install_cost + hardware_labor + pia)
@@ -437,24 +569,75 @@ def job_totals(db: Session, job: Job) -> dict:
     from app.sterling_app.models import PlanTops
 
     tops_rec = db.query(PlanTops).filter(PlanTops.job_id == job.id).first()
-    tops = tops_total(db, tops_rec)["total"] if tops_rec else Decimal("0.00")
+    # On a job the tops price by room, so the total is the sum of the room rows.
+    # (Plan/national tops keep tops_total's single Kitchen/Vanity rounding.)
+    tops_rows = tops_by_room(db, tops_rec) if tops_rec else []
+    tops = money(sum((r["total"] for r in tops_rows), Decimal("0")))
     cab_sell = sell
     sell = money(sell + tops)
 
-    # Allocate sell across rooms by share of TOTAL cost; the remainder is the
-    # install+hardware portion so rooms + install/hw always foot to the job sell.
+    # Break the job's money back down per room. Each room carries its own
+    # cabinets, lumber, hardware, tax, labor and PIA; anything a room cannot own
+    # (delivery, unassigned lumber, a flat install override, job-level PIA) lands
+    # in the job-level bucket so the rows always foot to the job total.
+    tot_hw = sum(p["hardware_qty"] for p in parts.values())
+    tot_boxes = sum(p["boxes"] for p in parts.values())
+    tot_units = sum(p["install_units"] for p in parts.values())
+    tot_cab = money(sum((p["cabinets"] for p in parts.values()), Decimal("0")))
+    materials_total = money(cabinets_cost + lumber_cost + hardware_material)
+    base_install = money(install_cost - hardware_labor - pia)
+
+    breakdown: list[dict] = []
+    for room in job.rooms:
+        p = parts.get(room.id)
+        if p is None:
+            continue
+        r_hw_mat = _share(p["hardware_qty"], tot_hw, hardware_material)
+        r_freight = _share(p["cabinets"], tot_cab, freight)
+        r_materials = money(p["cabinets"] + p["lumber"] + r_hw_mat)
+        r_tax = _share(r_materials, materials_total, tax)
+        r_assembly = _share(p["boxes"], tot_boxes, assembly)
+        r_install = money(
+            _share(p["install_units"], tot_units, base_install)
+            + _share(p["hardware_qty"], tot_hw, hardware_labor)
+            + p["pia"]
+        )
+        r_cost = money(
+            p["cabinets"] + p["lumber"] + r_freight + r_hw_mat + r_tax + r_assembly + r_install
+        )
+        breakdown.append({
+            "room_id": room.id, "name": room.name, "zone": room.zone,
+            "line_count": len(room.lines),
+            "list": p["list"], "cabinets": p["cabinets"], "lumber": p["lumber"],
+            "hardware_qty": p["hardware_qty"], "hardware_material": r_hw_mat,
+            "freight": r_freight, "tax": r_tax,
+            "boxes": p["boxes"], "assembly": r_assembly,
+            "install_units": p["install_units"], "install": r_install, "pia": p["pia"],
+            "cost": r_cost,
+        })
+
+    rooms_cost = money(sum((b["cost"] for b in breakdown), Decimal("0")))
+    job_level_cost = money(cost - rooms_cost)
+
+    # Sell follows cost share, whole dollars, remainder to the job-level bucket.
     allocated: dict[int, Decimal] = {room.id: Decimal("0.00") for room in job.rooms}
+    running = Decimal("0")
     if cost > 0:
-        running = Decimal("0")
-        for room in job.rooms:
+        for b in breakdown:
             share = money(
-                (cab_sell * room_costs[room.id] / cost).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                (cab_sell * b["cost"] / cost).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
             )
-            allocated[room.id] = share
+            b["sell"] = share
+            b["margin_amount"] = money(share - b["cost"])
+            b["margin_pct"] = money(b["margin_amount"] / share * 100) if share else None
+            allocated[b["room_id"]] = share
             running += share
-        install_hw_sell = money(cab_sell - running)
     else:
-        install_hw_sell = Decimal("0.00")
+        for b in breakdown:
+            b["sell"] = Decimal("0.00")
+            b["margin_amount"] = Decimal("0.00")
+            b["margin_pct"] = None
+    install_hw_sell = money(cab_sell - running)
 
     return {
         "list_total": money(sum((_room_list(r) for r in job.rooms), Decimal("0"))),
@@ -483,6 +666,12 @@ def job_totals(db: Session, job: Job) -> dict:
         "sell": sell,
         "allocated": allocated,
         "install_hw_sell": install_hw_sell,
+        "rooms_breakdown": breakdown,
+        "tops_rows": tops_rows,
+        "job_level_cost": job_level_cost,
+        "job_level_sell": install_hw_sell,
+        "job_pia": money(job.pia_amount) if job.pia_amount else Decimal("0.00"),
+        "cab_sell": cab_sell,
     }
 
 
@@ -499,6 +688,7 @@ def room_out(db: Session, room: Room, sell: Decimal | None = None) -> RoomOut:
         finish=room.finish,
         wood_species=room.wood_species,
         notes=room.notes,
+        pia_amount=room.pia_amount,
         lines=[line_out(line, fallback) for line in room.lines],
         list_total=_room_list(room),
         cost=_room_cost(room, fallback),
@@ -533,6 +723,7 @@ def job_list_item(db: Session, job: Job) -> JobListItem:
         margin_pct_actual=margin_pct,
         exported_job_id=job.exported_job_id,
         updated_at=job.updated_at,
+        last_activity=max(job.updated_at, job.last_opened_at) if job.last_opened_at else job.updated_at,
     )
 
 
@@ -608,4 +799,9 @@ def job_detail(db: Session, job: Job) -> JobDetail:
         install_cost=t["install_cost"],
         install_hw_sell=t["install_hw_sell"],
         tops=t["tops"],
+        rooms_breakdown=t["rooms_breakdown"],
+        tops_rows=t["tops_rows"],
+        job_level_cost=t["job_level_cost"],
+        job_level_sell=t["job_level_sell"],
+        job_pia=t["job_pia"],
     )

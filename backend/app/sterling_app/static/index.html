@@ -299,11 +299,12 @@ async function renderDashboard() {
 }
 
 // ---------- Jobs list ----------
-let jobFilter = { q: "", stage: "" };
+let jobFilter = { q: "", stage: "", days: "30" };   // default view: the last 30 days
 async function renderJobs() {
   const params = new URLSearchParams();
   if (jobFilter.q) params.set("q", jobFilter.q);
   if (jobFilter.stage) params.set("stage", jobFilter.stage);
+  if (jobFilter.days) params.set("days", jobFilter.days);
   if (currentKsr()) params.set("ksr", currentKsr());
   const jobs = await api("/jobs?" + params);
   // group by builder
@@ -323,6 +324,10 @@ async function renderJobs() {
         ${["Lead","Design","Quoted","Revision","Sold","Lost"].map(s =>
           `<option ${jobFilter.stage===s?"selected":""}>${s}</option>`).join("")}
       </select>
+      <select id="jdays" title="How far back to look — a job counts as active when it was edited or opened">
+        ${[["30","Last 30 days"],["90","Last 90 days"],["","All time"]].map(([v,l]) =>
+          `<option value="${v}" ${String(jobFilter.days ?? "")===v?"selected":""}>${l}</option>`).join("")}
+      </select>
       <div class="spacer"></div>
       <input type="file" id="q2020File" accept=".xls" style="display:none">
       <button class="ghost" id="import2020">Import 2020 Quote</button>
@@ -332,7 +337,8 @@ async function renderJobs() {
     <div class="card" style="padding:0; overflow-x:auto">
       <table>
         <thead><tr>
-          <th>Job</th><th>KSR</th><th>Community / Lot</th><th>Plan</th><th>Stage</th>
+          <th>Job</th><th>KSR</th><th>Updated</th><th>Last activity</th>
+          <th>Community / Lot</th><th>Plan</th><th>Stage</th>
           <th class="num">Rooms</th><th class="num">Cost</th><th class="num">Sell</th>
           <th class="num">Margin</th><th class="num">GM%</th><th></th>
         </tr></thead>
@@ -341,12 +347,14 @@ async function renderJobs() {
             const rows = groups.get(b);
             const gSell = rows.reduce((n, j) => n + Number(j.sell), 0);
             return `
-            <tr class="builder-row"><td colspan="11">${esc(b)}
+            <tr class="builder-row"><td colspan="13">${esc(b)}
               <span class="muted" style="font-weight:400">· ${rows.length} job${rows.length===1?"":"s"} · ${money(gSell)}</span></td></tr>
             ${rows.map(j => `
             <tr class="click" onclick="location.hash='#/job/${j.id}'">
               <td style="padding-left:22px"><strong>${esc(j.name)}</strong></td>
               <td>${esc(j.ksr ?? "—")}</td>
+              <td>${mdyy(j.last_activity ?? j.updated_at)}</td>
+              <td class="muted">${sinceWords(j.last_activity ?? j.updated_at)}</td>
               <td>${esc(j.community ?? "—")}${j.lot_number ? " / Lot " + esc(j.lot_number) : ""}</td>
               <td>${esc(j.plan ?? "—")}</td>
               <td><span class="chip ${j.stage}">${j.stage}</span></td>
@@ -358,13 +366,14 @@ async function renderJobs() {
               <td>${j.exported_job_id ? `<span class="chip exported" title="In CabinetTron as job #${j.exported_job_id}">CT #${j.exported_job_id}</span>` : ""}</td>
             </tr>`).join("")}`;
           }).join("")
-          : `<tr><td colspan="11" class="empty">${currentKsr() ? `No jobs for ${esc(currentKsr())} yet.` : "No jobs yet — hit “+ New Job” to price your first one."}</td></tr>`}
+          : `<tr><td colspan="13" class="empty">${currentKsr() ? `No jobs for ${esc(currentKsr())} yet.` : "No jobs yet — hit “+ New Job” to price your first one."}</td></tr>`}
         </tbody>
       </table>
     </div>`;
   $("#jq").addEventListener("input", e => { jobFilter.q = e.target.value;
     clearTimeout(renderJobs._t); renderJobs._t = setTimeout(renderJobs, 300); });
   $("#jstage").addEventListener("change", e => { jobFilter.stage = e.target.value; renderJobs(); });
+  $("#jdays").addEventListener("change", e => { jobFilter.days = e.target.value; renderJobs(); });
   $("#newJob").addEventListener("click", () => jobFormDialog());
   $("#newFromPlan").addEventListener("click", () => newFromPlanDialog());
   $("#import2020").addEventListener("click", () => $("#q2020File").click());
@@ -505,6 +514,18 @@ async function import2020Dialog(file, url, after) {
   });
 }
 
+// "Today" / "6 days ago" — the readable half of the two date columns.
+function sinceWords(iso) {
+  if (!iso) return "—";
+  const then = new Date(iso), now = new Date();
+  const days = Math.floor((now.setHours(0,0,0,0) - new Date(then).setHours(0,0,0,0)) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return days + " days ago";
+  if (days < 60) return "A month ago";
+  return Math.round(days / 30) + " months ago";
+}
+
 const DOC_CATS = ["Pricing", "Layouts", "Plans", "2020", "Contract"];
 const docCatLabel = c => c === "2020" ? "20/20" : c;
 
@@ -613,7 +634,14 @@ async function renderJobDetail(id) {
         ${j.notes ? `<div class="muted" style="margin-top:10px; font-size:12.5px">${esc(j.notes)}</div>` : ""}
       </div>
       <div class="card" style="flex:3; min-width:320px">
-        <div class="settings-grid no-print">
+        <div class="set-title" style="margin-bottom:6px">Pricing breakdown</div>
+        ${breakdownCard(j)}
+      </div>
+    </div>
+
+    <div class="card no-print" style="margin-bottom:16px">
+      <div class="set-title" style="margin-bottom:8px">Pricing selections</div>
+      <div class="settings-grid no-print">
           <div class="set-group">
             <div class="set-title">Pricing</div>
             <div class="set-row"><span>Margin %</span>
@@ -670,29 +698,6 @@ async function renderJobDetail(id) {
               <input id="ipia" type="number" min="0" step="0.01" value="${j.pia_amount ?? ""}" placeholder="0"></div>
           </div>
         </div>
-        <div class="totals-card">
-          <div class="t"><div class="label">Everluxe List</div><div class="value" style="font-size:16px; color:var(--muted)">${money(j.list_total)}</div></div>
-          ${Number(j.lumber_cost) ? `<div class="t"><div class="label">Lumber</div><div class="value" style="font-size:16px">${money(j.lumber_cost)}</div></div>` : ""}
-          <div class="t"><div class="label">Cabinets</div><div class="value" style="font-size:16px">${money(j.cabinets_cost)}</div></div>
-          ${j.cost_model === "matrix" ? `
-            <div class="t"><div class="label">Freight</div><div class="value" style="font-size:16px">${money(j.freight)}</div></div>
-            <div class="t"><div class="label">Hardware ${j.hardware_qty ? `(${j.hardware_qty} pc)` : ""}</div><div class="value" style="font-size:16px">${money(j.hardware_material)}</div></div>
-            <div class="t"><div class="label">Sales Tax</div><div class="value" style="font-size:16px">${money(j.tax)}</div></div>
-            <div class="t"><div class="label">Assembly (${num(j.assembly_boxes_effective)} × $${num(j.assembly_rate_effective, 10).toFixed(0)})</div><div class="value" style="font-size:16px">${money(j.assembly)}</div></div>
-            <div class="t"><div class="label">Install (${num(j.install_units_effective)} × $${num(j.install_rate_effective, 25).toFixed(0)}${Number(j.hardware_labor) ? ` + ${num(j.hardware_qty)} hdw × $${num(j.hardware_rate_effective, 1).toFixed(0)}` : ""}${Number(j.pia) ? " + PIA" : ""})</div><div class="value" style="font-size:16px">${money(j.install_cost)}</div></div>
-            ${Number(j.delivery) ? `<div class="t"><div class="label">Delivery</div><div class="value" style="font-size:16px">${money(j.delivery)}</div></div>` : ""}
-            <div class="t"><div class="label">Total COGS</div><div class="value">${money(j.cost)}</div></div>`
-          : `
-            <div class="t"><div class="label">Hardware ${j.hardware_qty ? `(${j.hardware_qty} pc)` : ""}</div><div class="value" style="font-size:16px">${money(j.hardware_material)}</div></div>
-            <div class="t"><div class="label">Sales Tax</div><div class="value" style="font-size:16px">${money(j.tax)}</div></div>
-            ${Number(j.assembly) ? `<div class="t"><div class="label">Assembly (${num(j.assembly_boxes_effective)} × $${num(j.assembly_rate_effective, 10).toFixed(0)})</div><div class="value" style="font-size:16px">${money(j.assembly)}</div></div>` : ""}
-            <div class="t"><div class="label">Install (${num(j.install_units_effective)} × $${num(j.install_rate_effective, 25).toFixed(0)}${Number(j.hardware_labor) ? ` + ${num(j.hardware_qty)} hdw × $${num(j.hardware_rate_effective, 1).toFixed(0)}` : ""}${Number(j.pia) ? " + PIA" : ""})</div><div class="value" style="font-size:16px">${money(j.install_cost)}</div></div>
-            <div class="t"><div class="label">Total Cost</div><div class="value">${money(j.cost)}</div></div>`}
-          ${Number(j.tops) ? `<div class="t"><div class="label">Tops (after margin)</div><div class="value" style="font-size:16px">${money(j.tops)}</div></div>` : ""}
-          <div class="t"><div class="label">Sell</div><div class="value">${money(j.sell)}</div></div>
-          <div class="t"><div class="label">Margin</div><div class="value orange">${money(j.margin_amount)} · ${pct(j.margin_pct_actual)}</div></div>
-        </div>
-      </div>
     </div>
 
     <div id="lumberSection" style="margin-top:16px">${lumberCard(j, lumberItems)}</div>
@@ -790,10 +795,17 @@ async function renderJobDetail(id) {
     }
     await api(`/rooms/${room.id}/lines`, {method:"POST", body: {
       sku: $("#lm_sel").value, qty: Number($("#lm_qty").value) || 1,
+      for_room_id: $("#lm_for").value ? Number($("#lm_for").value) : null,
     }});
     toast("Lumber added");
     renderJobDetail(id);
   };
+  $$("#lumberCard .lm-room").forEach(sel => sel.addEventListener("change", async e => {
+    await api("/lines/" + e.target.dataset.line, {method:"PUT", body: {
+      for_room_id: e.target.value ? Number(e.target.value) : null,
+    }});
+    renderJobDetail(id);
+  }));
   $$("#lumberCard tr[data-line]").forEach(tr => {
     const lineId = tr.dataset.line;
     const push = async body => { await api("/lines/" + lineId, {method:"PUT", body}); renderJobDetail(id); };
@@ -810,6 +822,11 @@ async function renderJobDetail(id) {
 function lumberCard(j, items) {
   const r = j.rooms.find(isLumberRoom);
   const lines = r ? r.lines : [];
+  const cabRooms = j.rooms.filter(x => !isLumberRoom(x));
+  const roomPick = (id, sel) => `<select class="lm-room" data-line="${id}" style="min-width:130px">
+      <option value="">— job level —</option>
+      ${cabRooms.map(x => `<option value="${x.id}" ${sel == x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
+    </select>`;
   return `
   <div class="room-card" id="lumberCard" ${r ? `data-room="${r.id}"` : ""}>
     <div class="room-head">
@@ -822,7 +839,7 @@ function lumberCard(j, items) {
     <div style="overflow-x:auto"><table>
       <thead><tr>
         <th>SKU</th><th>Description</th><th class="num">Qty</th><th class="num">List</th>
-        <th class="num">Cost</th><th class="no-print"></th>
+        <th class="num">Cost</th><th class="no-print">For room</th><th class="no-print"></th>
       </tr></thead>
       <tbody>
         ${lines.map(l => `
@@ -832,6 +849,7 @@ function lumberCard(j, items) {
           <td class="num"><input type="number" min="1" class="inline-edit l-qty" style="width:60px" value="${l.qty}"></td>
           <td class="num"><input type="number" min="0" step="0.01" class="inline-edit l-list" style="width:90px" value="${l.list_price}"></td>
           <td class="num"><strong>${money(l.cost)}</strong></td>
+          <td class="no-print">${roomPick(l.id, l.for_room_id)}</td>
           <td class="no-print"><button class="danger small l-del">✕</button></td>
         </tr>`).join("")}
       </tbody>
@@ -841,9 +859,78 @@ function lumberCard(j, items) {
         ${items.map(i => `<option value="${esc(i.sku)}">${esc(i.sku)} — ${money(i.list_price)}</option>`).join("")}
       </select>
       <input id="lm_qty" type="number" min="1" step="1" value="1" style="width:64px">
+      <select id="lm_for" title="Which room this lumber is for — its cost lands in that room's total">
+        <option value="">— job level —</option>
+        ${cabRooms.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
+      </select>
       <button class="small" id="lm_add">Add</button>
     </div>
   </div>`;
+}
+
+// The job's money, stacked and grouped by room. Every figure in a room block is
+// that room's own — its cabinets, hardware, tax, labor, lumber and PIA — so the
+// room totals foot to the job without any prorating sleight of hand. What a room
+// cannot own (delivery, unassigned lumber, a flat install override, job-level
+// PIA) shows in its own block above the grand total.
+function breakdownCard(j) {
+  const row = (label, value, muted) =>
+    `<div style="display:flex; justify-content:space-between; gap:10px; padding:1px 0${muted ? "; color:var(--muted)" : ""}">
+       <span>${label}</span><span>${value}</span></div>`;
+  const rooms = (j.rooms_breakdown || []).map(b => `
+    <div style="background:var(--bg); border-radius:6px; padding:7px 9px; margin-bottom:8px; font-size:12.5px">
+      <div style="display:flex; justify-content:space-between; color:var(--green-dark); font-weight:700; margin-bottom:3px">
+        <span>${esc(b.name)}${b.zone ? ` <span class="muted" style="font-weight:400">(${esc(b.zone)})</span>` : ""}</span>
+        <span class="muted" style="font-weight:400; font-size:11.5px">${b.line_count} line${b.line_count===1?"":"s"}${b.boxes ? ` · ${b.boxes} box${b.boxes===1?"":"es"}` : ""}</span>
+      </div>
+      ${row("List", money(b.list), true)}
+      ${row("Cabinets", money(b.cabinets), true)}
+      ${Number(b.hardware_material) || b.hardware_qty ? row(`Hardware (${b.hardware_qty} pc)`, money(b.hardware_material), true) : ""}
+      ${Number(b.lumber) ? row("Lumber", money(b.lumber), true) : ""}
+      ${Number(b.freight) ? row("Freight", money(b.freight), true) : ""}
+      ${row("Sales tax", money(b.tax), true)}
+      ${row("Assembly · install", money(Number(b.assembly) + Number(b.install)), true)}
+      ${Number(b.pia) ? row("PIA", money(b.pia), true) : ""}
+      <div style="border-top:1px solid var(--line); margin-top:4px; padding-top:4px">
+        ${row("Cost", `<strong>${money(b.cost)}</strong>`)}
+        ${row("Sell", `<strong>${money(b.sell)}</strong>`)}
+        <div style="display:flex; justify-content:space-between; color:var(--orange)">
+          <span>Margin</span><span>${money(b.margin_amount)}${b.margin_pct !== null ? ` · ${pct(b.margin_pct)}` : ""}</span></div>
+      </div>
+    </div>`).join("");
+
+  const jobLevel = (Number(j.job_level_cost) || Number(j.job_pia) || Number(j.delivery)) ? `
+    <div style="border:1px dashed var(--line); border-radius:6px; padding:7px 9px; margin-bottom:8px; font-size:12.5px">
+      <div style="display:flex; justify-content:space-between; margin-bottom:3px">
+        <span>Job level</span><span class="muted" style="font-size:11.5px">not tied to a room</span></div>
+      ${Number(j.job_pia) ? row("PIA (job level)", money(j.job_pia), true) : ""}
+      ${Number(j.delivery) ? row("Delivery", money(j.delivery), true) : ""}
+      ${row("Cost", `<strong>${money(j.job_level_cost)}</strong>`)}
+      ${row("Sell", `<strong>${money(j.job_level_sell)}</strong>`)}
+    </div>` : "";
+
+  const tops = (j.tops_rows || []).length ? `
+    <div style="border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin-bottom:8px; font-size:12.5px">
+      <div style="display:flex; justify-content:space-between; color:var(--green-dark); font-weight:700; margin-bottom:3px">
+        <span>Countertops by room</span><span class="muted" style="font-weight:400; font-size:11.5px">added after margin</span></div>
+      ${j.tops_rows.map(t => `
+        ${Number(t.surface) ? row(`${esc(t.room)} · ${t.sqft} sq ft @ ${money(t.rate)}`, money(t.surface), true) : ""}
+        ${Number(t.extras) ? row(`${esc(t.room)} · sinks and cutouts (${t.extra_qty})`, money(t.extras), true) : ""}`).join("")}
+      <div style="border-top:1px solid var(--line); margin-top:4px; padding-top:4px">
+        ${row("Tops total", `<strong>${money(j.tops)}</strong>`)}</div>
+    </div>` : "";
+
+  return `${rooms}${jobLevel}${tops}
+    <div style="background:var(--green); color:#fff; border-radius:6px; padding:8px 10px; font-size:13px">
+      ${row("Cabinets, labor" + (Number(j.lumber_cost) ? ", lumber" : ""), money(Number(j.sell) - Number(j.tops)))}
+      ${Number(j.tops) ? row("Countertops", money(j.tops)) : ""}
+      <div style="border-top:1px solid rgba(255,255,255,.3); margin-top:4px; padding-top:4px">
+        ${row("Total cost", `<strong>${money(j.cost)}</strong>`)}
+        ${row("Grand total sell", `<strong>${money(j.sell)}</strong>`)}
+        <div style="display:flex; justify-content:space-between; color:#ffd9c4">
+          <span>Margin</span><span>${money(j.margin_amount)} · ${pct(j.margin_pct_actual)}</span></div>
+      </div>
+    </div>`;
 }
 
 function roomCard(r) {
@@ -865,7 +952,7 @@ function roomCard(r) {
         <th class="num">Mult</th><th class="num">Net ea</th><th class="num">Cost</th><th class="no-print"></th>
       </tr></thead>
       <tbody>
-        ${r.lines.map(l => `
+        ${[...r.lines].reverse().map(l => `
         <tr class="${l.excluded ? "excluded" : ""}" data-line="${l.id}">
           <td class="keep"><strong>${esc(l.sku)}</strong>${l.excluded ? ' <span class="muted" style="font-size:11px">(appliance — not priced)</span>' : ""}</td>
           <td>${esc(l.description ?? "")}</td>
@@ -880,11 +967,12 @@ function roomCard(r) {
       </tbody>
     </table></div>
     <div class="addline no-print">
-      <input class="al-sku" placeholder="SKU (catalog auto-fills price)" style="width:200px" list="skuList">
-      <input class="al-desc" placeholder="Description (optional)" style="flex:1; min-width:140px">
-      <input class="al-qty" type="number" min="1" value="1" style="width:64px">
+      <input class="al-qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
+      <input class="al-sku" placeholder="SKU" style="width:200px" list="skuList">
+      <input class="al-desc" placeholder="Description (optional)" style="flex:1; min-width:120px">
       <input class="al-list" type="number" min="0" step="0.01" placeholder="List $ (blank = catalog)" style="width:150px">
       <button class="small al-add">Add</button>
+      <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
     </div>
   </div>`;
 }
@@ -902,16 +990,30 @@ function bindRoomHandlers(job) {
     $(".al-add", card).onclick = async () => {
       const sku = $(".al-sku", card).value.trim();
       if (!sku) return toast("Enter a SKU", true);
+      const qty = Number($(".al-qty", card).value);
+      if (!qty || qty < 1) { toast("Enter a quantity first", true); $(".al-qty", card).focus(); return; }
       const listRaw = $(".al-list", card).value;
       await api(`/rooms/${roomId}/lines`, {method:"POST", body: {
         sku,
         description: $(".al-desc", card).value.trim() || null,
-        qty: Number($(".al-qty", card).value) || 1,
+        qty,
         list_price: listRaw === "" ? null : Number(listRaw),
       }});
       renderJobDetail(job.id);
     };
-    $(".al-sku", card).addEventListener("keydown", e => { if (e.key === "Enter") $(".al-add", card).click(); });
+    // Enter on a partial SKU fills in the top catalog match; Enter again adds it.
+    $(".al-sku", card).addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      const typed = e.target.value.trim().toUpperCase();
+      if (typed && !skuExists(typed)) {
+        const hit = bestSku(typed);
+        if (hit) { e.target.value = hit; e.target.select(); return; }
+      }
+      $(".al-add", card).click();
+    });
+    $(".al-qty", card).addEventListener("keydown", e => {
+      if (e.key === "Enter") $(".al-sku", card).focus();
+    });
     $$("tr[data-line]", card).forEach(tr => {
       const lineId = tr.dataset.line;
       const push = async body => { await api("/lines/" + lineId, {method:"PUT", body}); renderJobDetail(job.id); };
@@ -977,6 +1079,8 @@ async function roomFormDialog(jobId, room) {
       <label class="f">Finish / color<input id="r_finish" value="${esc(r.finish??"")}" placeholder="White"></label>
       <label class="f">Wood species<input id="r_species" value="${esc(r.wood_species??"")}"></label>
       <label class="f">Notes<input id="r_notes" value="${esc(r.notes??"")}"></label>
+      <label class="f">PIA $ <span class="muted">(adds to this room's install)</span>
+        <input id="r_pia" type="number" min="0" step="0.01" value="${r.pia_amount ?? ""}" placeholder="0"></label>
     </div>
   `, async () => {
     const payload = {
@@ -988,6 +1092,7 @@ async function roomFormDialog(jobId, room) {
       finish: $("#r_finish").value.trim() || null,
       wood_species: $("#r_species").value.trim() || null,
       notes: $("#r_notes").value.trim() || null,
+      pia_amount: $("#r_pia").value === "" ? null : Number($("#r_pia").value),
     };
     if (!payload.name) throw new Error("Room name is required");
     if (isNew) await api(`/jobs/${jobId}/rooms`, {method:"POST", body: payload});

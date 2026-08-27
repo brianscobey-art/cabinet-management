@@ -101,9 +101,11 @@ def mount(app: FastAPI) -> None:
     from app.api.deps import read_access
     from app.sterling_app import xlsx_store
     from app.sterling_app.api import router
-    from app.sterling_app.database import Base, SessionLocal, engine
+    from app.sterling_app.database import Base, SessionLocal, engine, ensure_columns
 
     Base.metadata.create_all(bind=engine)
+    for col in ensure_columns():          # models gained a field since last boot
+        print(f"Sterling: added {col}")
     _ensure_columns(engine)
     # every committed change debounce-saves the workbook
     event.listens_for(SessionLocal, "after_commit")(lambda session: xlsx_store.mark_dirty())

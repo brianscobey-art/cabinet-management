@@ -147,17 +147,18 @@ SHEETS = [
         ("Sales Email", "sales_contact_email"), ("Field Contact", "field_contact_name"),
         ("Field Phone", "field_contact_phone"), ("Field Email", "field_contact_email"),
         ("Notes", "notes"), ("CT Job ID", "exported_job_id"), ("Exported At", "exported_at"),
-        ("Created", "created_at"), ("Updated", "updated_at"),
+        ("Created", "created_at"), ("Updated", "updated_at"), ("Last Opened", "last_opened_at"),
     ]),
     ("Rooms", "Rooms", Room, [
         ("ID", "id"), ("Job ID", "job_id"), ("Room", "name"), ("Zone", "zone"),
         ("Brand", "cabinet_brand"), ("Series", "series"), ("Door Style", "door_style"),
         ("Finish", "finish"), ("Wood Species", "wood_species"), ("Notes", "notes"),
+        ("PIA", "pia_amount"),
     ]),
     ("LineItems", "LineItems", LineItem, [
         ("ID", "id"), ("Room ID", "room_id"), ("SKU", "sku"), ("Description", "description"),
         ("Qty", "qty"), ("List Price", "list_price"), ("Multiplier", "multiplier"),
-        ("Notes", "notes"),
+        ("Notes", "notes"), ("For Room ID", "for_room_id"),
     ]),
 ]
 

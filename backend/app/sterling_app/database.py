@@ -37,3 +37,31 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_columns() -> list[str]:
+    """Add columns the models have gained since this cache file was written.
+
+    create_all() only creates missing TABLES, so a new field on an existing
+    model leaves the SQLite file a column short and every query on it fails.
+    The workbook is the source of truth, so the data is safe either way — but
+    adding the column in place beats deleting the cache and losing whatever had
+    not been flushed to the workbook yet.
+    """
+    from sqlalchemy import inspect, text
+
+    added: list[str] = []
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                ddl = col.type.compile(engine.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
+                added.append(f"{table.name}.{col.name}")
+    return added

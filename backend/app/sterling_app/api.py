@@ -333,9 +333,19 @@ def list_jobs(
     stage: Stage | None = None,
     q: str | None = None,
     ksr: str | None = None,
+    days: int | None = None,   # touched in the last N days; None/0 = all time
     db: Session = Depends(get_db),
 ):
     query = _job_query(db)
+    if days:
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        # Opening a job counts as activity, so a quote you keep coming back to
+        # does not fall off the list just because nothing was edited.
+        query = query.filter(
+            or_(Job.updated_at >= cutoff, Job.last_opened_at >= cutoff)
+        )
     if stage is not None:
         query = query.filter(Job.stage == stage)
     if ksr:
@@ -367,7 +377,22 @@ def create_job(payload: schemas.JobCreate, db: Session = Depends(get_db)):
 
 @router.get("/jobs/{job_id}", response_model=schemas.JobDetail)
 def get_job(job_id: int, db: Session = Depends(get_db)):
-    return compute.job_detail(db, _get_or_404(db, Job, job_id, "Job"))
+    job = _get_or_404(db, Job, job_id, "Job")
+    # Stamp the open WITHOUT touching updated_at — looking at a quote is not
+    # editing it, but it is still activity worth showing on the jobs list.
+    from sqlalchemy import update as _update
+
+    db.execute(
+        _update(Job).where(Job.id == job.id)
+        # updated_at is re-stated at its current value: the column's onupdate
+        # fires on any UPDATE, and letting it move would make every open look
+        # like an edit — which is exactly what this field exists to separate.
+        .values(last_opened_at=datetime.now(timezone.utc), updated_at=job.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+    db.refresh(job)
+    return compute.job_detail(db, job)
 
 
 @router.put("/jobs/{job_id}", response_model=schemas.JobDetail)

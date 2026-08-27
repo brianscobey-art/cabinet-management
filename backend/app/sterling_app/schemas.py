@@ -166,6 +166,7 @@ class LineCreate(BaseModel):
     list_price: Decimal | None = Field(default=None, ge=0)  # None -> catalog lookup
     multiplier: Decimal | None = Field(default=None, gt=0, le=1)
     notes: str | None = None
+    for_room_id: int | None = None   # lumber: the room it was bought for
 
 
 class LineUpdate(BaseModel):
@@ -175,6 +176,7 @@ class LineUpdate(BaseModel):
     list_price: Decimal | None = Field(default=None, ge=0)
     multiplier: Decimal | None = Field(default=None, gt=0, le=1)
     notes: str | None = None
+    for_room_id: int | None = None
 
 
 class LineOut(BaseModel):
@@ -186,6 +188,7 @@ class LineOut(BaseModel):
     list_price: Decimal
     multiplier: Decimal | None
     notes: str | None
+    for_room_id: int | None = None
     # computed
     effective_multiplier: Decimal
     net_each: Decimal
@@ -204,6 +207,7 @@ class RoomCreate(BaseModel):
     finish: str | None = None
     wood_species: str | None = None
     notes: str | None = None
+    pia_amount: Decimal | None = Field(default=None, ge=0)
 
 
 class RoomUpdate(BaseModel):
@@ -215,6 +219,43 @@ class RoomUpdate(BaseModel):
     finish: str | None = None
     wood_species: str | None = None
     notes: str | None = None
+    pia_amount: Decimal | None = Field(default=None, ge=0)
+
+
+class RoomCosts(BaseModel):
+    """One room's own money — what it costs, sells for, and earns."""
+
+    room_id: int
+    name: str
+    zone: str | None = None
+    line_count: int = 0
+    list: Decimal
+    cabinets: Decimal
+    lumber: Decimal
+    hardware_qty: int
+    hardware_material: Decimal
+    freight: Decimal
+    tax: Decimal
+    boxes: int
+    assembly: Decimal
+    install_units: int
+    install: Decimal
+    pia: Decimal
+    cost: Decimal
+    sell: Decimal
+    margin_amount: Decimal
+    margin_pct: Decimal | None = None
+
+
+class TopRoomRow(BaseModel):
+    room: str
+    rate_class: str
+    sqft: Decimal
+    rate: Decimal
+    surface: Decimal
+    extras: Decimal
+    extra_qty: int
+    total: Decimal
 
 
 class RoomOut(BaseModel):
@@ -228,6 +269,7 @@ class RoomOut(BaseModel):
     finish: str | None
     wood_species: str | None
     notes: str | None
+    pia_amount: Decimal | None = None
     lines: list[LineOut]
     # computed
     list_total: Decimal
@@ -322,6 +364,7 @@ class JobListItem(BaseModel):
     margin_pct_actual: Decimal | None
     exported_job_id: int | None
     updated_at: datetime
+    last_activity: datetime | None = None
 
 
 class JobDetail(BaseModel):
@@ -370,6 +413,11 @@ class JobDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
     rooms: list[RoomOut]
+    rooms_breakdown: list[RoomCosts] = []
+    tops_rows: list[TopRoomRow] = []
+    job_level_cost: Decimal = Decimal("0")
+    job_level_sell: Decimal = Decimal("0")
+    job_pia: Decimal = Decimal("0")
     # computed rollups
     cost: Decimal
     sell: Decimal
