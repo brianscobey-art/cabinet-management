@@ -425,15 +425,25 @@ async function newFromPlanDialog() {
 function jobFormDialog(job) {
   const isNew = !job;
   const j = job || {};
+  // Nothing is pre-suggested in the boxes — a greyed-out example reads as a
+  // filled-in value at a glance. Required fields carry a red star instead.
+  const req = `<span style="color:var(--red)">*</span>`;
+  const REQUIRED = [["f_name", "Job name"], ["f_builder", "Builder / account"],
+                    ["f_plan", "Plan"]]
+    // Only demand a KSR when Settings actually lists some to pick from.
+    .concat(ksrNames().length ? [["f_ksr", "KSR"]] : []);
   openDialog(`${isNew ? "New Job" : "Edit Job"}`, `
     <div class="grid2">
-      <label class="f">Job name / customer *<input id="f_name" value="${esc(j.name??"")}" placeholder="DRH Kali — Lot 42 or Smith Remodel"></label>
-      <label class="f">Builder / account<input id="f_builder" value="${esc(j.builder??"")}" placeholder="DR Horton Dothan"></label>
+      <label class="f">Job name / customer ${req}<input id="f_name" value="${esc(j.name??"")}"></label>
+      <label class="f">Builder / account ${req}<input id="f_builder" value="${esc(j.builder??"")}"></label>
       <label class="f">Community<input id="f_community" value="${esc(j.community??"")}"></label>
       <label class="f">Lot #<input id="f_lot" value="${esc(j.lot_number??"")}"></label>
       <label class="f">Address<input id="f_address" value="${esc(j.address??"")}"></label>
-      <label class="f">Plan<input id="f_plan" value="${esc(j.plan??"")}" placeholder="Kali STD"></label>
-      <label class="f">KSR (Kitchen Sales Rep)<select id="f_ksr">
+      <label class="f">Plan ${req}<input id="f_plan" value="${esc(j.plan??"")}"></label>
+      <label class="f">Margin % <span class="muted">(adjust any time)</span>
+        <input id="f_margin" type="number" min="0" max="99" step="1"
+          value="${j.margin_pct !== undefined && j.margin_pct !== null ? Math.round(Number(j.margin_pct)) : (isNew ? 30 : "")}"></label>
+      <label class="f">KSR (Kitchen Sales Rep) ${req}<select id="f_ksr">
         <option value="">— none —</option>
         ${ksrNames().map(n => `<option ${j.ksr===n?"selected":""}>${esc(n)}</option>`).join("")}
       </select></label>
@@ -460,12 +470,23 @@ function jobFormDialog(job) {
       job_type: $("#f_type").value,
       stage: $("#f_stage").value,
       ksr: $("#f_ksr").value || (isNew ? currentKsr() || null : null),
+      margin_pct: $("#f_margin").value === "" ? null : Number($("#f_margin").value),
       sales_contact_name: $("#f_scn").value.trim() || null,
       sales_contact_phone: $("#f_scp").value.trim() || null,
       field_contact_name: $("#f_fcn").value.trim() || null,
       field_contact_phone: $("#f_fcp").value.trim() || null,
       notes: $("#f_notes").value.trim() || null,
     };
+    // Enforced on new jobs only — older imported jobs predate these fields and
+    // must stay editable without back-filling all of them first.
+    if (isNew) {
+      const missing = REQUIRED.filter(([id]) => !$("#" + id).value.trim());
+      missing.forEach(([id]) => $("#" + id).style.borderColor = "var(--red)");
+      if (missing.length) {
+        $("#" + missing[0][0]).focus();
+        throw new Error("Still needed: " + missing.map(([, label]) => label).join(", "));
+      }
+    }
     if (!payload.name) throw new Error("Job name is required");
     if (isNew) {
       const created = await api("/jobs", {method:"POST", body: payload});
