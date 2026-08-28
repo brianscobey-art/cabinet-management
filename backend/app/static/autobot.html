@@ -211,6 +211,37 @@
   }
   .off-x { background: none; border: none; color: #7a4d00; padding: 0; font-size: 0.8rem; }
 
+  /* one-page print sheet: hidden on screen, the only thing on paper */
+  #print-sheet { display: none; }
+  @media print {
+    @page { size: letter portrait; margin: 0.45in; }
+    body > :not(#print-sheet) { display: none !important; }
+    #print-sheet { display: block; font-size: 9.5pt; color: #000; }
+    .pr-head {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      border-bottom: 2.5px solid #125952; padding-bottom: 4pt; margin-bottom: 6pt;
+    }
+    .pr-title { font-size: 14pt; letter-spacing: 0.04em; color: #125952; }
+    .pr-totals { text-align: right; }
+    .pr-sub { font-size: 8pt; color: #444; }
+    .pr-table { width: 100%; border-collapse: collapse; }
+    .pr-table th, .pr-table td {
+      border: 0.75pt solid #999; padding: 2.5pt 4pt; text-align: left;
+      vertical-align: top; page-break-inside: avoid;
+    }
+    .pr-table th { background: #eef4f3; font-size: 8pt; }
+    .pr-num { font-weight: 700; text-align: center; width: 4mm; }
+    .pr-time { white-space: nowrap; width: 17mm; }
+    .pr-mins { text-align: right; width: 9mm; }
+    .pr-check { text-align: center; width: 10mm; font-size: 12pt; }
+    .pr-map { margin-top: 6pt; text-align: center; }
+    .pr-map svg { max-height: 3.1in; width: auto; max-width: 100%; border: 0.75pt solid #ccc; }
+    #print-sheet.pr-dense { font-size: 8.25pt; }
+    .pr-dense .pr-table th, .pr-dense .pr-table td { padding: 1.5pt 3pt; }
+    .pr-dense .pr-map svg { max-height: 2.1in; }
+    .pr-dense .pr-check { font-size: 10pt; }
+  }
+
   /* login */
   .center { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--green); }
   form.login {
@@ -240,6 +271,8 @@
     <button type="submit">Sign in</button>
   </form>
 </div>
+
+<div id="print-sheet" aria-hidden="true"></div>
 
 <div id="app" hidden>
   <header>
@@ -428,6 +461,7 @@ function showTab(tab) {
 // ---------------------------------------------------------------- route
 
 let routeDay = todayIso();
+let lastPlan = null;  // most recently built plan — feeds the one-page print sheet
 
 async function renderRoute(genFirst = false) {
   const el = document.getElementById("view-route");
@@ -449,6 +483,7 @@ async function renderRoute(genFirst = false) {
         : "No new visits — the board already matches CabinetTron.";
     }
     const plan = await api("/autobot/plan?day=" + routeDay + "&real_drive=true" + workerParam());
+    lastPlan = plan;
     if (plan.time_off) {
       el.innerHTML = `
         <div class="row">
@@ -505,7 +540,8 @@ function routeHtml(plan, note) {
       ${workerSelect()}
       <button onclick="renderRoute()">Rebuild Route</button>
       <button class="ghost" onclick="renderRoute(true)">⟳ Sync from CabinetTron</button>
-      ${plan.stops.length ? `<a class="gmaps" href="${gmaps}" target="_blank" rel="noreferrer">🧭 Google Maps</a>` : ""}
+      ${plan.stops.length ? `<a class="gmaps" href="${gmaps}" target="_blank" rel="noreferrer">🧭 Google Maps</a>
+      <button class="ghost" onclick="printRoute()" title="One-page schedule for the clipboard">🖨 Print</button>` : ""}
     </div>
     <p class="muted">${esc(plan.worker)}'s loop${workerId ? " — starts and ends at their place" : " — starts and ends at the shop"}</p>
     ${note ? `<p class="muted">${esc(note)}</p>` : ""}
@@ -636,6 +672,45 @@ async function sendToCar(lat, lon, label) {
   } catch (e) {
     window.open(url, "_blank");
   }
+}
+
+function printRoute() {
+  if (!lastPlan || !lastPlan.stops.length) { alert("Build a route first."); return; }
+  const p = lastPlan;
+  const dayName = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(y, m - 1, d).getDay()];
+  };
+  const rows = p.stops.map((s) => `
+    <tr>
+      <td class="pr-num">${s.order}</td>
+      <td class="pr-time">${s.arrive}<br><span class="pr-sub">${s.depart}</span></td>
+      <td>${TYPE_LABELS[s.visit_type] || s.visit_type}${s.due_today ? " <b>· DUE</b>" : ""}</td>
+      <td>${esc(s.label)}${s.houses ? ` <span class="pr-sub">(${s.houses} houses)</span>` : ""}${s.notes ? `<br><span class="pr-sub">${esc(s.notes)}</span>` : ""}</td>
+      <td class="pr-mins">${s.drive_min}</td>
+      <td class="pr-mins">${s.duration_min}</td>
+      <td class="pr-check">☐</td>
+    </tr>`).join("");
+  document.getElementById("print-sheet").innerHTML = `
+    <div class="pr-head">
+      <div>
+        <b class="pr-title">AUTOBOT — ${esc(p.worker)}</b>
+        <div>${dayName(p.day)} ${fmtDate(p.day)}</div>
+      </div>
+      <div class="pr-totals">
+        ${p.stops.length} stops · drive ${hrs(p.drive_min)} · on-site ${hrs(p.onsite_min)}<br>
+        leave <b>${p.leave}</b> · back <b>${p.back}</b>${p.overflow ? " · <b>OVERFLOWS THE DAY</b>" : ""}
+        <div class="pr-sub">drive times ${p.drive_source === "osrm" ? "real" : "estimated"} · printed ${fmtStamp(new Date().toISOString())}</div>
+      </div>
+    </div>
+    <table class="pr-table">
+      <thead><tr><th>#</th><th>Arrive/<br>Depart</th><th>Task</th><th>Where</th><th>Drv<br>min</th><th>Site<br>min</th><th>Done</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${p.stops.length > 18 ? "" : `<div class="pr-map">${mapSvg(p)}</div>`}`;
+  // keep it to ONE sheet: shrink on busy days, and the map already bowed out above
+  document.getElementById("print-sheet").className = p.stops.length > 11 ? "pr-dense" : "";
+  window.print();
 }
 
 async function doneVisit(id) {

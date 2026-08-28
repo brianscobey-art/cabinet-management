@@ -8,6 +8,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "8/28/26",
+    title: "Autobot: print today's route",
+    detail:
+      "New 🖨 Print button on Today's Route makes a one-page schedule for the clipboard — stop times, tasks, drive/on-site minutes, a Done checkbox per stop, and the route map. Busy days shrink to stay on one sheet.",
+  },
+  {
     date: "8/10/26",
     title: "Data now refreshes twice a day",
     detail:
