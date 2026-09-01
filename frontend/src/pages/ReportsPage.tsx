@@ -1084,6 +1084,19 @@ interface CommunityGroup {
   rows: PhaseReportRow[];
 }
 
+// A measure date only counts as past due when a DATE is what the cell is
+// showing: COMPL means it is done and INCOR already reads red, so neither is
+// "overdue" no matter how old the date is. Compared as YYYY-MM-DD strings so
+// the result does not shift with the browser's timezone.
+function measureOverdue(r: PhaseReportRow): boolean {
+  if (r.fm_correct || r.fm_incorrect || !r.measure_date) return false;
+  const today = new Date();
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate()
+  ).padStart(2, "0")}`;
+  return r.measure_date.split("T")[0] < iso;
+}
+
 function PhaseReport() {
   const [rows, setRows] = useState<PhaseReportRow[]>([]);
   const [builders, setBuilders] = useState<string[]>([]);
@@ -1267,7 +1280,7 @@ function PhaseReport() {
                     </td>
                     <td>{r.address}</td>
                     <td>{r.plan ?? "—"}</td>
-                    <td>
+                    <td className={measureOverdue(r) ? "fm-overdue" : undefined}>
                       {r.fm_correct ? (
                         <b title="Field measure verified correct">COMPL</b>
                       ) : r.fm_incorrect ? (

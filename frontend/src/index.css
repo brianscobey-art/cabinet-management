@@ -1532,6 +1532,15 @@ td.fm-col input[type="checkbox"] {
 /* Current phase, sitting above the field measure detail in the same card.
    Separated by a rule rather than a fill so it reads as part of the widget
    rather than a banner stuck on top of it. */
+/* Field measure scheduled but not done — same wash as the overdue PO receipts
+   row, so "needs attention" looks the same everywhere. print-color-adjust keeps
+   it on the printed community sheets, which are what actually get walked. */
+.fm-overdue {
+  background: #fdeeee;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .fm-phase {
   display: flex;
   align-items: baseline;
