@@ -1090,6 +1090,9 @@ function PhaseReport() {
   const [selectedBuilders, setSelectedBuilders] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set()); // community group keys
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Phase 12 = IC Cab Installed. Those houses are finished, so they are out
+  // of the way by default; the toggle brings them back.
+  const [showPhase12, setShowPhase12] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -1103,7 +1106,8 @@ function PhaseReport() {
 
   const groups = useMemo(() => {
     const map = new Map<string, CommunityGroup>();
-    for (const row of rows) {
+    const shown = showPhase12 ? rows : rows.filter((r) => r.phase !== "12");
+    for (const row of shown) {
       const key = groupKey(row);
       if (!map.has(key)) {
         map.set(key, {
@@ -1116,9 +1120,10 @@ function PhaseReport() {
       map.get(key)!.rows.push(row);
     }
     return [...map.values()];
-  }, [rows]);
+  }, [rows, showPhase12]);
 
   const visibleGroups = groups.filter((g) => selectedBuilders.has(g.builder));
+  const phase12Count = showPhase12 ? 0 : rows.filter((r) => r.phase === "12").length;
 
   function toggleBuilder(name: string) {
     setSelectedBuilders((s) => {
@@ -1168,6 +1173,15 @@ function PhaseReport() {
           </button>
         </div>
         <div className="filters">
+          <label className="check-inline" title="Phase 12 = IC Cab Installed">
+            <input
+              type="checkbox"
+              checked={showPhase12}
+              onChange={(e) => setShowPhase12(e.target.checked)}
+            />
+            Show phase 12 (installed)
+            {phase12Count > 0 && <span className="muted"> · {phase12Count} hidden</span>}
+          </label>
           <MultiSelect
             label="Builders"
             options={builders}
@@ -1239,6 +1253,7 @@ function PhaseReport() {
                   <th>Address</th>
                   <th>Plan</th>
                   <th>Field Measure</th>
+                  <th>Install</th>
                   <th>Current phase</th>
                   <th>Updated</th>
                 </tr>
@@ -1274,6 +1289,7 @@ function PhaseReport() {
                         </>
                       )}
                     </td>
+                    <td>{r.install_date ? fmtDate(r.install_date) : "—"}</td>
                     <td>{r.phase_label ?? "—"}</td>
                     <td>{r.phase_date ? fmtDate(r.phase_date) : "—"}</td>
                   </tr>

@@ -56,6 +56,7 @@ class PhaseReportRow(BaseModel):
     phase_label: str | None
     phase_date: datetime | None
     measure_date: date | None
+    install_date: date | None = None
     fm_correct: bool = False
     fm_incorrect: bool = False
     layout_doc_id: int | None
@@ -124,6 +125,7 @@ def phase_report(db: Session = Depends(get_db)):
                 phase_label=PHASE_LABELS.get(current.phase) if current else None,
                 phase_date=current.noted_at if current else None,
                 measure_date=job.measure_date,
+                install_date=job.install_date,
                 fm_correct=measures.get(job.id, (False, False))[0],
                 fm_incorrect=measures.get(job.id, (False, False))[1],
                 layout_doc_id=layouts.get(job.id),
