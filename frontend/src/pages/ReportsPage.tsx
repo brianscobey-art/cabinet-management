@@ -1088,6 +1088,13 @@ interface CommunityGroup {
 // showing: COMPL means it is done and INCOR already reads red, so neither is
 // "overdue" no matter how old the date is. Compared as YYYY-MM-DD strings so
 // the result does not shift with the browser's timezone.
+// The community is named in the heading above every table, so "Southport, FL"
+// on each row is noise that also pushes the columns out of line. Keep the part
+// before the first comma: "1416 Destini Lane, Southport, FL" -> "1416 Destini Lane".
+function streetOnly(address: string): string {
+  return (address || "").split(",")[0].trim() || address;
+}
+
 function measureOverdue(r: PhaseReportRow): boolean {
   if (r.fm_correct || r.fm_incorrect || !r.measure_date) return false;
   const today = new Date();
@@ -1258,7 +1265,17 @@ function PhaseReport() {
             </h3>
           </div>
           <div className="table-wrap report-table">
-            <table>
+            <table className="phase-table">
+              <colgroup>
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "23%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "6%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Lot</th>
@@ -1278,7 +1295,7 @@ function PhaseReport() {
                     <td>
                       <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
                     </td>
-                    <td>{r.address}</td>
+                    <td>{streetOnly(r.address)}</td>
                     <td>{r.plan ?? "—"}</td>
                     <td className={measureOverdue(r) ? "fm-overdue" : undefined}>
                       {r.fm_correct ? (

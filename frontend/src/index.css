@@ -1535,6 +1535,18 @@ td.fm-col input[type="checkbox"] {
 /* Field measure scheduled but not done — same wash as the overdue PO receipts
    row, so "needs attention" looks the same everywhere. print-color-adjust keeps
    it on the printed community sheets, which are what actually get walked. */
+/* Each community renders its own <table>, so column widths were decided by that
+   table's own content and no two lined up down the printed page. Fixed layout
+   plus the colgroup makes every community share one grid. */
+.phase-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.phase-table td,
+.phase-table th {
+  overflow-wrap: anywhere;
+}
+
 .fm-overdue {
   background: #fdeeee;
   -webkit-print-color-adjust: exact;
