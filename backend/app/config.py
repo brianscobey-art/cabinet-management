@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     def email_enabled(self) -> bool:
         return bool(self.sendgrid_api_key and self.invite_from_email)
 
+    # The in-app assistant. Empty = the assistant is off and says so rather
+    # than failing oddly. Billed per question, so it is admin-only for now.
+    anthropic_api_key: str = ""
+    assistant_admin_only: bool = True
+
     # Where generated order/export files land (gitignored).
     generated_dir: str = str(_BACKEND_DIR / "generated")
 

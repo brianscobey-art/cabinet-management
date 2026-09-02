@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.accounts import router as accounts_router
+from app.api.assistant import router as assistant_router
 from app.api.autobot import router as autobot_router
 from app.api.documents import router as documents_router
 from app.api.fieldmeasure import router as fieldmeasure_router
@@ -222,6 +223,7 @@ app.include_router(notes_router)
 app.include_router(fieldmeasure_router)
 app.include_router(service_router)
 app.include_router(autobot_router)
+app.include_router(assistant_router)
 
 # Sterling (COAST pricing) — self-contained app at /sterling, own Excel-backed store
 from app.sterling_app import mount as _mount_sterling  # noqa: E402
@@ -237,6 +239,14 @@ def health():
 # The Ordering Platform is a self-contained page (not part of the React bundle);
 # registered as a route so it wins over the frontend static mount.
 _static = Path(__file__).resolve().parent / "static"
+
+
+# The assistant widget — one file, loaded by every shell in the suite.
+@app.get("/assistant.js", include_in_schema=False)
+def assistant_widget():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_static / "assistant.js", media_type="application/javascript")
 
 
 @app.get("/ordering-platform", include_in_schema=False)

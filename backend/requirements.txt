@@ -17,3 +17,4 @@ xlrd>=2.0
 pypdf>=4.0
 httpx>=0.27
 python-pptx>=1.0        # Sterling report -> PowerPoint export
+anthropic>=0.116        # the in-app assistant
