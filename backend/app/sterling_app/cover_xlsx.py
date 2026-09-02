@@ -42,7 +42,7 @@ ROW_TABLE = 16
 ROW_BAND = 19
 
 # Header blocks (label span, value span) — values sized to ~24-30 characters
-SALE_L, SALE_V = 5, 9          # "Ashely's Code" is the longest label here
+SALE_L, SALE_V = 5, 9          # "Ashley's Code" is the longest label here
 JOB_L, JOB_V = 3, 10           # short labels, long values (addresses, emails)
 CUST_L, CUST_V = 3, 10         # 14 + 13 + 13 = 40
 
@@ -117,7 +117,7 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
     r += 1
     sale_rows = [
         ("Sale Date", s.get("sale_date")), ("Plan Type", s.get("plan_type")),
-        ("Ashely's Code", s.get("customer_account")), ("G-Code", s.get("job_number")),
+        ("Ashley's Code", s.get("customer_account")), ("G-Code", s.get("job_number")),
         ("I-Code", s.get("install_code")), ("Cab Job Code", s.get("job_code")),
         ("Scope", s.get("scope")),
     ]
