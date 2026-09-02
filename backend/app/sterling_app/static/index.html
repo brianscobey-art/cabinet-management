@@ -299,7 +299,7 @@ async function renderDashboard() {
 }
 
 // ---------- Jobs list ----------
-let jobFilter = { q: "", stage: "", days: "30" };   // default view: the last 30 days
+let jobFilter = { q: "", stage: "", days: "" };   // all time — a filter must never hide everything on arrival
 async function renderJobs() {
   const params = new URLSearchParams();
   if (jobFilter.q) params.set("q", jobFilter.q);
@@ -325,7 +325,7 @@ async function renderJobs() {
           `<option ${jobFilter.stage===s?"selected":""}>${s}</option>`).join("")}
       </select>
       <select id="jdays" title="How far back to look — a job counts as active when it was edited or opened">
-        ${[["30","Last 30 days"],["90","Last 90 days"],["","All time"]].map(([v,l]) =>
+        ${[["","All time"],["30","Last 30 days"],["90","Last 90 days"]].map(([v,l]) =>
           `<option value="${v}" ${String(jobFilter.days ?? "")===v?"selected":""}>${l}</option>`).join("")}
       </select>
       <div class="spacer"></div>
@@ -366,7 +366,11 @@ async function renderJobs() {
               <td>${j.exported_job_id ? `<span class="chip exported" title="In CabinetTron as job #${j.exported_job_id}">CT #${j.exported_job_id}</span>` : ""}</td>
             </tr>`).join("")}`;
           }).join("")
-          : `<tr><td colspan="13" class="empty">${currentKsr() ? `No jobs for ${esc(currentKsr())} yet.` : "No jobs yet — hit “+ New Job” to price your first one."}</td></tr>`}
+          : `<tr><td colspan="13" class="empty">${
+              jobFilter.days
+                ? `Nothing touched in the last ${jobFilter.days} days. <a href="#" id="clearDays">Show all time</a> to see the rest.`
+                : currentKsr() ? `No jobs for ${esc(currentKsr())} yet.`
+                : "No jobs yet — hit “+ New Job” to price your first one."}</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -374,6 +378,9 @@ async function renderJobs() {
     clearTimeout(renderJobs._t); renderJobs._t = setTimeout(renderJobs, 300); });
   $("#jstage").addEventListener("change", e => { jobFilter.stage = e.target.value; renderJobs(); });
   $("#jdays").addEventListener("change", e => { jobFilter.days = e.target.value; renderJobs(); });
+  if ($("#clearDays")) $("#clearDays").onclick = e => {
+    e.preventDefault(); jobFilter.days = ""; renderJobs();
+  };
   $("#newJob").addEventListener("click", () => jobFormDialog());
   $("#newFromPlan").addEventListener("click", () => newFromPlanDialog());
   $("#import2020").addEventListener("click", () => $("#q2020File").click());
@@ -1527,7 +1534,7 @@ function contractHtml(j, hwFinish = "") {
       window.print();
     };
     renderSched("");
-  </scr` + `ipt>  <script src="/assistant.js" defer></script>
+  </scr` + `ipt>  <script src="/assistant.js" defer><\/script>
 </body></html>`;
 }
 
