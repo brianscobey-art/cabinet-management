@@ -1849,6 +1849,21 @@ async function natPlanDialog(division, plan, doorStyle) {
   const pb = $("#dsave", dlg);
   pb.textContent = "Print";
   pb.onclick = () => printHtml(`${plan} — ${division}`, html);
+  // take the layout off the list — bottom left, away from Close and Print
+  const del = document.createElement("button");
+  del.className = "danger";
+  del.textContent = "Delete Layout";
+  del.style.marginRight = "auto";
+  $(".dfoot", dlg).prepend(del);
+  del.onclick = async () => {
+    if (!confirm(`Delete "${plan}" from ${division}?
+
+Its SKU list, margin and countertops go with it. This cannot be undone.`)) return;
+    await api("/national-pricing/plan?" + q, {method: "DELETE"});
+    $("#dcancel", dlg).click();
+    toast(`Deleted ${plan} — ${division}`);
+    renderNational();
+  };
 }
 
 // A plain printable page for a block of app HTML (Letter, app colours).

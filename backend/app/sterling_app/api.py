@@ -813,6 +813,26 @@ def national_plan(division: str, plan: str, door_style: str | None = None,
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@router.delete("/national-pricing/plan")
+def delete_national_plan(division: str, plan: str, db: Session = Depends(get_db)):
+    """Take a layout off the national list: its SKU lines, its margin/install
+    record and its tops all go — the plan simply stops existing for that division."""
+    from app.sterling_app.models import PlanTops
+
+    gone = (db.query(PlanTemplateItem)
+            .filter(PlanTemplateItem.division == division, PlanTemplateItem.plan == plan)
+            .delete(synchronize_session=False))
+    if not gone:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    db.query(PlanInstall).filter(PlanInstall.division == division,
+                                 PlanInstall.plan == plan).delete(synchronize_session=False)
+    for tops in db.query(PlanTops).filter(PlanTops.division == division,
+                                          PlanTops.plan == plan).all():
+        db.delete(tops)                      # pieces go with it
+    db.commit()
+    return {"division": division, "plan": plan, "lines": gone}
+
+
 @router.put("/national-pricing/margin")
 def set_national_margin(payload: NationalMarginUpdate, db: Session = Depends(get_db)):
     rec = (
