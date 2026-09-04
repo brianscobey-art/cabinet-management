@@ -1227,18 +1227,17 @@ function breakdownPage(j, detailed = true) {
   const mPct = j.margin_pct ?? "";
   // Compact: no SKU listings — one Sections table (list/cost/sell); totals live in the build-up only.
   const secs = proposalSections(j);
-  const sellByRoom = new Map(secs.filter(c => c.room).map(c => [c.room, c.sell]));
-  const svcSell = secs.filter(c => !c.room).reduce((n, c) => n + c.sell, 0);
+  // Sections = the rooms as the screen prices them (complete, with their own
+  // hardware, tax, assembly and install), then the job-level bucket
   const roomTables = !detailed ? `
     <h3>Sections</h3>
     <table>
       <thead><tr><th>Section</th><th class="num">Ext List</th><th class="num">Cost</th><th class="num">Sell</th></tr></thead>
       <tbody>
-        ${j.rooms.filter(r => r.lines.length).map(r => `<tr>
-          <td>${esc(r.name)}${r.zone ? " ("+esc(r.zone)+")" : ""}</td>
-          <td class="num">${money(r.list_total)}</td><td class="num">${money(r.cost)}</td>
-          <td class="num">${money(sellByRoom.get(r) ?? 0)}</td></tr>`).join("")}
-        ${svcSell ? `<tr><td>Installation &amp; Services</td><td></td><td></td><td class="num">${money(svcSell)}</td></tr>` : ""}
+        ${secs.filter(c => !c.tops).map(c => `<tr>
+          <td>${esc(c.label)}</td>
+          <td class="num">${c.room ? money(c.list) : ""}</td><td class="num">${money(c.cost)}</td>
+          <td class="num">${money(c.sell)}</td></tr>`).join("")}
       </tbody>
     </table>`
   : j.rooms.filter(r => r.lines.length).map(r => `
@@ -1266,6 +1265,7 @@ function breakdownPage(j, detailed = true) {
       [`Sales tax (${tPct}% × materials)`, j.tax],
       [`Assembly (${j.assembly_boxes_effective} boxes × ${money(Number(j.assembly)/(j.assembly_boxes_effective||1))})`, j.assembly],
       [j.install_price !== null ? "Install (flat)" :
+        j.install_mode === "none" ? "Install (mode is None — not charged)" :
         j.install_min_applied ? `Install — ${money(j.install_minimum)} minimum (${j.install_units_effective} boxes × ${money(j.install_rate_effective)} = ${money(j.install_raw)})` :
         `Install (${j.install_units_effective} boxes × ${money(j.install_rate_effective)})`,
         Number(j.install_cost) - Number(j.pia) - Number(j.hardware_labor)],
@@ -1276,7 +1276,8 @@ function breakdownPage(j, detailed = true) {
       [`Hardware (${j.hardware_qty} pc)`, j.hardware_material],
       [`Sales tax (${tPct}% × materials)`, j.tax],
       ...(Number(j.assembly) ? [[`Assembly (${num(j.assembly_boxes_effective)} × ${money(j.assembly_rate_effective)})`, j.assembly]] : []),
-      [`Install (${num(j.install_units_effective)} × ${money(j.install_rate_effective)})`,
+      [j.install_mode === "none" ? "Install (mode is None — not charged)"
+        : `Install (${num(j.install_units_effective)} × ${money(j.install_rate_effective)})`,
         Number(j.install_cost) - Number(j.pia) - Number(j.hardware_labor)],
       ...(Number(j.hardware_labor) ? [[`Hardware install labor (${j.hardware_qty} pc × ${money(j.hardware_rate_effective)})`, j.hardware_labor]] : []),
       ...(Number(j.pia) ? [["Install PIA add-on", j.pia]] : []),
@@ -1297,32 +1298,25 @@ function breakdownPage(j, detailed = true) {
     </table>`;
 }
 
-// Allocate the sale price across every section (rooms + service kinds) by cost
-// share; the last section absorbs rounding so sections always foot to the total.
+// The sections of a sale are exactly what the on-screen Pricing Breakdown
+// shows: each room complete (its cabinets, hardware, freight, tax, assembly,
+// install and PIA) at the sell the job allocated to it, then the job-level
+// bucket (job PIA, install adjustments, delivery — never tied to a room), then
+// the countertops after margin. Print, quote and contract all read this one
+// list, so a room is the same number everywhere.
 function proposalSections(j) {
-  const totalCost = Number(j.cost);
   const tops = Number(j.tops || 0);
-  const sell = Number(j.sell) - tops;  // rooms/services allocate over the cabinet sell
+  const byId = new Map((j.rooms_breakdown || []).map(b => [b.room_id, b]));
   const comps = [];
   j.rooms.forEach(r => {
-    if (r.lines.length) comps.push({room: r, label: r.name + (r.zone ? ` (${r.zone})` : ""), cost: Number(r.cost)});
+    const b = byId.get(r.id);
+    if (r.lines.length && b)
+      comps.push({room: r, label: r.name + (r.zone ? ` (${r.zone})` : ""),
+                  list: Number(b.list), cost: Number(b.cost), sell: Number(b.sell)});
   });
-  [["Hardware" + (j.hardware_qty ? ` (${j.hardware_qty} pieces)` : ""), Number(j.hardware_material)],
-   ["Assembly", Number(j.assembly)],
-   ["Professional Installation", Number(j.install_cost) - Number(j.pia)],
-   ["Additional Install Services", Number(j.pia)],
-   ["Freight", Number(j.freight)],
-   ["Sales Tax", Number(j.tax)],
-   ["Delivery", Number(j.delivery)],
-  ].forEach(([label, cost]) => { if (cost > 0) comps.push({label, cost}); });
-  let running = 0;
-  comps.forEach((c, i) => {
-    // whole-dollar sections; the last one absorbs rounding so they foot exactly
-    c.sell = (i === comps.length - 1 || !totalCost)
-      ? Math.round(sell - running)
-      : Math.round(sell * c.cost / totalCost);
-    running += c.sell;
-  });
+  if (Number(j.job_level_cost) || Number(j.job_level_sell))
+    comps.push({label: "Job level — PIA, install adjustments, delivery",
+                cost: Number(j.job_level_cost), sell: Number(j.job_level_sell)});
   if (tops > 0) comps.push({label: "Countertops", cost: tops, sell: tops, tops: true});
   return comps;
 }
