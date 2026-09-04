@@ -77,6 +77,70 @@ def _seed_cover_refs(SessionLocal) -> None:
                 db.add(Superintendent(name=name, phone=phone, email=email))
         db.commit()
         _fix_cover_tax(db)
+        _apply_data_fixes(db)
+
+
+# Data corrections made against one copy of the workbook that every copy
+# needs — the hosted app keeps its own on Render's /data disk, and git only
+# seeds a fresh disk. Each fix runs once per disk, keyed by its Setting flag,
+# and is a no-op wherever the values already match.
+DATA_FIXES = [
+    ("data_fix_2026_09_04_install_rules", {
+        # sku -> field: value. Fillers, skins and the touch-up kit carry no
+        # install box; the dishwasher return panel installs but is not assembled.
+        "catalog": {
+            "DWR3": {"assemble_value": 0},
+            **{s: {"install_value": 0} for s in (
+                "BSV", "TUK", "F342", "F396", "F642", "F696", "F124", "F130", "F136",
+                "F142", "F148", "F160", "F224", "F230", "F236", "F242", "F248", "F260")},
+        },
+        # (division, plan) -> sku: qty (None drops the line). Reconciled to the
+        # Everluxe sales orders for the Aisle (SO46632) and Embry (SO45881).
+        "plan_templates": {
+            ("DRH PC", "EX1 Aisle STD"): {"F642": 3, "SHM": 6, "BSV": 9, "WSV42": 4},
+            ("DRH PC", "DRH1 Embry STD"): {"VS30": 5, "VS36": None, "BSV": 6, "WSV42": 4},
+        },
+    }),
+]
+
+
+def _apply_data_fixes(db) -> None:
+    from sqlalchemy import func
+
+    from app.sterling_app.models import CatalogItem, PlanTemplateItem, Setting
+
+    for key, fix in DATA_FIXES:
+        if db.get(Setting, key):
+            continue
+        for sku, fields in fix.get("catalog", {}).items():
+            item = (db.query(CatalogItem)
+                    .filter(CatalogItem.vendor == "Everluxe",
+                            func.upper(CatalogItem.sku) == sku.upper())
+                    .first())
+            if item is None:
+                continue
+            for field, value in fields.items():
+                setattr(item, field, value)
+        for (division, plan), skus in fix.get("plan_templates", {}).items():
+            existing = (db.query(PlanTemplateItem)
+                        .filter(PlanTemplateItem.division == division,
+                                PlanTemplateItem.plan == plan).all())
+            if not existing:            # this disk never had the plan — nothing to correct
+                continue
+            by_sku = {i.sku.strip().upper(): i for i in existing}
+            for sku, qty in skus.items():
+                item = by_sku.get(sku.upper())
+                if qty is None:
+                    if item is not None:
+                        db.delete(item)
+                elif item is not None:
+                    item.qty = qty
+                else:
+                    db.add(PlanTemplateItem(division=division, plan=plan, sku=sku,
+                                            qty=qty, area="All"))
+        db.add(Setting(key=key, value="1"))
+        db.commit()
+        print(f"Sterling: applied {key}")
 
 
 def _fix_cover_tax(db) -> None:
