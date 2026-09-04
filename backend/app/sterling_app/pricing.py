@@ -30,6 +30,7 @@ MATRIX_DEFAULTS = {
     "knob_material": "1.25",      # $E$5 — KNB cost each
     "handle_material": "2.60",    # $E$6 — HNDL cost each
     "knob_labor": "1",            # $J$4 — knob install $ per piece
+    "install_minimum": "250",     # no job installs for less than this (overridable per job)
     "handle_labor": "2",          # $J$5 — handle install $ per piece
     "delivery": "0",              # $G$3
     "national_margin": "15",      # $G$4 — default margin for national builder pricing

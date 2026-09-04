@@ -1015,6 +1015,7 @@ class EvxLine(BaseModel):
 
 class EvxPriceIn(BaseModel):
     door_style: str | None = None
+    install_min_override: bool = False      # waive the per-job install minimum
     multiplier: Decimal = Field(default=Decimal("0.21"), gt=0, le=1)
     margin_pct: Decimal = Field(default=Decimal("15"), ge=0, lt=100)
     fuel_pct: Decimal = Field(default=Decimal("0"), ge=0, lt=100)  # optional fuel surcharge % of dealer cost
@@ -1086,7 +1087,9 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
 
     hw_unit, hw_labor_rate, hw_kind, _ = resolve_hardware(payload.hardware_sku)
 
-    def price_subset(lines):
+    install_minimum = compute.matrix_rate(db, "install_minimum")
+
+    def price_subset(lines, apply_min=True):
         """Full matrix over a set of lines -> (out_lines, totals dict)."""
         out, list_total = [], Decimal("0")
         hw_qty = boxes = units = 0
@@ -1129,7 +1132,12 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
         hw_material = money(hw_qty * hw_unit) if payload.include_hardware else Decimal("0.00")
         hw_labor = money(hw_qty * hw_labor_rate) if payload.include_hardware else Decimal("0.00")
         tax = money((cabinets + hw_material) * tax_pct)
-        install = money(Decimal(units) * install_rate)
+        install_raw = money(Decimal(units) * install_rate)
+        install = install_raw
+        install_min_applied = False
+        if apply_min and not payload.install_min_override and cabinets > 0 and install < install_minimum:
+            install = money(install_minimum)
+            install_min_applied = True
         cogs = money(cabinets + assembly + freight + fuel + hw_material + tax + hw_labor + install)
         sale = (
             money(compute.sell_from_margin(cogs, payload.margin_pct).quantize(Decimal("1"), rounding=_RH))
@@ -1143,6 +1151,8 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
             "hardware_labor_rate": str(hw_labor_rate), "tax": str(tax),
             "assembly_boxes": boxes, "assembly": str(assembly),
             "install_units": units, "install": str(install),
+            "install_raw": str(install_raw), "install_minimum": str(install_minimum),
+            "install_min_applied": install_min_applied,
             "cogs": str(cogs), "margin_pct": str(payload.margin_pct), "sale": str(sale),
             "assem_rate": str(assem_rate), "install_rate": str(install_rate),
         }
@@ -1158,7 +1168,7 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
     areas = []
     for a in area_names:
         subset = [ln for ln in payload.lines if ((ln.area or "All").strip() or "All") == a]
-        _, at = price_subset(subset)
+        _, at = price_subset(subset, apply_min=False)   # the minimum is per job, not per area
         areas.append({"area": a, "totals": at})
     grand_sale = money(sum((Decimal(a["totals"]["sale"]) for a in areas), Decimal("0")))
     grand_cogs = money(sum((Decimal(a["totals"]["cogs"]) for a in areas), Decimal("0")))

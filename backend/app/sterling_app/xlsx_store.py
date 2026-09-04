@@ -142,6 +142,7 @@ SHEETS = [
         ("Hardware Rate", "hardware_rate"), ("Assembly Rate", "assembly_rate"),
         ("PIA", "pia_amount"), ("KSR", "ksr"),
         ("Cost Model", "cost_model"), ("Install Mode", "install_mode"), ("Install Price", "install_price"),
+        ("Install Min Override", "install_min_override"),
         ("Hardware SKU", "hardware_sku"), ("Hardware Qty", "hardware_qty_override"),
         ("Sales Contact", "sales_contact_name"), ("Sales Phone", "sales_contact_phone"),
         ("Sales Email", "sales_contact_email"), ("Field Contact", "field_contact_name"),

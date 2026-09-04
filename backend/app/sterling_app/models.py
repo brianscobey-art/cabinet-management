@@ -292,6 +292,7 @@ class Job(Base):
         Enum(InstallMode, native_enum=False, length=16), default=InstallMode.none
     )
     install_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)  # override; blank = plan lookup
+    install_min_override: Mapped[int] = mapped_column(default=0)  # 1 = this job is exempt from the install minimum
     hardware_sku: Mapped[str | None] = mapped_column(String(100), default=None)  # knob/pull catalog SKU
     hardware_qty_override: Mapped[int | None] = mapped_column(default=None)  # blank = doors+drawers from lines
 

@@ -336,6 +336,7 @@ class JobUpdate(BaseModel):
     cost_model: CostModel | None = None
     install_mode: InstallMode | None = None
     install_price: Decimal | None = Field(default=None, ge=0)
+    install_min_override: int | None = Field(default=None, ge=0, le=1)
     hardware_sku: str | None = None
     hardware_qty_override: int | None = Field(default=None, ge=0)
     sales_contact_name: str | None = None
@@ -401,6 +402,10 @@ class JobDetail(BaseModel):
     install_price: Decimal | None
     hardware_sku: str | None
     hardware_qty_override: int | None
+    install_min_override: int = 0
+    install_min_applied: bool = False
+    install_minimum: Decimal = Decimal("250")
+    install_raw: Decimal = Decimal("0")
     sales_contact_name: str | None
     sales_contact_phone: str | None
     sales_contact_email: str | None

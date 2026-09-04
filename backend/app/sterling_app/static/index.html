@@ -727,6 +727,12 @@ async function renderJobDetail(id) {
                 placeholder="${j.assembly_boxes_effective}" title="Box count; blank = per-SKU/plan count"></div>
             <div class="set-row"><span>Install flat $ <small class="muted">(overrides)</small></span>
               <input id="iprice" type="number" min="0" step="0.01" value="${j.install_price ?? ""}"></div>
+            <div class="set-row"><span>Install minimum <small class="muted">(${money(j.install_minimum)} per job)</small></span>
+              <button class="${j.install_min_override ? "small" : "ghost small"}"
+                onclick="waiveInstallMin(${j.id}, ${j.install_min_override ? 0 : 1})"
+                title="${j.install_min_override ? "The minimum is waived on this job — click to put it back" : "Charge the install as computed even when it is under the minimum"}">
+                ${j.install_min_override ? "Minimum waived — restore" : "Override minimum"}</button></div>
+            ${j.install_min_applied ? `<div class="banner" style="margin:6px 0 2px; font-size:12px">Install came to ${money(j.install_raw)} — raised to the ${money(j.install_minimum)} minimum. Override it above if this job is exempt.</div>` : ""}
             <div class="set-row"><span>PIA $ <small class="muted">(adds to install)</small></span>
               <input id="ipia" type="number" min="0" step="0.01" value="${j.pia_amount ?? ""}" placeholder="0"></div>
           </div>
@@ -796,14 +802,28 @@ async function renderJobDetail(id) {
     toast("Job duplicated"); location.hash = "#/job/" + copy.id;
   };
   $("#jobCover").onclick = async () => {
+    await freshJob();
     const cs = await api(`/cover-sheets/from-job/${j.id}`, {method:"POST"});
     toast("Cover sheet ready");
     location.hash = "#/coversheet/" + cs.id;
   };
   $("#jobTops").onclick = () => topsDialog("Jobs", `Job ${j.id}`, j.id, () => renderJobDetail(id), j.name);
-  $("#printContract").onclick = () => printContract(j);
-  $("#printQuote").onclick = () => printQuote(j, "detailed");
-  $("#printCompact").onclick = () => printQuote(j, "compact");
+  // A value typed into the pricing panel only saves when the field loses focus.
+  // Every button that prints or exports first takes focus away (which fires
+  // that save), waits for it, and reads the job back — so what prints is what
+  // is on screen, Enter or no Enter.
+  const PANEL_FIELDS = ["pmargin","pstage","cmodel","ptier","pboxes","arate",
+                        "imode","irate","hrate","iprice","ipia","hsku","hqty"];
+  const freshJob = async () => {
+    const el = document.activeElement;
+    if (el && PANEL_FIELDS.includes(el.id)) { el.blur(); await savePanel(); }
+    await _panelSave;
+    return api(`/jobs/${j.id}`);
+  };
+  $("#printContract").onclick = async () => printContract(await freshJob());
+  $("#printQuote").onclick = async () => printQuote(await freshJob(), "detailed");
+  if (j.install_min_applied) toast(`Install raised to the ${money(j.install_minimum)} minimum (it came to ${money(j.install_raw)}) — Pricing selections has the override`);
+  $("#printCompact").onclick = async () => printQuote(await freshJob(), "compact");
   $("#exportBtn").onclick = async () => {
     if (!confirm(`Send "${j.name}" to CabinetTron?\n\nThis creates the job, its rooms, and a quote with every line item.`)) return;
     const btn = $("#exportBtn"); btn.disabled = true; btn.textContent = "Sending…";
@@ -815,7 +835,8 @@ async function renderJobDetail(id) {
   };
 
   // Pricing panel — every control auto-saves on change (no Apply button)
-  const savePanel = async () => {
+  let _panelSave = Promise.resolve();
+  const savePanelNow = async () => {
     try {
       await api(`/jobs/${j.id}`, {method:"PUT", body: {
         pricing_mode: "margin",  // plan/bid mode retired — sell is always margin-based
@@ -839,8 +860,8 @@ async function renderJobDetail(id) {
       renderJobDetail(id);
     } catch (e) { toast(e.message, true); }
   };
-  ["pmargin","pstage","cmodel","ptier","pboxes","arate",
-   "imode","irate","hrate","iprice","ipia","hsku","hqty"].forEach(fid => {
+  const savePanel = () => (_panelSave = savePanelNow());
+  PANEL_FIELDS.forEach(fid => {
     const el = $("#" + fid);
     if (el) el.addEventListener("change", savePanel);
   });
@@ -1191,6 +1212,13 @@ function groupLines(lines) {
   return [...map.values()];
 }
 
+// Waive (1) or restore (0) the per-job install minimum.
+async function waiveInstallMin(id, val) {
+  await api("/jobs/" + id, {method: "PUT", body: {install_min_override: val}});
+  toast(val ? "Install minimum waived for this job" : "Install minimum back on");
+  renderJobDetail(id);
+}
+
 function breakdownPage(j, detailed = true) {
   const matrix = j.cost_model === "matrix";
   const cab = Number(j.cabinets_cost), hwm = Number(j.hardware_material);
@@ -1238,6 +1266,7 @@ function breakdownPage(j, detailed = true) {
       [`Sales tax (${tPct}% × materials)`, j.tax],
       [`Assembly (${j.assembly_boxes_effective} boxes × ${money(Number(j.assembly)/(j.assembly_boxes_effective||1))})`, j.assembly],
       [j.install_price !== null ? "Install (flat)" :
+        j.install_min_applied ? `Install — ${money(j.install_minimum)} minimum (${j.install_units_effective} boxes × ${money(j.install_rate_effective)} = ${money(j.install_raw)})` :
         `Install (${j.install_units_effective} boxes × ${money(j.install_rate_effective)})`,
         Number(j.install_cost) - Number(j.pia) - Number(j.hardware_labor)],
       ...(Number(j.hardware_labor) ? [[`Hardware install labor (${j.hardware_qty} pc × ${money(j.hardware_rate_effective)})`, j.hardware_labor]] : []),
@@ -2134,6 +2163,11 @@ async function renderEverluxe() {
             <option value="merged">Merged — one total</option>
             <option value="by_area">By area — separate</option>
           </select></label>
+        <label class="f">Install min
+          <select id="evxMin" title="No job installs for less than the minimum unless it is waived here">
+            <option value="">Charge minimum</option>
+            <option value="1">Waived</option>
+          </select></label>
         <label class="f">Saved lists
           <select id="evxSaved" style="width:190px"><option value="">— open a saved list —</option></select></label>
         <div class="spacer"></div>
@@ -2210,7 +2244,8 @@ async function renderEverluxe() {
     $("#evxHdwWrap").style.display = hwSeparate() ? "none" : "";
     $$(".evx-hopt").forEach(el => el.style.display = hwSeparate() ? "" : "none");
   };
-  const reprice = async () => {
+  let _evxRepriceP = Promise.resolve();
+  const repriceNow = async () => {
     const lines = _evxLines.filter(l => l.sku.trim());
     syncDirty();
     if (!lines.length) { $("#evxRows").innerHTML = ""; $("#evxTotals").innerHTML = ""; return; }
@@ -2222,9 +2257,14 @@ async function renderEverluxe() {
       hardware_sku: hwSeparate() ? null : ($("#evxHdw").value.trim() || null),
       include_hardware: !hwSeparate(),
       hardware_options: hwSeparate() ? hwOptionSkus() : [],
+      install_min_override: $("#evxMin").value === "1",
       lines,
     }});
     window._evxLast = res;
+    if (res.totals.install_min_applied && !window._evxMinToasted) {
+      toast(`Install raised to the ${money(res.totals.install_minimum)} minimum (it came to ${money(res.totals.install_raw)}) — waive it under Install min if this one is exempt`);
+    }
+    window._evxMinToasted = !!res.totals.install_min_applied;
     const areaList = ["All", ...new Set(_evxLines.map(l => (l.area || "All").trim() || "All").filter(a => a !== "All"))];
     const areaSel = (l, i) => `<select class="evx-area" data-i="${i}">
       ${areaList.map(a => `<option ${((l.area || "All") === a) ? "selected" : ""}>${esc(a)}</option>`).join("")}
@@ -2262,7 +2302,7 @@ async function renderEverluxe() {
         : `<div class="t"><div class="label">Hdw (${t.hardware_qty} pc)</div><div class="value" style="font-size:16px">${money(t.hardware_material)}</div></div>
       <div class="t"><div class="label">Tax</div><div class="value" style="font-size:16px">${money(t.tax)}</div></div>
       <div class="t"><div class="label">${t.hardware_kind === "handle" ? "Handle" : "Knob"} Labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</div><div class="value" style="font-size:16px">${money(t.hardware_labor)}</div></div>`}
-      <div class="t"><div class="label">Install (${t.install_units} bx × $25)</div><div class="value" style="font-size:16px">${money(t.install)}</div></div>
+      <div class="t"><div class="label">${t.install_min_applied ? `Install — ${money(t.install_minimum)} min (${t.install_units} bx = ${money(t.install_raw)})` : `Install (${t.install_units} bx × $25)`}</div><div class="value" style="font-size:16px${t.install_min_applied ? "; color:var(--orange)" : ""}">${money(t.install)}</div></div>
       <div class="t"><div class="label">COGS</div><div class="value">${money(t.cogs)}</div></div>
       <div class="spacer"></div>
       <div class="t"><div class="label">Sale @ ${Math.round(Number(t.margin_pct))}%</div><div class="value" style="color:var(--orange); font-size:24px">${money(t.sale)}</div></div>`;
@@ -2316,6 +2356,7 @@ async function renderEverluxe() {
       _evxLines.splice(Number(e.target.dataset.i), 1); reprice();
     });
   };
+  const reprice = () => (_evxRepriceP = repriceNow());
   const addLine = () => {
     let sku = baseSku($("#evx_sku").value.trim().toUpperCase());
     if (!sku) { $("#evx_sku").focus(); return; }
@@ -2344,7 +2385,7 @@ async function renderEverluxe() {
     if ($("#evx_sku").value.trim()) addLine(); else $("#evx_sku").focus();
   });
   ["evxStyle","evxMult","evxMargin","evxFuel","evxMode","evxHdw",
-   "evxHdw1","evxHdw2","evxHdw3"].forEach(id => $("#" + id).addEventListener("change", reprice));
+   "evxHdw1","evxHdw2","evxHdw3","evxMin"].forEach(id => $("#" + id).addEventListener("change", reprice));
   $("#evxHdwMode").addEventListener("change", () => { syncHwMode(); reprice(); });
   syncHwMode();
   loadHardwareList();
@@ -2444,7 +2485,11 @@ async function renderEverluxe() {
     _evxLoaded = {division, plan, snapshot: listSnap()};
     reprice();
   });
-  $("#evxPrint").onclick = () => {
+  $("#evxPrint").onclick = async () => {
+    // a margin or multiplier still being typed saves on blur — take focus, wait for the reprice
+    const el = document.activeElement;
+    if (el && ["INPUT", "SELECT"].includes(el.tagName)) { el.blur(); await reprice(); }
+    await _evxRepriceP;
     if (!window._evxLast || !window._evxLast.lines.length) return toast("Add some SKUs first", true);
     printEverluxeSheet(window._evxLast, {
       plan: $("#evxPlan").value.trim(),
@@ -2576,7 +2621,7 @@ function printEverluxeSheet(res, opts) {
         <tr><td>Sales tax (7% materials)</td><td class="num">${money(t.tax)}</td></tr>
         ${hwSep ? `<tr><td>Hardware (${t.hardware_qty} pc)</td><td class="num">priced separately</td></tr>`
                 : `<tr><td>${t.hardware_kind === "handle" ? "Handle" : "Knob"} install labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</td><td class="num">${money(t.hardware_labor)}</td></tr>`}
-        <tr><td>Install (${t.install_units} boxes × $25)</td><td class="num">${money(t.install)}</td></tr>
+        <tr><td>${t.install_min_applied ? `Install — ${money(t.install_minimum)} minimum (${t.install_units} boxes × $25 = ${money(t.install_raw)})` : `Install (${t.install_units} boxes × $25)`}</td><td class="num">${money(t.install)}</td></tr>
         <tr class="sub-t"><td>TOTAL COST</td><td class="num">${money(t.cogs)}</td></tr>
       </table>
     </td><td style="vertical-align:top">

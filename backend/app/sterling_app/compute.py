@@ -651,6 +651,8 @@ def job_totals(db: Session, job: Job) -> dict:
     )
     install_cost = Decimal("0.00")
     hardware_labor = Decimal("0.00")
+    install_minimum = matrix_rate(db, "install_minimum")
+    install_min_applied = False
     if job.install_mode != InstallMode.none:
         if job.install_price is not None:
             install_cost = money(job.install_price)
@@ -660,6 +662,14 @@ def job_totals(db: Session, job: Job) -> dict:
             install_cost = money(rates.cabinet_install)
         if job.install_mode in (InstallMode.with_knobs, InstallMode.with_handles):
             hardware_labor = money(hw_qty * hardware_rate)
+    install_raw = install_cost
+    # No job installs for less than the minimum — unless a flat price was set
+    # or the job was marked exempt. Only once there are cabinets to install.
+    if (job.install_mode != InstallMode.none and job.install_price is None
+            and not job.install_min_override and cabinets_cost > 0
+            and install_cost < install_minimum):
+        install_cost = money(install_minimum)
+        install_min_applied = True
 
     # PIA: flat add-on to install (difficult jobs), applied on top of whatever
     # the install computed to — even a flat install price.
@@ -781,6 +791,9 @@ def job_totals(db: Session, job: Job) -> dict:
         "install_units_effective": install_units,
         "delivery": delivery,
         "install_cost": install_cost,
+        "install_raw": install_raw,
+        "install_minimum": install_minimum,
+        "install_min_applied": install_min_applied,
         "cost": cost,
         "tops": tops,
         "sell": sell,
@@ -890,6 +903,10 @@ def job_detail(db: Session, job: Job) -> JobDetail:
         cost_model=job.cost_model,
         install_mode=job.install_mode,
         install_price=job.install_price,
+        install_min_override=job.install_min_override or 0,
+        install_min_applied=t["install_min_applied"],
+        install_minimum=t["install_minimum"],
+        install_raw=t["install_raw"],
         hardware_sku=job.hardware_sku,
         hardware_qty_override=job.hardware_qty_override,
         exported_job_id=job.exported_job_id,
