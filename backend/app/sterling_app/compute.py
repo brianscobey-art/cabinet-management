@@ -407,6 +407,113 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
     return rows
 
 
+def national_plan_detail(db: Session, division: str, plan: str,
+                         door_style: str | None) -> dict:
+    """One plan off the national price sheet, opened up: every SKU priced and
+    each step of COGS -> sale spelled out. Same math as national_pricing_rows,
+    so the detail always agrees with the row it was opened from."""
+    from app.sterling_app.models import PlanTemplateItem, PlanTops
+
+    group = resolve_price_group(db, door_style)
+    rates = {
+        "multiplier": matrix_rate(db, "drh_multiplier"),
+        "freight_pct": matrix_rate(db, "freight_pct"),
+        "tax_pct": matrix_rate(db, "tax_pct"),
+        "assem_rate": matrix_rate(db, "assem_rate"),
+        "install_rate": matrix_rate(db, "install_rate"),
+        "knob_material": matrix_rate(db, "knob_material"),
+        "knob_labor": matrix_rate(db, "knob_labor"),
+        "default_margin": matrix_rate(db, "national_margin"),
+    }
+    items = (
+        db.query(PlanTemplateItem)
+        .filter(PlanTemplateItem.division == division, PlanTemplateItem.plan == plan)
+        .order_by(PlanTemplateItem.id)
+        .all()
+    )
+    if not items:
+        raise ValueError("Plan not found")
+    catalog = {
+        i.sku.upper(): i
+        for i in db.query(CatalogItem).filter(CatalogItem.vendor == "Everluxe").all()
+    }
+    lines = []
+    list_total = Decimal("0")
+    hw_qty = sku_boxes = sku_install = 0
+    units_found = False
+    for it in items:
+        cat = catalog.get(it.sku.strip().upper())
+        if cat is None:
+            lines.append({
+                "sku": it.sku.strip(), "qty": it.qty, "description": None, "in_catalog": False,
+                "list_each": Decimal("0"), "ext_list": Decimal("0"), "dealer_ext": Decimal("0"),
+                "assem_each": 0, "assem_units": 0, "install_each": 0, "install_units": 0,
+                "hw_each": 0, "hw_pieces": 0,
+            })
+            continue
+        each = group_price(cat, group)
+        ext = each * it.qty
+        hw_each = (cat.doors or 0) + (cat.drawers or 0)
+        asm_each = cat.assemble_value or 0
+        inst_each = cat.install_value or 0
+        if cat.assemble_value is not None or cat.install_value is not None:
+            units_found = True
+        list_total += ext
+        hw_qty += hw_each * it.qty
+        sku_boxes += asm_each * it.qty
+        sku_install += inst_each * it.qty
+        lines.append({
+            "sku": cat.sku, "qty": it.qty, "description": cat.description, "in_catalog": True,
+            "list_each": money(each), "ext_list": money(ext),
+            "dealer_ext": money(ext * rates["multiplier"]),
+            "assem_each": asm_each, "assem_units": asm_each * it.qty,
+            "install_each": inst_each, "install_units": inst_each * it.qty,
+            "hw_each": hw_each, "hw_pieces": hw_each * it.qty,
+        })
+
+    rec = db.query(PlanInstall).filter(
+        PlanInstall.division == division, PlanInstall.plan == plan).first()
+    boxes = sku_boxes if units_found else (rec.assembly_units if rec else 0)
+    units = sku_install if units_found else (rec.install_units if rec else 0)
+    cabinets = money(list_total * rates["multiplier"])
+    freight = money(cabinets * rates["freight_pct"])
+    hw_material = money(hw_qty * rates["knob_material"])
+    tax = money((cabinets + hw_material) * rates["tax_pct"])
+    assembly = money(Decimal(boxes) * rates["assem_rate"])
+    install_cabinet = money(Decimal(units) * rates["install_rate"])
+    hw_labor = money(hw_qty * rates["knob_labor"])
+    install = money(Decimal(units) * rates["install_rate"] + hw_qty * rates["knob_labor"])
+    cogs = money(cabinets + freight + hw_material + tax + assembly + install)
+    override = rec.margin_pct if rec and rec.margin_pct is not None else None
+    margin = Decimal(override) if override is not None else rates["default_margin"]
+    sale = (
+        money(sell_from_margin(cogs, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        if cogs else Decimal("0.00")
+    )
+    tops_rec = db.query(PlanTops).filter(
+        PlanTops.division == division, PlanTops.plan == plan).first()
+    tp = tops_total(db, tops_rec) if tops_rec else None
+    tops = tp["total"] if tp else Decimal("0.00")
+    return {
+        "division": division, "plan": plan, "door_style": door_style, "price_group": group,
+        "units_source": "sku" if units_found else "plan",
+        "rates": rates,
+        "lines": lines,
+        "totals": {
+            "list_total": money(list_total), "cabinets": cabinets, "freight": freight,
+            "hardware_qty": hw_qty, "hardware_material": hw_material, "tax": tax,
+            "assembly_boxes": boxes, "assembly": assembly,
+            "install_units": units, "install_cabinet": install_cabinet,
+            "hardware_labor": hw_labor, "install": install,
+            "cogs": cogs, "margin_pct": margin, "margin_override": override, "sale": sale,
+            "tops": tops,
+            "tops_kitchen": tp["kitchen"] if tp else Decimal("0.00"),
+            "tops_vanity": tp["vanity"] if tp else Decimal("0.00"),
+            "total": money(sale + tops),
+        },
+    }
+
+
 def _room_components(db: Session, job: Job, fallback: Decimal) -> dict[int, dict]:
     """Raw per-room drivers before any job-level override is applied.
 

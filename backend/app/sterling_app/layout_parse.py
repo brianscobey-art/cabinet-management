@@ -11,10 +11,10 @@ Two things are on a layout and both count:
 A SKU can show up in both (FPV4296 gets drawn AND listed). Adding the two would
 double-count it, so a SKU that appears both ways takes the LARGER of the two.
 
-Appliance placeholders never get priced or ordered (the standing rule), and the
-small fillers drawn on the plan are cut from F642 stock — they come back in
-their own bucket rather than as priced lines, so nobody pays twice for a filler
-that the F642 callout already covers.
+Appliance placeholders never get priced or ordered (the standing rule). Short
+fillers (F630, F330, F636...) are cut from 42" stock, so they come through as
+the 42" filler of the same width (F630 -> F642, F330 -> F342) and merge with
+any of that SKU already on the list; the conversions are reported alongside.
 """
 
 from __future__ import annotations
@@ -25,9 +25,14 @@ import re
 # Never priced or ordered — they mark where the appliance goes.
 APPLIANCE_PREFIXES = ("RANGE", "REF.", "REF2", "DISHW", "MICRO", "HOOD")
 
-# Fillers cut from F642 stock; F642 itself is real stock and stays priced.
-CUT_STOCK_RE = re.compile(r"^F\d{3}$")
-CUT_STOCK_KEEP = {"F642"}
+# Short fillers are cut from 42" stock of the same width: F630 -> F642, F330 -> F342.
+CUT_STOCK_RE = re.compile(r"^F(\d)(30|36)$")
+
+
+def filler_stock(sku: str) -> str:
+    """The 42\" filler a short one is cut from — or the SKU unchanged."""
+    m = CUT_STOCK_RE.match(sku)
+    return f"F{m.group(1)}42" if m else sku
 
 # "3-F630", "1-TUK", "59-Hardware", "1-2x4-8"
 CALLOUT_RE = re.compile(r"^(\d{1,3})\s*-\s*([A-Za-z0-9][A-Za-z0-9./x-]*)$")
@@ -67,35 +72,61 @@ def pdf_tokens(raw: bytes) -> list[str]:
     """
     from pypdf import PdfReader
 
-    runs: list[tuple[float, str]] = []
+    runs: list[tuple[float, float, str]] = []
 
     def visit(text, cm, tm, font_dict, font_size):
         t = (text or "").strip()
         if t:
-            runs.append((tm[4], t))
+            runs.append((tm[4], tm[5], t))
 
     reader = PdfReader(io.BytesIO(raw))
     for page in reader.pages:
         page.extract_text(visitor_text=visit)
+    return _glue_runs(runs)
 
-    tokens: list[str] = []
-    buf, last_x = "", None
-    for x, t in runs:
+
+def _glue_runs(runs: list[tuple[float, float, str]]) -> list[str]:
+    """Runs -> labels. Two kinds of split get repaired:
+
+    * rotated labels arrive one character at a time (glued until x resets);
+    * a label or callout arrives in two pieces on the same line — "1" then
+      "-F642", "7-WSV" then "42", "FPV" then "4296". A piece that starts with
+      "-", or a run of digits right after a piece ending in a letter, belongs
+      to the label before it when they share a baseline and read left to right.
+    """
+    placed: list[list] = []          # [x, y, text]
+    buf, buf_x, buf_y, last_x = "", None, None, None
+    for x, y, t in runs:
         if len(t) == 1 and not t.isspace():
             if last_x is not None and x <= last_x:  # new text object -> new label
                 if buf:
-                    tokens.append(buf)
+                    placed.append([buf_x, buf_y, buf])
                 buf = ""
+            if not buf:
+                buf_x, buf_y = x, y
             buf += t
             last_x = x
             continue
         if buf:
-            tokens.append(buf)
+            placed.append([buf_x, buf_y, buf])
         buf, last_x = "", None
-        tokens.append(t)
+        placed.append([x, y, t])
     if buf:
-        tokens.append(buf)
-    return tokens
+        placed.append([buf_x, buf_y, buf])
+
+    out: list[list] = []
+    for x, y, t in placed:
+        if out:
+            px, py, pt = out[-1]
+            # baselines wobble a few units between pieces; the wobble is small
+            # next to the horizontal step between them
+            same_line = x > px and abs(y - py) <= max(3.0, 0.25 * (x - px))
+            continues = (t.startswith("-") and not pt.endswith("-")) or                         (t.isdigit() and pt[-1:].isalpha() and " " not in pt)
+            if same_line and continues:
+                out[-1][2] = pt + t
+                continue
+        out.append([x, y, t])
+    return [t for _, _, t in out]
 
 
 def text_tokens(text: str) -> list[str]:
@@ -162,7 +193,10 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
             elif sku.startswith(APPLIANCE_PREFIXES):
                 excluded[sku] = excluded.get(sku, 0) + qty
             else:
-                called[sku] = called.get(sku, 0) + qty
+                stock = filler_stock(sku)
+                if stock != sku:
+                    cut_stock[sku] = cut_stock.get(sku, 0) + qty
+                called[stock] = called.get(stock, 0) + qty
             continue
 
         sku = tok.upper()
@@ -170,12 +204,13 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
             continue
         if sku.startswith(APPLIANCE_PREFIXES):
             excluded[sku] = excluded.get(sku, 0) + 1
-        elif CUT_STOCK_RE.match(sku) and sku not in CUT_STOCK_KEEP:
-            cut_stock[sku] = cut_stock.get(sku, 0) + 1
         else:
             # Kept even when the catalog has never heard of it — a real cabinet
             # must never vanish silently. It comes back flagged instead.
-            drawn[sku] = drawn.get(sku, 0) + 1
+            stock = filler_stock(sku)
+            if stock != sku:
+                cut_stock[sku] = cut_stock.get(sku, 0) + 1
+            drawn[stock] = drawn.get(stock, 0) + 1
 
     # Drawn wins on cabinets, the callout wins where it is bigger — never both.
     lines = []
@@ -195,7 +230,8 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         "plan": plan,
         "door_style": door_style,
         "lines": lines,
-        "cut_stock": [{"sku": s, "qty": q} for s, q in sorted(cut_stock.items())],
+        "cut_stock": [{"sku": s, "qty": q, "as": filler_stock(s)}
+                      for s, q in sorted(cut_stock.items())],
         "excluded": [{"sku": s, "qty": q} for s, q in sorted(excluded.items())],
         "lumber": lumber,
         "hardware_pieces": hardware_pieces,

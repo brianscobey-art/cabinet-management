@@ -515,10 +515,10 @@ async function import2020Dialog(file, url, after) {
   try { styles = await api("/door-styles"); } catch {}
   openDialog(`2020 Import — ${esc(file.name)}`, `
     <div class="grid2">
-      <label class="f">Room name *<input id="i20_room" value="Kitchen" list="i20rooms">
+      <label class="f">Room name *<input id="i20_room" list="i20rooms">
         <datalist id="i20rooms">${["Kitchen","Kitchen Perimeter","Kitchen Island","Master Bath","Bath 2","Laundry","Butler's Pantry"].map(n=>`<option>${n}</option>`).join("")}</datalist></label>
-      <label class="f">Brand<input id="i20_brand" value="Everluxe"></label>
-      <label class="f">Door style<input id="i20_door" list="i20styles" placeholder="Shaker White">
+      <label class="f">Brand<input id="i20_brand"></label>
+      <label class="f">Door style<input id="i20_door" list="i20styles">
         <datalist id="i20styles">${styles.map(s=>`<option>${esc(s.name)}</option>`).join("")}</datalist></label>
       <label class="f">Finish / color<input id="i20_finish"></label>
       <label class="f">Series<input id="i20_series"></label>
@@ -1143,16 +1143,16 @@ async function roomFormDialog(jobId, room) {
   const styles = await doorStyleOptions();
   openDialog(isNew ? "Add Room" : "Edit Room", `
     <div class="grid2">
-      <label class="f">Room *<input id="r_name" value="${esc(r.name??"")}" list="roomNames" placeholder="Kitchen Perimeter">
+      <label class="f">Room *<input id="r_name" value="${esc(r.name??"")}" list="roomNames">
         <datalist id="roomNames">${COMMON.map(n=>`<option>${n}</option>`).join("")}</datalist></label>
-      <label class="f">Zone<input id="r_zone" value="${esc(r.zone??"")}" placeholder="Island / Perimeter"></label>
-      <label class="f">Brand<input id="r_brand" value="${esc(r.cabinet_brand??"")}" placeholder="Everluxe"></label>
+      <label class="f">Zone<input id="r_zone" value="${esc(r.zone??"")}"></label>
+      <label class="f">Brand<input id="r_brand" value="${esc(r.cabinet_brand??"")}"></label>
       <label class="f">Series<input id="r_series" value="${esc(r.series??"")}"></label>
       <label class="f">Door style / color <span class="muted">(sets price group)</span>
-        <input id="r_door" value="${esc(r.door_style??"")}" list="doorStyleList" placeholder="Shaker White">
+        <input id="r_door" value="${esc(r.door_style??"")}" list="doorStyleList">
         <datalist id="doorStyleList">${styles.map(s =>
           `<option value="${esc(s.name)}">Group ${s.price_group}${s.code ? " · " + esc(s.code) : ""}</option>`).join("")}</datalist></label>
-      <label class="f">Finish / color<input id="r_finish" value="${esc(r.finish??"")}" placeholder="White"></label>
+      <label class="f">Finish / color<input id="r_finish" value="${esc(r.finish??"")}"></label>
       <label class="f">Wood species<input id="r_species" value="${esc(r.wood_species??"")}"></label>
       <label class="f">Notes<input id="r_notes" value="${esc(r.notes??"")}"></label>
       <label class="f">PIA $ <span class="muted">(adds to this room's install)</span>
@@ -1671,6 +1671,7 @@ async function renderNational() {
       <label class="f">Sent snapshots
         <select id="natSnap"><option value="">— Live pricing —</option></select></label>
       <div class="spacer"></div>
+      <button class="gray" id="natAdd" title="Price a new floorplan for a division on the Everluxe pricing sheet; saving it puts it on this list">+ Add Layout</button>
       <button class="gray" id="natSnapshot" title="Freeze a copy of this pricing as-sent — never affected by later price changes">Snapshot Sent</button>
       <button class="gray" id="natPrint">Print Price Sheet</button>
       <button class="orange" id="natSave">Save To Plan Bids</button>
@@ -1689,7 +1690,7 @@ async function renderNational() {
               <span class="muted" style="font-weight:400">· ${groups.get(div).length} plans</span></td></tr>
             ${groups.get(div).map(r => `
             <tr data-div="${esc(r.division)}" data-plan="${esc(r.plan)}">
-              <td style="padding-left:22px"><strong>${esc(r.plan)}</strong></td>
+              <td style="padding-left:22px"><a href="#" class="nat-plan" title="Open this plan — pricing summary, the SKUs and the math"><strong>${esc(r.plan)}</strong></a></td>
               <td class="num">${money(r.list_total)}</td>
               <td class="num">${money(r.cabinets)}</td>
               <td class="num">${money(r.freight)}</td>
@@ -1729,6 +1730,25 @@ async function renderNational() {
     toast(`${res.saved} plan bids saved`);
   };
   $("#natPrint").onclick = () => printPriceSheet(data, natFilter);
+  $$(".nat-plan").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    const tr = e.target.closest("tr");
+    natPlanDialog(tr.dataset.div, tr.dataset.plan, natFilter.door_style);
+  });
+  // A new floorplan is priced on the Everluxe sheet under its division; the
+  // saved list is what this table prices.
+  $("#natAdd").onclick = () => openDialog("Add Layout", `
+    <label class="f">Division *<input id="al_div" list="natDivList" value="${esc(natFilter.division)}">
+      <datalist id="natDivList">${data.divisions.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label>
+    <label class="f">Plan name *<input id="al_plan"></label>
+    <p class="muted" style="font-size:12px; margin:0">Opens the Everluxe pricing sheet for this plan. Add the SKUs
+      from the layout (type them or Import Layout), then Save List — the plan shows up here priced at the
+      national rates.</p>`, () => {
+    const division = $("#al_div").value.trim(), plan = $("#al_plan").value.trim();
+    if (!division || !plan) throw new Error("Division and plan name are both needed");
+    window._evxContext = {division, plan};
+    location.hash = "#/everluxe";
+  });
   $$(".nat-tops").forEach(btn => btn.onclick = e => {
     const tr = e.target.closest("tr");
     topsDialog(tr.dataset.div, tr.dataset.plan);
@@ -1765,6 +1785,94 @@ async function renderNational() {
   };
 }
 
+// One plan off the national sheet: the summary band, every step of the price
+// with its arithmetic, and the SKU list — printable as its own page.
+async function natPlanDialog(division, plan, doorStyle) {
+  const q = new URLSearchParams({division, plan});
+  if (doorStyle) q.set("door_style", doorStyle);
+  const d = await api("/national-pricing/plan?" + q);
+  const t = d.totals, r = d.rates;
+  const pc = (v, dp = 1) => (Number(v) * 100).toFixed(dp) + "%";
+  const cell = (label, v, big) => `<div class="t"><div class="label">${label}</div>
+    <div class="value" style="font-size:${big ? 24 : 16}px${big ? "; color:var(--orange)" : ""}">${money(v)}</div></div>`;
+  const band = `<div class="totals-card" style="margin:6px 0 4px">
+    ${cell("List", t.list_total)}${cell("Cabinets", t.cabinets)}${cell("Freight", t.freight)}
+    ${cell(`Hdw (${t.hardware_qty} pc)`, t.hardware_material)}${cell("Tax", t.tax)}
+    ${cell(`Assembly (${t.assembly_boxes} bx)`, t.assembly)}${cell(`Install (${t.install_units} bx)`, t.install)}
+    ${cell("COGS", t.cogs)}<div class="spacer"></div>${cell(`Sale @ ${pct(t.margin_pct)}`, t.sale, true)}
+    ${Number(t.tops) ? cell("Tops", t.tops) + cell("Total", t.total) : ""}</div>`;
+  const step = (label, math, v, bold) => `<tr${bold ? ' class="sub"' : ""}><td>${label}</td>
+    <td class="muted" style="font-size:12px">${math}</td><td class="num">${money(v)}</td></tr>`;
+  const steps = [
+    step(`Everluxe list${d.price_group ? ` (Group ${d.price_group} · ${esc(d.door_style)})` : " (base price)"}`,
+         `${d.lines.length} SKUs — qty × list, added up`, t.list_total),
+    step("Cabinets", `${money(t.list_total)} × ${Number(r.multiplier).toFixed(2)}`, t.cabinets),
+    step("Freight", `${money(t.cabinets)} × ${pc(r.freight_pct)}`, t.freight),
+    step("Hardware", `${t.hardware_qty} pc (doors + drawers) × ${money(r.knob_material)}`, t.hardware_material),
+    step("Sales tax", `(${money(t.cabinets)} + ${money(t.hardware_material)}) × ${pc(r.tax_pct, 0)}`, t.tax),
+    step("Assembly", `${t.assembly_boxes} boxes × ${money(r.assem_rate)}${d.units_source === "plan" ? " · boxes from the plan's install record" : " · boxes from each SKU"}`, t.assembly),
+    step("Install", `${t.install_units} boxes × ${money(r.install_rate)} = ${money(t.install_cabinet)}, plus knob labor ${t.hardware_qty} × ${money(r.knob_labor)} = ${money(t.hardware_labor)}`, t.install),
+    step("COGS", "cabinets + freight + hardware + tax + assembly + install", t.cogs, true),
+    step(`Sale @ ${pct(t.margin_pct)}${t.margin_override !== null && t.margin_override !== undefined ? " (this plan's margin)" : " (default margin)"}`,
+         `${money(t.cogs)} ÷ (1 − ${pct(t.margin_pct)}), rounded to whole dollars`, t.sale, true),
+    ...(Number(t.tops) ? [
+      step("Countertops", `Top Pricing form, added AFTER margin — kitchen ${money(t.tops_kitchen)}, vanity ${money(t.tops_vanity)}`, t.tops),
+      step("Total", "sale + countertops", t.total, true)] : []),
+  ].join("");
+  const sum = k => d.lines.reduce((n, l) => n + Number(l[k] || 0), 0);
+  const skus = d.lines.map(l => `<tr${l.in_catalog ? "" : ' class="ex"'}>
+    <td class="num">${l.qty}</td>
+    <td><strong>${esc(l.sku)}</strong>${l.in_catalog ? "" : ' <span class="muted" style="font-size:11px">(not in catalog — priced at $0)</span>'}</td>
+    <td>${esc(l.description ?? "")}</td>
+    <td class="num">${money(l.list_each)}</td><td class="num">${money(l.ext_list)}</td>
+    <td class="num">${money(l.dealer_ext)}</td>
+    <td class="num">${l.assem_units || ""}</td><td class="num">${l.install_units || ""}</td><td class="num">${l.hw_pieces || ""}</td></tr>`).join("");
+  const html = `
+    <div class="meta">${esc(division)} · ${esc(plan)} · ${d.door_style ? esc(d.door_style) : "base price group"} · multiplier ${Number(r.multiplier).toFixed(2)} · freight ${pc(r.freight_pct)} · tax ${pc(r.tax_pct, 0)}</div>
+    ${band}
+    <h3>How the price is built</h3>
+    <table><thead><tr><th>Step</th><th>Math</th><th class="num">Amount</th></tr></thead><tbody>${steps}</tbody></table>
+    <h3>Cabinet SKUs</h3>
+    <table><thead><tr><th class="num">Qty</th><th>SKU</th><th>Description</th><th class="num">List ea</th>
+      <th class="num">Ext list</th><th class="num" title="Ext list × multiplier">Dealer</th>
+      <th class="num" title="Assembly boxes">Asm bx</th><th class="num" title="Install boxes">Inst bx</th>
+      <th class="num" title="Doors + drawers = hardware pieces">Hdw pc</th></tr></thead>
+      <tbody>${skus}
+      <tr class="sub"><td class="num">${sum("qty")}</td><td colspan="2">Totals</td><td></td>
+        <td class="num">${money(t.list_total)}</td><td class="num">${money(t.cabinets)}</td>
+        <td class="num">${t.assembly_boxes}</td><td class="num">${t.install_units}</td><td class="num">${t.hardware_qty}</td></tr>
+      </tbody></table>`;
+  openDialog(`${plan} — ${division}`, html, () => {});
+  const dlg = [...document.querySelectorAll("dialog")].pop();
+  dlg.style.width = "min(1100px, 97vw)";
+  $("#dcancel", dlg).textContent = "Close";
+  const pb = $("#dsave", dlg);
+  pb.textContent = "Print";
+  pb.onclick = () => printHtml(`${plan} — ${division}`, html);
+}
+
+// A plain printable page for a block of app HTML (Letter, app colours).
+function printHtml(title, body) {
+  const w = window.open("", "_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(title)}</title><style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; color: #1c2b28; font-size: 12px; width: 7.5in; margin: 14px auto; }
+    h2 { color: #125952; margin: 0 0 2px; } h3 { color: #194039; font-size: 13px; margin: 14px 0 4px; }
+    .meta { color: #64807a; font-size: 11px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; color: #64807a; border-bottom: 2px solid #dde5e3; padding: 4px 6px; }
+    td { padding: 3px 6px; border-bottom: 1px solid #eef2f1; vertical-align: top; }
+    .num { text-align: center; } .muted { color: #64807a; } .ex td { color: #a3b5b0; }
+    .sub td { font-weight: 700; color: #125952; border-top: 2px solid #dde5e3; }
+    .totals-card { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0 10px; }
+    .t .label { font-size: 10px; text-transform: uppercase; color: #64807a; } .t .value { font-weight: 700; }
+    .spacer { flex: 1; }
+  </style></head><body><h2>${esc(title)}</h2>${body}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+
 // Tops calculator — same layout as the Top Pricing Sheet workbook:
 // Countertops / Backsplashes / Side Splashes, each split Kitchen & Vanity,
 // with the sheet's computed columns (Sq Ft Ea, Per Sq Ft, SqFt TTL, Cost Each,
@@ -1775,11 +1883,12 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
   const SECTIONS = [
     ["top", "Countertops", "Depth"],
     ["backsplash", "Backsplashes", "Height"],
-    ["side_splash", "Side Splashes", "Depth"],
+    ["side_splash", "Side Splashes", "Height"],
   ];
+  // splashes are always 4" tall, so every splash row starts with the height filled in
   const NEW_ROW_DEFAULTS = {
     backsplash: {Kitchen: {depth: 4}, Vanity: {depth: 4}},
-    side_splash: {Kitchen: {width: 23.75, depth: 4}, Vanity: {width: 20.75, depth: 4}},
+    side_splash: {Kitchen: {width: 25.5, depth: 4}, Vanity: {width: 20.75, depth: 4}},   // kitchen side splash is always 25.5 x 4
   };
   const row = (kind, area, p = {}) => `
     <tr class="tp-row" data-kind="${kind}" data-area="${area}">
@@ -1803,7 +1912,7 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
           <th class="num">Per Sq Ft</th><th class="num">SqFt TTL</th><th class="num">Cost Each</th>
           <th class="num">Cost Total</th><th></th></tr></thead>
         <tbody class="tp-body" data-kind="${kind}" data-area="${area}">
-          ${pieces.map(p => row(kind, area, p)).join("") || row(kind, area)}
+          ${pieces.map(p => row(kind, area, p)).join("") || row(kind, area, (NEW_ROW_DEFAULTS[kind] || {})[area] || {})}
         </tbody>
       </table>
       <button class="ghost small tp-add" data-kind="${kind}" data-area="${area}" style="margin-top:3px">+ Row</button>
@@ -1964,14 +2073,18 @@ function printPriceSheet(data, filt) {
 
 // ---------- Everluxe SKU pricer + cabinet demand projections ----------
 let _evxLines = [{sku: "", qty: 1}];
+let _evxLoaded = null;   // the saved list on screen: {division, plan, snapshot}
 async function renderEverluxe() {
   const styles = await api("/door-styles").catch(() => []);
   $("#main").innerHTML = `
     <h1>Everluxe Pricing</h1>
     <div class="card" style="margin-bottom:14px">
       <div class="toolbar">
+        <label class="f">Division
+          <select id="evxDiv" style="width:150px" title="Saved = your own lists. A builder division puts the list on National Pricing.">
+            <option value="Saved">Saved lists</option></select></label>
         <label class="f">Plan / job name
-          <input id="evxPlan" placeholder="EX1 Alabaster STD" style="width:170px"></label>
+          <input id="evxPlan" style="width:170px; background:#fff59d" title="Name this list — the plan or job it prices"></label>
         <label class="f">Door style
           <select id="evxStyle"><option value="">Base (Group 1)</option>
             ${styles.map(s => `<option>${esc(s.name)}</option>`).join("")}</select></label>
@@ -1983,7 +2096,7 @@ async function renderEverluxe() {
         <label class="f">Margin %
           <input id="evxMargin" type="number" min="0" max="99" step="1" class="inline-edit" value="15"></label>
         <label class="f">Fuel % <span class="muted">(optional)</span>
-          <input id="evxFuel" type="number" min="0" step="0.1" class="inline-edit" value="0" placeholder="1.8"></label>
+          <input id="evxFuel" type="number" min="0" step="0.1" class="inline-edit" value="0"></label>
         <label class="f">Hardware
           <select id="evxHdwMode" style="width:150px"
             title="In the price = one hardware SKU inside the job cost. Priced separately = cabinets without hardware, plus up to three hardware options quoted on their own.">
@@ -1991,14 +2104,14 @@ async function renderEverluxe() {
             <option value="sep">Priced separately</option>
           </select></label>
         <label class="f" id="evxHdwWrap">SKU
-          <input id="evxHdw" list="hwList" style="width:110px" placeholder="3910MB / 156MB"
+          <input id="evxHdw" list="hwList" style="width:110px"
             title="3910 = knob ($1 labor) · 156 = handle ($2 labor) — letters are the color"></label>
         <label class="f evx-hopt" style="display:none">Option 1
-          <input id="evxHdw1" list="hwList" style="width:110px" placeholder="3910MB"></label>
+          <input id="evxHdw1" list="hwList" style="width:110px"></label>
         <label class="f evx-hopt" style="display:none">Option 2
-          <input id="evxHdw2" list="hwList" style="width:110px" placeholder="156MB"></label>
+          <input id="evxHdw2" list="hwList" style="width:110px"></label>
         <label class="f evx-hopt" style="display:none">Option 3
-          <input id="evxHdw3" list="hwList" style="width:110px" placeholder="3910PC"></label>
+          <input id="evxHdw3" list="hwList" style="width:110px"></label>
         <label class="f">Pricing
           <select id="evxMode" title="By area = each area priced completely separately; Merged = one combined total">
             <option value="merged">Merged — one total</option>
@@ -2009,10 +2122,18 @@ async function renderEverluxe() {
         <div class="spacer"></div>
         <button class="ghost" id="evxClear">Clear</button>
         <button class="gray" id="evxLayout" title="Drop in a 2020 Design layout PDF (or paste its text) and it builds the SKU list">Import Layout</button>
-        <button class="gray" id="evxSave" title="Save this SKU list under the plan / job name">Save List</button>
+        <button class="orange" id="evxUpdate" style="display:none" title="Write your edits back to the list you opened">Save Changes</button>
+        <button class="gray" id="evxSave" title="Save this SKU list under the plan / job name (a new name saves a new list)">Save List</button>
         <button class="gray" id="evxPrint">Print Pricing Sheet</button>
         <button class="orange" id="evxJob">Create Job From List</button>
       </div>
+      <div class="addline" style="margin-bottom:8px">
+        <input id="evx_qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
+        <input id="evx_sku" list="skuList" placeholder="SKU" style="width:200px">
+        <button class="small" id="evx_add">Add</button>
+        <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
+      </div>
+      <div class="totals-card" id="evxTotals" style="margin:4px 0 12px"></div>
       <div style="overflow-x:auto"><table>
         <thead><tr><th class="num">Qty</th><th>SKU</th><th>Description</th><th>Fin End</th><th>Area</th>
           <th class="num">List Ea</th><th class="num">Ext List</th><th class="num">Dealer Ext</th>
@@ -2023,17 +2144,31 @@ async function renderEverluxe() {
           <th>Notes</th><th></th></tr></thead>
         <tbody id="evxRows"></tbody>
       </table></div>
-      <div class="addline">
-        <input id="evx_qty" type="number" min="1" style="width:64px" placeholder="Qty" title="Quantity — required">
-        <input id="evx_sku" list="skuList" placeholder="SKU" style="width:200px">
-        <button class="small" id="evx_add">Add</button>
-        <span class="muted" style="font-size:12px">Qty, then SKU — Enter completes a partial SKU, Enter again adds it. New lines go on top.</span>
-      </div>
-      <div class="totals-card" id="evxTotals" style="margin-top:10px"></div>
       <div id="evxLayoutInfo"></div>
     </div>
     </div>`;
   loadSkuList();
+  // what a saved list actually stores — so edits to it can be told apart
+  const listSnap = () => JSON.stringify(_evxLines.filter(l => l.sku.trim())
+    .map(l => [l.sku.trim().toUpperCase(), Number(l.qty), (l.area || "").trim() || null]));
+  const syncDirty = () => {
+    const dirty = !!_evxLoaded && listSnap() !== _evxLoaded.snapshot;
+    $("#evxUpdate").style.display = dirty ? "" : "none";
+    if (dirty) $("#evxUpdate").textContent = `Save Changes to “${_evxLoaded.plan}”`;
+  };
+  const setDivision = d => {
+    const sel = $("#evxDiv");
+    if (![...sel.options].some(o => o.value === d)) sel.add(new Option(d, d));
+    sel.value = d;
+  };
+  // arriving from National › Add Layout: a clean sheet for that division and plan
+  if (window._evxContext) {
+    const c = window._evxContext; window._evxContext = null;
+    _evxLines = []; _evxLoaded = null; window._evxLayout = null;
+    $("#evxPlan").value = c.plan || "";
+    setDivision(c.division || "Saved");
+    if (/horton|drh|century/i.test(c.division || "")) $("#evxMult").value = "0.21";
+  }
   const showLayoutInfo = d => {
     if (!d) { $("#evxLayoutInfo").innerHTML = ""; return; }
     const chip = (label, body) => body
@@ -2044,7 +2179,7 @@ async function renderEverluxe() {
       <div style="display:flex; gap:22px; flex-wrap:wrap; border-top:1px dashed var(--line); margin-top:10px; padding-top:10px">
         ${chip("From the layout", `${esc(d.plan || "—")}${d.door_style ? " · " + esc(d.door_style) : ""}`)}
         ${chip("Not priced (appliance)", d.excluded.map(e => esc(e.sku)).join("<br>"))}
-        ${chip("Cut from F642", d.cut_stock.map(c => `${c.qty} × ${esc(c.sku)}`).join("<br>"))}
+        ${chip("Fillers cut from 42\" stock", d.cut_stock.map(c => `${c.qty} × ${esc(c.sku)} → ${esc(c.as)}`).join("<br>"))}
         ${chip("Lumber on the plan", lum)}
         ${chip("Hardware called out", d.hardware_pieces ? d.hardware_pieces + " pieces" : "")}
         ${chip("Not in the catalog", d.unknown.map(u => `<span style="color:var(--orange)">${esc(u)}</span>`).join("<br>"))}
@@ -2059,6 +2194,7 @@ async function renderEverluxe() {
   };
   const reprice = async () => {
     const lines = _evxLines.filter(l => l.sku.trim());
+    syncDirty();
     if (!lines.length) { $("#evxRows").innerHTML = ""; $("#evxTotals").innerHTML = ""; return; }
     const res = await api("/everluxe/price", {method:"POST", body: {
       door_style: $("#evxStyle").value || null,
@@ -2077,7 +2213,10 @@ async function renderEverluxe() {
       <option value="__new">+ New area…</option></select>`;
     $("#evxRows").innerHTML = res.lines.map((l, i) => `<tr>
       <td class="num"><input type="number" min="1" class="inline-edit evx-qty" data-i="${i}" style="width:60px" value="${l.qty}"></td>
-      <td><strong>${esc(l.sku)}</strong>${l.found ? "" : ' <span class="muted" style="font-size:11px">(not in catalog)</span>'}</td>
+      <td><input class="inline-edit evx-sku" data-i="${i}" value="${esc(l.sku)}" spellcheck="false"
+          style="width:118px; font-weight:700${l.found ? "" : "; color:var(--red); border-color:var(--red)"}"
+          title="${l.found ? "Edit the SKU in place" : "Not in the catalog — fix the SKU here"}">${
+          l.found ? "" : ' <span style="font-size:11px; color:var(--red)">not in catalog</span>'}</td>
       <td>${esc(l.description ?? "")}</td>
       <td><select class="evx-fin" data-i="${i}" title="Finished end — blank = doesn't matter">
         ${["","L","R","B"].map(v => `<option value="${v}" ${(l.fin_end ?? "") === v ? "selected" : ""}>${v}</option>`).join("")}
@@ -2132,6 +2271,16 @@ async function renderEverluxe() {
     $$(".evx-qty").forEach(inp => inp.addEventListener("change", e => {
       _evxLines[Number(e.target.dataset.i)].qty = Number(e.target.value) || 1; reprice();
     }));
+    // retype a SKU where it sits; if it becomes one already on the list, the two merge
+    $$(".evx-sku").forEach(inp => inp.addEventListener("change", e => {
+      const i = Number(e.target.dataset.i);
+      const sku = e.target.value.trim().toUpperCase();
+      if (!sku) { reprice(); return; }
+      const dup = _evxLines.findIndex((l, k) => k !== i && l.sku.trim().toUpperCase() === sku);
+      if (dup >= 0) { _evxLines[dup].qty += _evxLines[i].qty; _evxLines.splice(i, 1); }
+      else _evxLines[i].sku = sku;
+      reprice();
+    }));
     [["evx-fin","fin_end"],["evx-notes","notes"]].forEach(([cls, key]) =>
       $$("." + cls).forEach(inp => inp.addEventListener("change", e => {
         _evxLines[Number(e.target.dataset.i)][key] = e.target.value.trim() || null; reprice();
@@ -2180,14 +2329,14 @@ async function renderEverluxe() {
   $("#evxHdwMode").addEventListener("change", () => { syncHwMode(); reprice(); });
   syncHwMode();
   loadHardwareList();
-  $("#evxClear").onclick = () => { _evxLines = []; window._evxLayout = null; showLayoutInfo(null); reprice(); };
+  $("#evxClear").onclick = () => { _evxLines = []; _evxLoaded = null; window._evxLayout = null; showLayoutInfo(null); reprice(); };
 
   // Layout -> quote. Everything it finds lands in the editable list, so the
   // quantities and any missing SKU can be fixed before the sheet prints.
   $("#evxLayout").onclick = () => openDialog("Import Layout", `
     <label class="f">Layout PDF<input type="file" id="lyFile" accept=".pdf,application/pdf"></label>
     <label class="f">…or paste the layout text
-      <textarea id="lyText" rows="6" placeholder="B33&#10;B33&#10;W3336&#10;3-F630&#10;1-TUK"
+      <textarea id="lyText" rows="6" placeholder="Paste the layout text here"
         style="width:100%; font-family:ui-monospace,Consolas,monospace; font-size:12px"></textarea></label>
     <label style="display:flex; gap:8px; align-items:center; font-size:13px">
       <input type="checkbox" id="lyReplace" checked> Replace the current list</label>
@@ -2226,20 +2375,41 @@ async function renderEverluxe() {
       + all.map(t => `<option value="${esc(t.division)}|${esc(t.plan)}">${esc(t.plan)}${
           t.division === "Saved" ? "" : " · " + esc(t.division)} (${t.line_count})</option>`).join("");
     if (keep) $("#evxSaved").value = keep;
+    // every division that has a list is a place a new one can go
+    const cur = $("#evxDiv").value;
+    for (const d of new Set(all.map(t => t.division).filter(d => d && d !== "Saved"))) setDivision(d);
+    $("#evxDiv").value = cur;
   };
   loadSaved();
+  // write the list to a division/plan and remember it as the one on screen
+  const saveTo = async (division, plan, lines) => {
+    await api("/everluxe/lists", {method:"POST", body: {plan, division, lines}});
+    _evxLoaded = {division, plan, snapshot: listSnap()};
+    await loadSaved(division + "|" + plan);
+    syncDirty();
+    toast(division === "Saved"
+      ? `Saved "${plan}" — ${lines.length} line${lines.length === 1 ? "" : "s"}`
+      : `Saved "${plan}" to National Pricing · ${division}`);
+  };
+  $("#evxUpdate").onclick = async () => {
+    const lines = _evxLines.filter(l => l.sku.trim());
+    if (!lines.length) return toast("The list is empty — use Clear if you meant to drop it", true);
+    await saveTo(_evxLoaded.division, _evxLoaded.plan, lines);
+  };
   $("#evxSave").onclick = async () => {
     const lines = _evxLines.filter(l => l.sku.trim());
     if (!lines.length) return toast("Add some SKUs first", true);
+    const division = $("#evxDiv").value || "Saved";
     let name = $("#evxPlan").value.trim();
     if (!name) {
       name = (prompt("Save this SKU list as:", "") || "").trim();
       if (!name) return;
       $("#evxPlan").value = name;
     }
-    await api("/everluxe/lists", {method:"POST", body: {plan: name, lines}});
-    await loadSaved("Saved|" + name);
-    toast(`Saved "${name}" — ${lines.length} line${lines.length === 1 ? "" : "s"}`);
+    // same name and division as the list that was opened = an update, not a copy
+    if (_evxLoaded && (_evxLoaded.plan !== name || _evxLoaded.division !== division)
+        && !confirm(`Save as a new list "${name}"${division !== "Saved" ? " under " + division : ""}? (“${_evxLoaded.plan}” stays as it was.)`)) return;
+    await saveTo(division, name, lines);
   };
   $("#evxSaved").addEventListener("change", async e => {
     const v = e.target.value;
@@ -2251,6 +2421,8 @@ async function renderEverluxe() {
                         + "&plan=" + encodeURIComponent(plan));
     _evxLines = d.lines.map(l => ({sku: l.sku, qty: l.qty, area: l.area || null}));
     $("#evxPlan").value = plan;
+    setDivision(division);
+    _evxLoaded = {division, plan, snapshot: listSnap()};
     reprice();
   });
   $("#evxPrint").onclick = () => {
@@ -2813,7 +2985,7 @@ async function renderAddItems() {
     <h1>Add Catalog Items</h1>
     <div class="card" style="margin-bottom:14px">
       <div class="grid3">
-        <label class="f">SKU *<input id="n_sku" placeholder="B15"></label>
+        <label class="f">SKU *<input id="n_sku"></label>
         <label class="f">Description<input id="n_desc"></label>
         <label class="f">Vendor<input id="n_vendor" value="Everluxe"></label>
         <label class="f">Category<input id="n_cat" placeholder="Cabinet / Hardware / Trim…"></label>
@@ -3066,8 +3238,8 @@ window.bidDialog = function(bid) {
   const b = bid || {};
   openDialog(isNew ? "Add Plan Bid" : "Edit Plan Bid", `
     <div class="grid2">
-      <label class="f">Builder *<input id="b_builder" value="${esc(b.builder??"")}" placeholder="DR Horton Dothan"></label>
-      <label class="f">Plan *<input id="b_plan" value="${esc(b.plan??"")}" placeholder="Kali STD"></label>
+      <label class="f">Builder *<input id="b_builder" value="${esc(b.builder??"")}"></label>
+      <label class="f">Plan *<input id="b_plan" value="${esc(b.plan??"")}"></label>
       <label class="f">Bid price *<input id="b_price" type="number" min="0" step="0.01" value="${b.bid_price??""}"></label>
       <label class="f">Notes<input id="b_notes" value="${esc(b.notes??"")}"></label>
     </div>
@@ -3122,7 +3294,7 @@ async function renderSettings() {
         </div>
         <p class="muted" style="margin-top:10px; font-size:12.5px">Cost = list × multiplier. Sell = cost ÷ (1 − margin%), rounded to whole dollars.</p>
         <label class="f" style="margin-top:12px">Kitchen Sales Reps <span class="muted">(comma separated — shows in the header dropdown)</span>
-          <input id="s_ksrs" value="${esc(s.ksr_list)}" placeholder="Brian Scobey, Paula Cook, Alex Talley"></label>
+          <input id="s_ksrs" value="${esc(s.ksr_list)}"></label>
       </div>
       <div class="card" style="flex:1; min-width:300px">
         <h2 style="margin-bottom:12px">CabinetTron Connection</h2>

@@ -172,6 +172,7 @@ def build_plan_margin(db, vs_path: str | None = None, **_) -> dict:
 
     agg: dict[str, list[float]] = collections.defaultdict(list)
     skipped = collections.Counter()
+    cents_pos: list[tuple[str, str, float]] = []
     for buid, total in by_job.items():
         plan = plan_of.get(buid)
         if plan is None:
@@ -180,6 +181,11 @@ def build_plan_margin(db, vs_path: str | None = None, **_) -> dict:
             skipped["job has no plan"] += 1
         elif plan not in priced:
             skipped["plan not priced in Sterling"] += 1
+        elif has_cents(total):
+            # A part-price PO would drag the plan average off the contract
+            # price. Set it aside and report it rather than averaging it in.
+            skipped["PO carries cents"] += 1
+            cents_pos.append((buid, plan, round(float(total), 2)))
         else:
             agg[plan].append(total)
 
@@ -216,6 +222,8 @@ def build_plan_margin(db, vs_path: str | None = None, **_) -> dict:
         "net": round(under - over, 2),
         "below_cost": sum(1 for r in rows if r["margin"] < 0),
         "skipped": dict(skipped),
+        # Held out of the averages, listed so they get looked at rather than lost.
+        "cents_pos": [{"buid": b, "plan": pl, "amount": amt} for b, pl, amt in cents_pos],
         "headline": [
             ("Net, 12 months", f"-${under - over:,.0f}", "under-contract minus over"),
             ("Priced below", f"-${under:,.0f}",
@@ -224,6 +232,8 @@ def build_plan_margin(db, vs_path: str | None = None, **_) -> dict:
              f"{sum(1 for r in rows if r['exp'] > 0)} plans"),
             ("Below cost", str(sum(1 for r in rows if r["margin"] < 0)),
              "plans under our cost"),
+            ("Cents on the PO", str(len(cents_pos)),
+             "set aside — we price in whole dollars"),
         ],
     }
     return {"meta": meta, "rows": rows}
@@ -258,6 +268,17 @@ REPRICE_COLUMNS = [
 ]
 
 TOL = 1.0   # a dollar — these are whole-dollar contract prices
+
+
+def has_cents(amount) -> bool:
+    """Every price Carter gives a builder is a whole dollar. Cents can only come
+    from the builder's side — a prorated PO, a rolled-in change order, a model
+    home, a keying error — so the amount is not evidence of the contract price.
+    """
+    try:
+        return abs(round(float(amount), 2) % 1) > 0.004
+    except (TypeError, ValueError):
+        return False
 
 
 def build_reprice_check(db, vs_path: str | None = None, **_) -> dict:
@@ -343,9 +364,13 @@ def build_reprice_check(db, vs_path: str | None = None, **_) -> dict:
         upch = float(cp.color_upcharge or 0)
         prior = float(cp.prior_price) if cp.prior_price is not None else None
 
-        if abs(base - expected) <= TOL or (upch and abs(base - (expected + upch)) <= TOL):
+        if has_cents(base):
+            # Cents beat every other reading: whatever this is, it is not one of
+            # our prices, so do not accuse it of using the old one either.
+            verdict = "Cents — not one of our prices"
+        elif abs(base - expected) <= TOL or (upch and abs(base - (expected + upch)) <= TOL):
             continue                                   # correct, nothing to report
-        if prior is not None and abs(base - prior) <= TOL:
+        elif prior is not None and abs(base - prior) <= TOL:
             verdict = "Old price used"
         else:
             verdict = "Check — matches neither"

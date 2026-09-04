@@ -803,6 +803,16 @@ class NationalMarginUpdate(BaseModel):
     margin_pct: Decimal | None = Field(default=None, ge=0, lt=100)
 
 
+@router.get("/national-pricing/plan")
+def national_plan(division: str, plan: str, door_style: str | None = None,
+                  db: Session = Depends(get_db)):
+    """One plan opened up — the SKUs, the rates and every step of the price."""
+    try:
+        return compute.national_plan_detail(db, division, plan, door_style)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @router.put("/national-pricing/margin")
 def set_national_margin(payload: NationalMarginUpdate, db: Session = Depends(get_db)):
     rec = (
