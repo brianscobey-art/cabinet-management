@@ -1055,8 +1055,12 @@ function bindRoomHandlers(job) {
       toast("Room removed"); renderJobDetail(job.id);
     };
     $(".al-add", card).onclick = async () => {
-      const sku = $(".al-sku", card).value.trim();
-      if (!sku) return toast("Enter a SKU", true);
+      let sku = baseSku($(".al-sku", card).value.trim().toUpperCase());
+      if (!sku) { $(".al-sku", card).focus(); return toast("Enter a SKU", true); }
+      if (!skuExists(sku)) {                 // a partial SKU completes on the way in
+        const hit = bestSku(sku);
+        if (hit) { toast(`${sku} → ${hit}`); sku = hit; }
+      }
       const qty = Number($(".al-qty", card).value);
       if (!qty || qty < 1) { toast("Enter a quantity first", true); $(".al-qty", card).focus(); return; }
       const listRaw = $(".al-list", card).value;
@@ -1069,18 +1073,14 @@ function bindRoomHandlers(job) {
       _resumeEntry = roomId;   // re-render scrolls back to this room's entry row
       renderJobDetail(job.id);
     };
-    // Enter on a partial SKU fills in the top catalog match; Enter again adds it.
-    $(".al-sku", card).addEventListener("keydown", e => {
-      if (e.key !== "Enter") return;
-      const typed = e.target.value.trim().toUpperCase();
-      if (typed && !skuExists(typed)) {
-        const hit = bestSku(typed);
-        if (hit) { e.target.value = hit; e.target.select(); return; }
-      }
-      $(".al-add", card).click();
-    });
+    // Enter anywhere on the entry row is the Add button; on an empty SKU it moves there.
+    $$(".al-sku, .al-desc, .al-list", card).forEach(inp => inp.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); $(".al-add", card).click(); }
+    }));
     $(".al-qty", card).addEventListener("keydown", e => {
-      if (e.key === "Enter") $(".al-sku", card).focus();
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if ($(".al-sku", card).value.trim()) $(".al-add", card).click(); else $(".al-sku", card).focus();
     });
     $$("tr[data-line]", card).forEach(tr => {
       const lineId = tr.dataset.line;
@@ -2317,8 +2317,13 @@ async function renderEverluxe() {
     });
   };
   const addLine = () => {
-    const sku = baseSku($("#evx_sku").value.trim().toUpperCase());
-    if (!sku) return;
+    let sku = baseSku($("#evx_sku").value.trim().toUpperCase());
+    if (!sku) { $("#evx_sku").focus(); return; }
+    // a partial SKU completes to the top catalog match on the way in
+    if (!skuExists(sku)) {
+      const hit = bestSku(sku);
+      if (hit) { toast(`${sku} → ${hit}`); sku = hit; }
+    }
     // Quantity is required — no silent default, so a missed qty can't slip through.
     const qty = Number($("#evx_qty").value);
     if (!qty || qty < 1) { toast("Enter a quantity first", true); $("#evx_qty").focus(); return; }
@@ -2330,18 +2335,14 @@ async function renderEverluxe() {
   };
   _evxLines = _evxLines.filter(l => l.sku.trim());
   $("#evx_add").onclick = addLine;
-  // Enter on a partial SKU fills in the rest from the top catalog match (prefix
-  // first, then anywhere in the SKU); a second Enter adds the completed line.
-  $("#evx_sku").addEventListener("keydown", e => {
+  // Enter anywhere on the entry row is the Add button (a partial SKU completes
+  // to the top catalog match as it goes in); Enter on an empty SKU just moves there.
+  $("#evx_sku").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addLine(); } });
+  $("#evx_qty").addEventListener("keydown", e => {
     if (e.key !== "Enter") return;
-    const typed = e.target.value.trim().toUpperCase();
-    if (typed && !skuExists(typed)) {
-      const hit = bestSku(typed);
-      if (hit) { e.target.value = hit; e.target.select(); return; }
-    }
-    addLine();
+    e.preventDefault();
+    if ($("#evx_sku").value.trim()) addLine(); else $("#evx_sku").focus();
   });
-  $("#evx_qty").addEventListener("keydown", e => { if (e.key === "Enter") $("#evx_sku").focus(); });
   ["evxStyle","evxMult","evxMargin","evxFuel","evxMode","evxHdw",
    "evxHdw1","evxHdw2","evxHdw3"].forEach(id => $("#" + id).addEventListener("change", reprice));
   $("#evxHdwMode").addEventListener("change", () => { syncHwMode(); reprice(); });
