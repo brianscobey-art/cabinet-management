@@ -120,6 +120,7 @@ SHEETS = [
         ("Super Name", "super_name"), ("Super Phone", "super_phone"), ("Super Email", "super_email"),
         ("Tax %", "tax_pct"), ("Sale Cabinets", "sale_cabinets"),
         ("Sale Countertops", "sale_countertops"), ("Sale Other", "sale_other"),
+        ("Sale Total Override", "sale_total_override"),
         ("Notes", "notes"), ("Created", "created_at"), ("Updated", "updated_at"),
     ]),
     ("CoverSheetPOs", "CoverSheetPOs", CoverSheetPO, [

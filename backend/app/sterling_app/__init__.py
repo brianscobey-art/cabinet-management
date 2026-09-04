@@ -55,7 +55,8 @@ def _seed_cover_refs(SessionLocal) -> None:
         ("product", "Countertops", "CTP", None, None),
         ("product", "Hardware", "HDW", "Hardware Resources", None),
         ("labor", "Install", "INS", "Lynn's Cabinet Installation", "953426"),
-        ("labor", "Assembly", "ASM", None, None),
+        # Everluxe's build charge — on the cabinet PO, not our labor
+        ("product", "Assembly", "CAB", "Everything Building Products", "70408"),
     ]
     SUPERS = [
         ("Dylan Pope", "8503380165", "dylan@jubileebuilders.com"),
@@ -101,13 +102,20 @@ DATA_FIXES = [
             ("DRH PC", "DRH1 Embry STD"): {"VS30": 5, "VS36": None, "BSV": 6, "WSV42": 4},
         },
     }),
+    # Assembly is Everluxe's build charge — it rides on the cabinet PO, so the
+    # cover-sheet preset moves from the labor table to the products table.
+    ("data_fix_2026_09_04_assembly_is_product", {
+        "cover_vendors": [("Assembly", {"kind": "product", "po_abb": "CAB",
+                                        "vendor": "Everything Building Products",
+                                        "vendor_code": "70408"})],
+    }),
 ]
 
 
 def _apply_data_fixes(db) -> None:
     from sqlalchemy import func
 
-    from app.sterling_app.models import CatalogItem, PlanTemplateItem, Setting
+    from app.sterling_app.models import CatalogItem, CoverVendor, PlanTemplateItem, Setting
 
     for key, fix in DATA_FIXES:
         if db.get(Setting, key):
@@ -138,6 +146,10 @@ def _apply_data_fixes(db) -> None:
                 else:
                     db.add(PlanTemplateItem(division=division, plan=plan, sku=sku,
                                             qty=qty, area="All"))
+        for po_type, fields in fix.get("cover_vendors", []):
+            for v in db.query(CoverVendor).filter(CoverVendor.po_type == po_type).all():
+                for field, value in fields.items():
+                    setattr(v, field, value)
         db.add(Setting(key=key, value="1"))
         db.commit()
         print(f"Sterling: applied {key}")

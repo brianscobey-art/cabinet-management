@@ -207,8 +207,10 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
               bold=True, align="center", fmt=MONEY_HARD, size=10)
         return tr
 
-    prod_total_row = po_table(r, "PO's Needed — Products", products,
-                              max(PROD_ROWS, len(products)), "Cost", "Freight")
+    prod_count = max(PROD_ROWS, len(products))
+    prod_total_row = po_table(r, "PO's Needed — Products", products, prod_count, "Cost", "Freight")
+    prod_first = prod_total_row - prod_count
+    TYPE_COL = get_column_letter(1 + sum(PO_SPANS[:3]))
     ws.row_dimensions[prod_total_row + 1].height = 7   # spacer
     r = prod_total_row + 2
     lab_total_row = po_table(r, "PO's Needed — Labor", labor,
@@ -237,15 +239,18 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
         rr = r + i
         ws.row_dimensions[rr].height = ROW_ENTRY
         _cell(ws, rr, cost_c, COST_L, label, bold=(i == 3), fill=LABEL_FILL, size=9.5, shrink=True)
+        # tax on materials less the Everluxe build charge (Assembly rows)
+        untaxed = (f'SUMIF({TYPE_COL}{prod_first}:{TYPE_COL}{prod_total_row - 1},"Assembly*",'
+                   f'{T}{prod_first}:{T}{prod_total_row - 1})')
         formula = (
             f"={mat_ref}", f"={lab_ref}",
-            f"={mat_ref}*{CV}{tax_row}",
+            f"=({mat_ref}-{untaxed})*{CV}{tax_row}",
             f"={CV}{r}+{CV}{r + 1}+{CV}{r + 2}",
         )[i]
         _cell(ws, rr, cost_val_col, COST_V, formula, align="center",
               fmt=MONEY_HARD, bold=(i == 3), size=10, shrink=True)
     ws.row_dimensions[tax_row].height = ROW_TABLE
-    _cell(ws, tax_row, cost_c, COST_L, "Tax rate (on materials)", fill=LABEL_FILL, size=9, shrink=True)
+    _cell(ws, tax_row, cost_c, COST_L, "Tax rate (materials, not build charge)", fill=LABEL_FILL, size=9, shrink=True)
     _cell(ws, tax_row, cost_val_col, COST_V, float(s.get("tax_pct") or 7) / 100,
           align="center", fmt="0.0%", size=10)
 
@@ -262,7 +267,9 @@ def build_cover_workbook(s: dict | None = None) -> io.BytesIO:
             _cell(ws, rr, contract_val_col, CONTRACT_V, v, align="center", fmt=MONEY,
                   size=10, shrink=True)
         else:
-            _cell(ws, rr, contract_val_col, CONTRACT_V, f"=SUM({KV}{r}:{KV}{r + 2})",
+            ovr = s.get("sale_total_override")
+            total = (float(ovr) if ovr not in (None, "") else f"=SUM({KV}{r}:{KV}{r + 2})")
+            _cell(ws, rr, contract_val_col, CONTRACT_V, total,
                   bold=True, align="center", fmt=MONEY_HARD, size=10)
     sale_cell = f"{KV}{r + 3}"
     cogs_cell = f"{CV}{r + 3}"

@@ -1694,6 +1694,11 @@ async function renderNational() {
       <label class="f">Sent snapshots
         <select id="natSnap"><option value="">— Live pricing —</option></select></label>
       <div class="spacer"></div>
+      <span id="natPickBar" style="display:none; align-items:center; gap:8px">
+        <span class="muted" style="font-size:12px"><b id="natPickN">0</b> checked</span>
+        <button class="gray" id="natPickCost" title="Internal — list, COGS, margin and sale for the checked plans">Cost / Sell Summary</button>
+        <button class="gray" id="natPickCust" title="Customer-facing price sheet for the checked plans only">Customer Price Sheet</button>
+      </span>
       <button class="gray" id="natAdd" title="Price a new floorplan for a division on the Everluxe pricing sheet; saving it puts it on this list">+ Add Layout</button>
       <button class="gray" id="natSnapshot" title="Freeze a copy of this pricing as-sent — never affected by later price changes">Snapshot Sent</button>
       <button class="gray" id="natPrint">Print Price Sheet</button>
@@ -1702,6 +1707,7 @@ async function renderNational() {
     <div class="card" style="padding:0; overflow-x:auto">
       <table>
         <thead><tr>
+          <th style="width:28px"><input type="checkbox" id="natPickAll" title="Check every plan shown"></th>
           <th>Plan</th><th class="num">List</th><th class="num">Cabinets</th><th class="num">Freight</th>
           <th class="num">Hdw</th><th class="num">Tax</th><th class="num">Assembly</th>
           <th class="num">Install</th><th class="num">COGS</th><th class="num">Margin %</th><th class="num">Sale</th>
@@ -1709,11 +1715,12 @@ async function renderNational() {
         </tr></thead>
         <tbody>
           ${data.rows.length ? [...groups.keys()].map(div => `
-            <tr class="builder-row"><td colspan="13">${esc(div)}
+            <tr class="builder-row"><td colspan="14">${esc(div)}
               <span class="muted" style="font-weight:400">· ${groups.get(div).length} plans</span></td></tr>
             ${groups.get(div).map(r => `
             <tr data-div="${esc(r.division)}" data-plan="${esc(r.plan)}">
-              <td style="padding-left:22px"><a href="#" class="nat-plan" title="Open this plan — pricing summary, the SKUs and the math"><strong>${esc(r.plan)}</strong></a></td>
+              <td><input type="checkbox" class="nat-pick" title="Include in a report of checked plans"></td>
+              <td style="padding-left:6px"><a href="#" class="nat-plan" title="Open this plan — pricing summary, the SKUs and the math"><strong>${esc(r.plan)}</strong></a></td>
               <td class="num">${money(r.list_total)}</td>
               <td class="num">${money(r.cabinets)}</td>
               <td class="num">${money(r.freight)}</td>
@@ -1729,7 +1736,7 @@ async function renderNational() {
               <td class="num"><button class="ghost small nat-tops" title="Laminate tops calculator (Top Pricing Sheet)">${Number(r.tops) ? money(r.tops) : "Tops…"}</button></td>
               <td class="num"><strong>${money(r.total)}</strong></td>
             </tr>`).join("")}`).join("")
-          : `<tr><td colspan="13" class="empty">No plan templates loaded — run the DRH workbook import on the Catalog page.</td></tr>`}
+          : `<tr><td colspan="14" class="empty">No plan templates loaded — run the DRH workbook import on the Catalog page.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -1753,6 +1760,23 @@ async function renderNational() {
     toast(`${res.saved} plan bids saved`);
   };
   $("#natPrint").onclick = () => printPriceSheet(data, natFilter);
+  // tick plans -> a report of just those, internal or for the customer
+  const picked = () => $$(".nat-pick:checked").map(cb => {
+    const tr = cb.closest("tr");
+    return data.rows.find(r => r.division === tr.dataset.div && r.plan === tr.dataset.plan);
+  }).filter(Boolean);
+  const syncPick = () => {
+    const n = $$(".nat-pick:checked").length;
+    $("#natPickBar").style.display = n ? "inline-flex" : "none";
+    $("#natPickN").textContent = n;
+  };
+  $$(".nat-pick").forEach(cb => cb.addEventListener("change", syncPick));
+  $("#natPickAll").addEventListener("change", e => {
+    $$(".nat-pick").forEach(cb => { cb.checked = e.target.checked; });
+    syncPick();
+  });
+  $("#natPickCust").onclick = () => printPriceSheet({...data, rows: picked()}, natFilter);
+  $("#natPickCost").onclick = () => printNationalSummary(picked(), natFilter, data.default_margin);
   $$(".nat-plan").forEach(a => a.onclick = e => {
     e.preventDefault();
     const tr = e.target.closest("tr");
@@ -2105,6 +2129,68 @@ function printPriceSheet(data, filt) {
       </table>`; }).join("")}
     <div class="foot">Pricing valid (14) calendar days from the effective date; subject to change with tariff, freight, or material cost changes thereafter.
       Prepared by ${esc(currentKsr() || "Carter Kitchen & Bath")} · Carter Lumber — Kitchen &amp; Bath Division · 868 Murray Rd, Dothan, AL 36303</div>
+  <script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+
+// Internal cost/sell summary for a set of national plans — every column of
+// the National table, grouped by division, with totals. EYES ONLY.
+function printNationalSummary(rows, filt, defaultMargin) {
+  if (!rows.length) return toast("Check some plans first", true);
+  const today = new Date();
+  const dstr = `${today.getMonth()+1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
+  const groups = new Map();
+  for (const r of rows) {
+    if (!groups.has(r.division)) groups.set(r.division, []);
+    groups.get(r.division).push(r);
+  }
+  const cols = ["list_total", "cabinets", "freight", "hardware_material", "tax", "assembly", "install", "cogs", "sale", "tops", "total"];
+  const sum = (rs, k) => rs.reduce((n, r) => n + Number(r[k] || 0), 0);
+  const line = r => `<tr><td><strong>${esc(r.plan)}</strong></td>
+    ${cols.slice(0, 8).map(k => `<td class="num">${money(r[k])}</td>`).join("")}
+    <td class="num">${pct(r.margin_pct)}</td>
+    <td class="num tot">${money(r.sale)}</td>
+    <td class="num">${Number(r.tops) ? money(r.tops) : "—"}</td>
+    <td class="num tot">${money(r.total)}</td></tr>`;
+  const totals = (rs, label) => `<tr class="sum"><td>${label}</td>
+    ${cols.slice(0, 8).map(k => `<td class="num">${money(sum(rs, k))}</td>`).join("")}
+    <td class="num">${sum(rs, "sale") ? pct((sum(rs, "sale") - sum(rs, "cogs")) / sum(rs, "sale") * 100) : "—"}</td>
+    <td class="num">${money(sum(rs, "sale"))}</td>
+    <td class="num">${Number(sum(rs, "tops")) ? money(sum(rs, "tops")) : "—"}</td>
+    <td class="num">${money(sum(rs, "total"))}</td></tr>`;
+  const w = window.open("", "_blank", "width=1100,height=850");
+  w.document.write(`<!DOCTYPE html><html><head><title>Cost-Sell Summary ${dstr.replaceAll("/", "-")}</title><style>
+    @page { size: letter landscape; margin: 0.45in; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; color: #1c2b28; font-size: 11px; width: 10in; margin: 12px auto 30px; }
+    .eyes { text-align:center; color:#c0392b; font-weight:800; font-size:22px; margin-bottom: 6px; }
+    .head { display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 3px solid #125952; padding-bottom: 8px; }
+    .co { font-size: 18px; font-weight: 800; color: #125952; } .co small { display:block; font-size: 10px; font-weight: 400; color: #64807a; letter-spacing: 1px; }
+    .meta { color:#64807a; font-size: 11px; text-align: right; }
+    h2 { background: #125952; color: #fff; font-size: 12px; margin: 14px 0 0; padding: 5px 8px; }
+    table { width:100%; border-collapse: collapse; }
+    th { text-align:center; font-size:9.5px; text-transform:uppercase; color:#125952; background:#eaf2f0; border-bottom:2px solid #125952; padding:4px 6px; }
+    th:first-child { text-align:left; }
+    td { padding: 4px 6px; border-bottom: 1px solid #e3ebe9; }
+    .num { text-align: center; font-variant-numeric: tabular-nums; }
+    .tot { font-weight: 700; color: #125952; }
+    .sum td { font-weight: 700; color: #125952; border-top: 2px solid #dde5e3; background: #f7faf9; }
+    .foot { margin-top: 18px; color:#64807a; font-size: 10px; }
+  </style></head><body>
+    <div class="eyes">EYES ONLY-Internal Use</div>
+    <div class="head">
+      <div class="co">Carter Kitchen &amp; Bath<small>NATIONAL PRICING — COST / SELL SUMMARY</small></div>
+      <div class="meta">${esc(filt.division || "All divisions")} · Door style: ${esc(filt.door_style || "Base (Group 1)")}<br>
+        ${rows.length} plan${rows.length === 1 ? "" : "s"} · default margin ${Math.round(Number(defaultMargin))}% · ${dstr}</div>
+    </div>
+    ${[...groups.keys()].map(div => `
+      <h2>${esc(div)}</h2>
+      <table>
+        <thead><tr><th>Floorplan</th><th>List</th><th>Cabinets</th><th>Freight</th><th>Hdw</th><th>Tax</th>
+          <th>Assembly</th><th>Install</th><th>COGS</th><th>Margin</th><th>Sale</th><th>Tops</th><th>Total</th></tr></thead>
+        <tbody>${groups.get(div).map(line).join("")}${groups.size > 1 ? totals(groups.get(div), esc(div) + " total") : ""}</tbody>
+      </table>`).join("")}
+    <table style="margin-top:10px"><tbody>${totals(rows, "All checked plans")}</tbody></table>
+    <div class="foot">COGS = cabinets (list × multiplier) + freight + hardware + tax + assembly + install. Sale = COGS ÷ (1 − margin), whole dollars. Tops are added after margin.</div>
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
@@ -2791,7 +2877,11 @@ async function renderCoverSheet(id) {
             ${[["sale_cabinets","Cabinets"],["sale_countertops","Countertops"],["sale_other","Other"]].map(([k,l]) => `
             <tr><td>${l}</td><td class="num"><input class="cv money" data-k="${k}"
               value="${Number(s[k]) ? money(s[k]) : ""}" placeholder="$0.00" style="width:120px; text-align:center"></td></tr>`).join("")}
-            <tr class="sub"><td><strong>Total Sale</strong></td><td class="num" id="cvSale"><strong>${money(s.totals.sale)}</strong></td></tr>
+            <tr class="sub"><td><strong>Total Sale</strong> <small class="muted">type over it to set the sale</small></td>
+              <td class="num"><input class="cv money" data-k="sale_total_override" id="cvSaleIn"
+                value="${s.sale_total_override !== null && s.sale_total_override !== undefined ? money(s.sale_total_override) : ""}"
+                placeholder="${money(s.totals.sale_sum)}" title="Blank = cabinets + countertops + other. A figure here is the sale the margin is figured on."
+                style="width:120px; text-align:center; font-weight:700${s.sale_total_override !== null && s.sale_total_override !== undefined ? "; background:#fff59d" : ""}"></td></tr>
           </tbody>
         </table>
       </div>
@@ -2811,7 +2901,8 @@ async function renderCoverSheet(id) {
     const body = {job_id: s.job_id};
     $$(".cv").forEach(el => {
       const k = el.dataset.k;
-      if (el.classList.contains("money")) body[k] = Number(el.value.replace(/[^0-9.-]/g, "")) || 0;
+      if (k === "sale_total_override") body[k] = el.value.trim() === "" ? null : (Number(el.value.replace(/[^0-9.-]/g, "")) || 0);
+      else if (el.classList.contains("money")) body[k] = Number(el.value.replace(/[^0-9.-]/g, "")) || 0;
       else if (el.type === "number") body[k] = Number(el.value) || 0;
       else body[k] = el.value.trim() || null;
     });
@@ -2829,19 +2920,22 @@ async function renderCoverSheet(id) {
   };
   const recalc = () => {
     const b = collect();
-    let mat = 0, lab = 0;
+    let mat = 0, lab = 0, build = 0;
     b.pos.forEach(p => {
       const t = p.total_override !== null ? p.total_override : p.amount1 + p.amount2;
-      if (p.kind === "labor") lab += t; else mat += t;
+      if (p.kind === "labor") lab += t;
+      else { mat += t; if (/^assembly/i.test(p.po_type || "")) build += t; }   // build charge: product, untaxed
     });
-    const tax = mat * (b.tax_pct || 0) / 100;
+    const tax = (mat - build) * (b.tax_pct || 0) / 100;
     const cogs = mat + lab + tax;
-    const sale = (b.sale_cabinets || 0) + (b.sale_countertops || 0) + (b.sale_other || 0);
+    const saleSum = (b.sale_cabinets || 0) + (b.sale_countertops || 0) + (b.sale_other || 0);
+    const sale = b.sale_total_override !== null && b.sale_total_override !== undefined ? b.sale_total_override : saleSum;
+    $("#cvSaleIn").placeholder = money(saleSum);
+    $("#cvSaleIn").style.background = b.sale_total_override !== null && b.sale_total_override !== undefined ? "#fff59d" : "";
     const margin = sale - cogs;
     $("#cvMat").textContent = money(mat); $("#cvLab").textContent = money(lab);
     $("#cvTax").textContent = money(tax);
     $("#cvCogs").innerHTML = `<strong>${money(cogs)}</strong>`;
-    $("#cvSale").innerHTML = `<strong>${money(sale)}</strong>`;
     $("#cvMarginD").textContent = money(margin);
     $("#cvMarginP").textContent = sale ? pct(margin / sale * 100) : "—";
     $$(".cv-body tr[data-po]").forEach(tr => {
@@ -3015,7 +3109,7 @@ function printCoverSheet(s) {
         <tr><th>Item</th><th class="num">Total Cost</th></tr>
         <tr><td>Total Materials</td><td class="num">${money(t.materials)}</td></tr>
         <tr><td>Total Labor</td><td class="num">${money(t.labor)}</td></tr>
-        <tr><td>Total Tax (${Number(s.tax_pct)}%)</td><td class="num">${money(t.tax)}</td></tr>
+        <tr><td>Total Tax (${Number(s.tax_pct)}%${Number(t.build_charge) ? ", not on the build charge" : ""})</td><td class="num">${money(t.tax)}</td></tr>
         <tr class="sum"><td>Total COGS</td><td class="num">${money(t.cogs)}</td></tr>
       </table></div>
       <div><table>

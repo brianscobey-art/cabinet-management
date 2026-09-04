@@ -432,6 +432,8 @@ class CoverSheet(Base):
     sale_cabinets: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     sale_countertops: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     sale_other: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    # typed over the cabinets+tops+other sum; the margin follows it
+    sale_total_override: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     notes: Mapped[str | None] = mapped_column(Text, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

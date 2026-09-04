@@ -1616,13 +1616,14 @@ class CoverSheetIn(BaseModel):
     sale_cabinets: Decimal = Field(default=Decimal("0"), ge=0)
     sale_countertops: Decimal = Field(default=Decimal("0"), ge=0)
     sale_other: Decimal = Field(default=Decimal("0"), ge=0)
+    sale_total_override: Decimal | None = Field(default=None, ge=0)
     pos: list[CoverPOIn] = []
 
 
 def _cover_out(db: Session, s: CoverSheet) -> dict:
     money = compute.money
     rows = []
-    materials = labor = Decimal("0")
+    materials = labor = build_charge = Decimal("0")
     for p in s.pos:
         total = (
             Decimal(p.total_override)
@@ -1633,6 +1634,9 @@ def _cover_out(db: Session, s: CoverSheet) -> dict:
             labor += total
         else:
             materials += total
+            # Everluxe's build charge sits with the product but is not taxed
+            if (p.po_type or "").strip().lower().startswith("assembly"):
+                build_charge += total
         rows.append({
             "id": p.id, "kind": p.kind, "po_type": p.po_type, "po_abb": p.po_abb,
             "vendor": p.vendor, "vendor_code": p.vendor_code,
@@ -1642,17 +1646,21 @@ def _cover_out(db: Session, s: CoverSheet) -> dict:
             "po_number": f"{s.job_code or ''} {p.po_abb or ''}".strip(),
         })
     materials, labor = money(materials), money(labor)
-    tax = money(materials * Decimal(s.tax_pct) / 100)
+    tax = money((materials - build_charge) * Decimal(s.tax_pct) / 100)
     cogs = money(materials + labor + tax)
-    sale = money(Decimal(s.sale_cabinets) + Decimal(s.sale_countertops) + Decimal(s.sale_other))
+    sale_sum = money(Decimal(s.sale_cabinets) + Decimal(s.sale_countertops) + Decimal(s.sale_other))
+    # a typed-over total is the sale the margin is figured on
+    sale = money(Decimal(s.sale_total_override)) if s.sale_total_override is not None else sale_sum
     margin = money(sale - cogs)
     data = {f: getattr(s, f) for f in COVER_FIELDS}
     data.update({m: str(getattr(s, m)) for m in COVER_MONEY})
     data.update({
         "id": s.id, "job_id": s.job_id, "pos": rows,
+        "sale_total_override": str(s.sale_total_override) if s.sale_total_override is not None else None,
         "totals": {
             "materials": str(materials), "labor": str(labor), "tax": str(tax), "cogs": str(cogs),
-            "sale": str(sale), "margin": str(margin),
+            "build_charge": str(money(build_charge)),
+            "sale": str(sale), "sale_sum": str(sale_sum), "margin": str(margin),
             "margin_pct": str(money(margin / sale * 100)) if sale else None,
         },
         "updated_at": s.updated_at.isoformat(),
@@ -1820,9 +1828,16 @@ def cover_sheet_from_job(job_id: int, db: Session = Depends(get_db)):
             kind="product", po_type="Cabinets", po_abb="CAB",
             amount1=cab, amount2=t["freight"],
         ))
+        # the build charge is Everluxe's: same PO as the cabinets, not our labor
+        if t["assembly"]:
+            s.pos.append(CoverSheetPO(
+                kind="product", po_type="Assembly", po_abb="CAB",
+                vendor="Everything Building Products", vendor_code="70408",
+                amount1=t["assembly"], amount2=Decimal("0"),
+            ))
         s.pos.append(CoverSheetPO(
             kind="labor", po_type="Install", po_abb="INS",
-            amount1=t["assembly"], amount2=t["install_cost"],
+            amount1=Decimal("0"), amount2=t["install_cost"],
         ))
     db.commit()
     db.refresh(s)
