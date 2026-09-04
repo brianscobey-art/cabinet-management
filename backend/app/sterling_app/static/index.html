@@ -2180,6 +2180,7 @@ async function renderEverluxe() {
         ${chip("From the layout", `${esc(d.plan || "—")}${d.door_style ? " · " + esc(d.door_style) : ""}`)}
         ${chip("Not priced (appliance)", d.excluded.map(e => esc(e.sku)).join("<br>"))}
         ${chip("Fillers cut from 42\" stock", d.cut_stock.map(c => `${c.qty} × ${esc(c.sku)} → ${esc(c.as)}`).join("<br>"))}
+        ${chip("Drawn but not counted", (d.ignored || []).map(g => `${g.qty} × ${esc(g.sku)} <span class="muted">— ${esc(g.why)}</span>`).join("<br>"))}
         ${chip("Lumber on the plan", lum)}
         ${chip("Hardware called out", d.hardware_pieces ? d.hardware_pieces + " pieces" : "")}
         ${chip("Not in the catalog", d.unknown.map(u => `<span style="color:var(--orange)">${esc(u)}</span>`).join("<br>"))}

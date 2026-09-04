@@ -8,8 +8,11 @@ Two things are on a layout and both count:
 * the qty-prefixed callout blocks down the side — Accessories / Trim / Skins /
   Other — written "3-F630", "1-TUK", "8-SCR", "1-2x4-8".
 
-A SKU can show up in both (FPV4296 gets drawn AND listed). Adding the two would
-double-count it, so a SKU that appears both ways takes the LARGER of the two.
+A SKU can show up in both (FPV4296 gets drawn AND listed). The callout list is
+the authority: a SKU that is called out is counted from the callout only, and
+its drawn copies are disregarded. Fillers (F3xx / F6xx) and the dishwasher
+return panel DWR3 count ONLY from the callout list — drawn anywhere else they
+are ignored (and reported, so nothing vanishes silently).
 
 Appliance placeholders never get priced or ordered (the standing rule). Short
 fillers (F630, F330, F636...) are cut from 42" stock, so they come through as
@@ -27,6 +30,10 @@ APPLIANCE_PREFIXES = ("RANGE", "REF.", "REF2", "DISHW", "MICRO", "HOOD")
 
 # Short fillers are cut from 42" stock of the same width: F630 -> F642, F330 -> F342.
 CUT_STOCK_RE = re.compile(r"^F(\d)(30|36)$")
+
+
+# Counted from the callout list only; a drawn copy anywhere else is disregarded.
+CALLOUT_ONLY_RE = re.compile(r"^(F[36]\d{2}|DWR3)$")
 
 
 def filler_stock(sku: str) -> str:
@@ -207,23 +214,31 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         else:
             # Kept even when the catalog has never heard of it — a real cabinet
             # must never vanish silently. It comes back flagged instead.
-            stock = filler_stock(sku)
-            if stock != sku:
-                cut_stock[sku] = cut_stock.get(sku, 0) + 1
-            drawn[stock] = drawn.get(stock, 0) + 1
+            # drawn fillers are never counted (callouts only), so no cut-stock
+            # note for them — it would report a conversion that did not happen
+            drawn[filler_stock(sku)] = drawn.get(filler_stock(sku), 0) + 1
 
-    # Drawn wins on cabinets, the callout wins where it is bigger — never both.
+    # The callout list is the authority: a called-out SKU is counted from the
+    # callout only, and fillers / DWR3 are never counted from the drawing.
     lines = []
+    ignored: list[dict] = []
+    drawn_ignored: dict[str, int] = {}
     for sku, qty in drawn.items():
-        call_qty = called.pop(sku, 0)
-        note = "drawn on the layout"
-        if call_qty:
-            note = f"drawn {qty} · callout {call_qty} — took the larger"
-            qty = max(qty, call_qty)
-        lines.append({"sku": sku, "qty": qty, "notes": note,
+        stock = base_sku(sku)
+        if sku in called or stock in called:
+            key = sku if sku in called else stock
+            drawn_ignored[key] = drawn_ignored.get(key, 0) + qty
+            ignored.append({"sku": sku, "qty": qty, "why": "listed in the callouts — the callout count is used"})
+            continue
+        if CALLOUT_ONLY_RE.match(stock):
+            ignored.append({"sku": sku, "qty": qty, "why": "counts only from the accessories list"})
+            continue
+        lines.append({"sku": sku, "qty": qty, "notes": "drawn on the layout",
                       "in_catalog": _known(sku, known)})
     for sku, qty in called.items():
-        lines.append({"sku": sku, "qty": qty, "notes": "callout list",
+        dropped = drawn_ignored.get(sku, 0)
+        note = "callout list" + (f" · {dropped} drawn, disregarded" if dropped else "")
+        lines.append({"sku": sku, "qty": qty, "notes": note,
                       "in_catalog": _known(sku, known)})
 
     return {
@@ -235,6 +250,7 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         "excluded": [{"sku": s, "qty": q} for s, q in sorted(excluded.items())],
         "lumber": lumber,
         "hardware_pieces": hardware_pieces,
+        "ignored": ignored,
         "unknown": sorted(l["sku"] for l in lines if not l["in_catalog"]),
         "token_count": len(tokens),
     }
