@@ -2074,6 +2074,8 @@ function printPriceSheet(data, filt) {
 // ---------- Everluxe SKU pricer + cabinet demand projections ----------
 let _evxLines = [{sku: "", qty: 1}];
 let _evxLoaded = null;   // the saved list on screen: {division, plan, snapshot}
+// A trailing L/R after a digit is only the door swing — B21L is a B21.
+const baseSku = s => /\d[LR]$/.test(s) ? s.slice(0, -1) : s;
 async function renderEverluxe() {
   const styles = await api("/door-styles").catch(() => []);
   $("#main").innerHTML = `
@@ -2275,7 +2277,7 @@ async function renderEverluxe() {
     // retype a SKU where it sits; if it becomes one already on the list, the two merge
     $$(".evx-sku").forEach(inp => inp.addEventListener("change", e => {
       const i = Number(e.target.dataset.i);
-      const sku = e.target.value.trim().toUpperCase();
+      const sku = baseSku(e.target.value.trim().toUpperCase());
       if (!sku) { reprice(); return; }
       const dup = _evxLines.findIndex((l, k) => k !== i && l.sku.trim().toUpperCase() === sku);
       if (dup >= 0) { _evxLines[dup].qty += _evxLines[i].qty; _evxLines.splice(i, 1); }
@@ -2300,7 +2302,7 @@ async function renderEverluxe() {
     });
   };
   const addLine = () => {
-    const sku = $("#evx_sku").value.trim();
+    const sku = baseSku($("#evx_sku").value.trim().toUpperCase());
     if (!sku) return;
     // Quantity is required — no silent default, so a missed qty can't slip through.
     const qty = Number($("#evx_qty").value);

@@ -57,8 +57,8 @@ SKU_RE = re.compile(r"^[A-Z0-9][A-Z0-9./-]{1,19}$")
 
 
 def base_sku(sku: str) -> str:
-    """B18L -> B18. Layouts draw the handing; the catalog carries the base SKU
-    (the standing rule: normalise a trailing L/R)."""
+    """B18L -> B18. A trailing L/R after a digit is only the door swing, so it
+    is dropped at intake and the line merges with its base SKU (Brian's rule)."""
     if len(sku) > 3 and sku[-1] in "LR" and sku[-2].isdigit():
         return sku[:-1]
     return sku
@@ -192,7 +192,7 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
 
         call = CALLOUT_RE.match(tok)
         if call:
-            qty, sku = int(call.group(1)), call.group(2).upper()
+            qty, sku = int(call.group(1)), base_sku(call.group(2).upper())
             if sku in LUMBER:
                 lumber[LUMBER[sku]] = lumber.get(LUMBER[sku], 0) + qty
             elif sku == "HARDWARE":
@@ -206,7 +206,7 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
                 called[stock] = called.get(stock, 0) + qty
             continue
 
-        sku = tok.upper()
+        sku = base_sku(tok.upper())
         if not _looks_like_sku(sku):
             continue
         if sku.startswith(APPLIANCE_PREFIXES):
