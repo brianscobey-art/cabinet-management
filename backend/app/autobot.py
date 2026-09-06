@@ -60,6 +60,22 @@ PHASE_CHECK_MAX_DETOUR_MIN = 30     # "nearby" = adds at most this much drive
 # The two non-negotiable deadline kinds; everything else flexes around them.
 HARD_ANCHOR_TYPES = {"field_measure", "post_walk"}
 
+# The walk-through rhythm of a house, from Brian's 9/5/26 interview:
+#   post walk   the service tech checks the install within 48 hours (a new step —
+#               only installs in the last POST_WALK_LOOKBACK days get one);
+#   full punch  2-3 weeks after install; Vendor Suite dates it for some divisions,
+#               otherwise the coordinator asks the super at install + PUNCH_AFTER_DAYS;
+#   blue tape   when the homeowner walks — due by the closing date the super gives,
+#               else BLUE_TAPE_DAYS after the request. Houses can sit months between.
+POST_WALK_DAYS = 2
+POST_WALK_LOOKBACK = 14        # installs older than this get no automatic 48h clock
+PUNCH_AFTER_DAYS = 14
+PUNCH_WINDOW_DAYS = 7          # install+14 .. install+21
+BLUE_TAPE_DAYS = 4
+BOARD_INSTALL_BACK = 270       # a house stays on the punch board this long after install
+WALK_TYPES = ("post_walk", "punch_out", "blue_tape")
+INSTALLED_STATUSES = (JobStatus.ndqw, JobStatus.parts, JobStatus.punch, JobStatus.blue)
+
 # Accounts where the sold-it-so-you-walk-it rule does NOT apply (reps on national
 # builders don't do their own field work — those assign by territory instead).
 NATIONAL_PREFIXES = ("DR Horton", "Century")
@@ -456,20 +472,37 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
             add("field_measure", job_id=j.id, open_date=j.measure_date,
                 close_date=j.measure_date + timedelta(days=1))
 
-    # Post-walks: the 48-hour clock starts when the installer finishes (status 3.0-Nd QW).
-    # Only recent installs — a job parked at Nd QW for months has no live 48h clock, and
-    # spawning the whole backlog as due-today anchors would swamp every route. Old ones
-    # stay visible on the Jobs board; add a visit manually if one still needs a walk.
-    for j in db.query(Job).filter(Job.status == JobStatus.ndqw).all():
-        if j.install_date and j.install_date < today - timedelta(days=14):
+    # Post-walks: the 48-hour clock starts at the install date, for any house past
+    # install (2.1-Inst with a date, or 3.0 and up). Only recent installs — a months-old install has no live 48h clock, and
+    # spawning the backlog as due-today anchors would swamp every route.
+    walk_statuses = (JobStatus.inst,) + INSTALLED_STATUSES
+    for j in db.query(Job).filter(Job.status.in_(walk_statuses), Job.install_date.isnot(None)).all():
+        if j.install_date < today - timedelta(days=POST_WALK_LOOKBACK):
+            continue
+        if j.install_date > today + timedelta(days=30):
             continue
         if not exists("post_walk", job_id=j.id):
-            start = j.install_date or today
-            add("post_walk", job_id=j.id, open_date=start,
-                close_date=max(start + timedelta(days=2), today))
+            add("post_walk", job_id=j.id, open_date=j.install_date,
+                close_date=max(j.install_date + timedelta(days=POST_WALK_DAYS), today))
+    # The old rule kept for houses at Nd QW with no install date on file.
+    for j in db.query(Job).filter(Job.status == JobStatus.ndqw, Job.install_date.is_(None)).all():
+        if not exists("post_walk", job_id=j.id):
+            add("post_walk", job_id=j.id, open_date=today, close_date=today + timedelta(days=POST_WALK_DAYS))
 
-    # Punch-outs: flexible, a few weeks out.
-    for j in db.query(Job).filter(Job.status == JobStatus.punch).all():
+    # Punch-outs: the window is install + 14 to install + 21. The visit exists from
+    # install day so the board can show "ask the super" once the window opens;
+    # the coordinator sets requested_on / scheduled_date when the date is confirmed.
+    # A house already at 3.5-Blue is past its punch (the super only calls for
+    # blue tape after it), so no punch is spawned for it.
+    punch_statuses = tuple(s for s in INSTALLED_STATUSES if s != JobStatus.blue)
+    for j in db.query(Job).filter(Job.status.in_(punch_statuses), Job.install_date.isnot(None)).all():
+        if j.install_date < today - timedelta(days=BOARD_INSTALL_BACK):
+            continue
+        if not exists("punch_out", job_id=j.id):
+            start = j.install_date + timedelta(days=PUNCH_AFTER_DAYS)
+            add("punch_out", job_id=j.id, open_date=start,
+                close_date=start + timedelta(days=PUNCH_WINDOW_DAYS))
+    for j in db.query(Job).filter(Job.status == JobStatus.punch, Job.install_date.is_(None)).all():
         if not exists("punch_out", job_id=j.id):
             add("punch_out", job_id=j.id, open_date=today, close_date=today + timedelta(days=21))
 
@@ -918,3 +951,123 @@ def plan_horizon(
         "total_stops": len(done),
         "leftover": leftovers,
     }
+
+
+# ---------------------------------------------------------------- punch board
+# One row per house past install: where its post walk, full punch and blue tape
+# stand, how many parts are still open, and one phrase for the board.
+
+def _latest(visits: list[Visit], vtype: str) -> Visit | None:
+    """The live trip of a type for a house: the pending one if any, else the last done."""
+    vs = [v for v in visits if v.visit_type == vtype]
+    if not vs:
+        return None
+    pending = [v for v in vs if v.status == "pending"]
+    pool = pending or vs
+    return max(pool, key=lambda v: (v.trip or 1, v.id))
+
+
+def walk_summary(v: Visit | None, today: date) -> dict | None:
+    if v is None:
+        return None
+    return {
+        "visit_id": v.id, "trip": v.trip or 1, "status": v.status, "result": v.result,
+        "open_date": v.open_date, "close_date": v.close_date, "scheduled_date": v.scheduled_date,
+        "requested_on": v.requested_on, "confirmed_with": v.confirmed_with,
+        "closing_date": v.closing_date, "return_date": v.return_date,
+        "completed_on": v.completed_at.date() if v.completed_at else None,
+        "completed_by": v.completed_by, "result_notes": v.result_notes, "photos_url": v.photos_url,
+        "notes": v.notes,
+        "assignee": v.assignee.name if v.assignee else None,
+        "overdue": bool(v.status == "pending" and v.close_date and v.close_date < today),
+    }
+
+
+def house_status(job: Job, pw: dict | None, punch: dict | None, blue: dict | None, today: date) -> str:
+    """One phrase for the board, in the order a house moves through the steps."""
+    if pw and pw["status"] == "pending":
+        return "POST WALK OVERDUE" if pw["overdue"] else "Post walk due"
+    old = bool(job.install_date and job.install_date < today - timedelta(days=90))
+    punch_done = punch is not None and punch["status"] == "done" and punch["result"] in (None, "complete", "ok")
+    # At 3.5-Blue the punch already happened even if nobody logged it.
+    if job.status == JobStatus.blue:
+        punch_done = True
+    if not punch_done:
+        if punch is None:
+            # 2.1-Inst houses carry no punch visit yet; the window still opens at install + 14
+            if job.install_date and job.install_date + timedelta(days=PUNCH_AFTER_DAYS) > today:
+                return "Punch coming up"
+            return "No punch on record" if old else "REQUEST PUNCH"
+        if punch["scheduled_date"]:
+            return "Punch scheduled"
+        if punch["requested_on"]:
+            return "Punch requested"
+        if punch["open_date"] and punch["open_date"] <= today:
+            return "No punch on record" if old else "REQUEST PUNCH"
+        return "Punch coming up"
+    if blue is None:
+        return "Waiting on blue tape"
+    if blue["status"] == "done":
+        return "Done"
+    if blue["overdue"]:
+        return "BLUE TAPE OVERDUE"
+    if blue["scheduled_date"]:
+        return "Blue tape scheduled"
+    return "Blue tape requested"
+
+
+def house_board(db: Session, today: date) -> list[dict]:
+    from sqlalchemy.orm import joinedload
+
+    cutoff = today - timedelta(days=BOARD_INSTALL_BACK)
+    jobs = (
+        db.query(Job)
+        .options(joinedload(Job.community), joinedload(Job.account))
+        .filter(Job.status.in_((JobStatus.inst,) + INSTALLED_STATUSES))
+        .all()
+    )
+    ids = [j.id for j in jobs]
+    visits = (
+        db.query(Visit).options(joinedload(Visit.assignee))
+        .filter(Visit.job_id.in_(ids), Visit.visit_type.in_(WALK_TYPES), Visit.status != "canceled")
+        .all()
+        if ids else []
+    )
+    by_job: dict[int, list[Visit]] = {}
+    for v in visits:
+        by_job.setdefault(v.job_id, []).append(v)
+    parts_open: dict[int, int] = {}
+    requests = (
+        db.query(ServiceRequest).options(joinedload(ServiceRequest.parts))
+        .filter(ServiceRequest.job_id.in_(ids)).all()
+        if ids else []
+    )
+    for sr in requests:
+        n = sum(1 for p in sr.parts if p.installed_at is None)
+        if n:
+            parts_open[sr.job_id] = parts_open.get(sr.job_id, 0) + n
+
+    rows = []
+    for j in jobs:
+        vs = by_job.get(j.id, [])
+        if j.status == JobStatus.inst and not (j.install_date and j.install_date <= today):
+            continue                                  # scheduled, not installed yet
+        if j.install_date and j.install_date < cutoff and not any(v.status == "pending" for v in vs):
+            continue                                  # long done, nothing open
+        pw = walk_summary(_latest(vs, "post_walk"), today)
+        punch = walk_summary(_latest(vs, "punch_out"), today)
+        blue = walk_summary(_latest(vs, "blue_tape"), today)
+        rows.append({
+            "job_id": j.id, "job_code": j.job_code, "address": j.address, "lot_number": j.lot_number,
+            "community": j.community.name if j.community else None,
+            "builder": j.account.name if j.account else None,
+            "plan": j.plan, "super_name": j.field_contact_name, "super_email": j.field_contact_email,
+            "g_code": j.g_code, "i_code": j.i_code,
+            "status": j.status.value if hasattr(j.status, "value") else str(j.status),
+            "install_date": j.install_date,
+            "post_walk": pw, "punch": punch, "blue_tape": blue,
+            "open_parts": parts_open.get(j.id, 0),
+            "house_status": house_status(j, pw, punch, blue, today),
+        })
+    rows.sort(key=lambda r: (r["install_date"] or date.max, r["job_code"] or ""))
+    return rows

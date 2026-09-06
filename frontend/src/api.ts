@@ -1041,3 +1041,120 @@ export async function isOrderPackOwner(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------------------------------------------------------------- walks & punch board
+// Post walk, full punch, blue tape and parts live on Autobot's visit records;
+// the office reads and writes the same endpoints the truck does.
+
+export interface WalkVisit {
+  id: number;
+  visit_type: string;
+  status: string;
+  label: string;
+  job_id: number | null;
+  job_code: string | null;
+  open_date: string | null;
+  close_date: string | null;
+  scheduled_date: string | null;
+  notes: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  assignee: string | null;
+  result: string | null;
+  result_notes: string | null;
+  photos_url: string | null;
+  requested_on: string | null;
+  confirmed_with: string | null;
+  closing_date: string | null;
+  return_date: string | null;
+  trip: number;
+  parent_visit_id: number | null;
+}
+
+export interface HousePart {
+  id: number;
+  service_request_id: number;
+  job_id: number;
+  part: string;
+  cabinet: string | null;
+  qty: number;
+  reason: string | null;
+  found_on: string | null;
+  install_by: string | null;
+  vendor: string | null;
+  order_number: string | null;
+  order_date: string | null;
+  due_date: string | null;
+  received: boolean;
+  installed_at: string | null;
+  installed_by: string | null;
+  cost: number | null;
+  who_pays: string | null;
+  notes: string | null;
+  trade_blocking: boolean;
+  state: "needs_order" | "ordered" | "received" | "installed";
+}
+
+export interface WalkStep {
+  visit_id: number;
+  trip: number;
+  status: string;
+  result: string | null;
+  open_date: string | null;
+  close_date: string | null;
+  scheduled_date: string | null;
+  requested_on: string | null;
+  confirmed_with: string | null;
+  closing_date: string | null;
+  return_date: string | null;
+  completed_on: string | null;
+  completed_by: string | null;
+  result_notes: string | null;
+  photos_url: string | null;
+  notes: string | null;
+  assignee: string | null;
+  overdue: boolean;
+}
+
+export interface HouseRow {
+  job_id: number;
+  job_code: string | null;
+  address: string;
+  lot_number: string | null;
+  community: string | null;
+  builder: string | null;
+  plan: string | null;
+  super_name: string | null;
+  super_email: string | null;
+  g_code: string | null;
+  i_code: string | null;
+  status: string;
+  install_date: string | null;
+  post_walk: WalkStep | null;
+  punch: WalkStep | null;
+  blue_tape: WalkStep | null;
+  open_parts: number;
+  house_status: string;
+}
+
+export const listPunchBoard = () => api<HouseRow[]>("/autobot/punch-board");
+export const listJobWalks = (jobId: number) => api<WalkVisit[]>(`/autobot/jobs/${jobId}/walks`);
+export const completeVisit = (
+  visitId: number,
+  body: { result: string; notes?: string | null; photos_url?: string | null; return_date?: string | null; completed_on?: string | null },
+) => api<WalkVisit[]>(`/autobot/visits/${visitId}/complete`, { method: "POST", body: JSON.stringify(body) });
+export const punchRequest = (
+  jobId: number,
+  body: { requested_on?: string | null; confirmed_with?: string | null; scheduled_date?: string | null; notes?: string | null },
+) => api<WalkVisit>(`/autobot/jobs/${jobId}/punch-request`, { method: "POST", body: JSON.stringify(body) });
+export const blueTapeRequest = (
+  jobId: number,
+  body: { requested_on?: string | null; closing_date?: string | null; scheduled_date?: string | null; notes?: string | null },
+) => api<WalkVisit>(`/autobot/jobs/${jobId}/blue-tape`, { method: "POST", body: JSON.stringify(body) });
+export const listJobParts = (jobId: number) => api<HousePart[]>(`/autobot/jobs/${jobId}/parts`);
+export const addJobPart = (
+  jobId: number,
+  body: { part: string; cabinet?: string | null; qty?: number; reason?: string | null; found_on?: string | null; install_by?: string | null; vendor?: string | null; notes?: string | null; trade_blocking?: boolean },
+) => api<HousePart>(`/autobot/jobs/${jobId}/parts`, { method: "POST", body: JSON.stringify(body) });
+export const patchJobPart = (partId: number, body: Partial<Omit<HousePart, "id" | "service_request_id" | "job_id" | "state">>) =>
+  api<HousePart>(`/autobot/parts/${partId}`, { method: "PATCH", body: JSON.stringify(body) });

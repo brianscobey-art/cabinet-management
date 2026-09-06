@@ -30,6 +30,11 @@ VISIT_TYPES = (
 
 VISIT_STATUSES = ("pending", "done", "canceled")
 
+# What a finished visit found. Post-walks: ok / issues. Punch and blue-tape:
+# complete, or one of the three "not finished" outcomes that spawn a return trip.
+VISIT_RESULTS = ("ok", "issues", "complete", "incomplete", "no_access", "rescheduled")
+RETURN_RESULTS = ("incomplete", "no_access", "rescheduled")
+
 
 class Visit(Base):
     __tablename__ = "visits"
@@ -62,6 +67,22 @@ class Visit(Base):
     scheduled_date: Mapped[date | None] = mapped_column(Date, default=None)  # pin to a specific day
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # What happened (set when the visit is finished) — see VISIT_RESULTS.
+    result: Mapped[str | None] = mapped_column(String(20), default=None)
+    result_notes: Mapped[str | None] = mapped_column(Text, default=None)   # damage, missing, other
+    photos_url: Mapped[str | None] = mapped_column(String(500), default=None)  # reference-picture folder
+    # The coordinator's dates: when the punch / blue tape was asked for, who
+    # confirmed it, and the closing date a blue tape has to beat.
+    requested_on: Mapped[date | None] = mapped_column(Date, default=None)
+    confirmed_with: Mapped[str | None] = mapped_column(String(120), default=None)
+    closing_date: Mapped[date | None] = mapped_column(Date, default=None)
+    # A trip that couldn't finish names the day it comes back; the follow-up
+    # visit points at this one and carries trip + 1.
+    return_date: Mapped[date | None] = mapped_column(Date, default=None)
+    parent_visit_id: Mapped[int | None] = mapped_column(Integer, index=True, default=None)
+    trip: Mapped[int] = mapped_column(Integer, default=1)
+
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     completed_by: Mapped[str | None] = mapped_column(String(255), default=None)
     created_by: Mapped[str | None] = mapped_column(String(255), default=None)

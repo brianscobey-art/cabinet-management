@@ -154,6 +154,23 @@
     padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;
   }
   .addform label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; }
+  .finish { background: #f6faf8; border: 1px solid #cfe0da; border-radius: 8px; padding: 0.6rem; margin: 0.4rem 0; display: grid; gap: 0.4rem; }
+  .finish .row { flex-wrap: wrap; }
+  .finish textarea { width: 100%; min-height: 3.2rem; }
+  .hs { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: #eef2f1; color: #1c2b28; }
+  .hs-red { background: #fdecea; color: #8f1717; }
+  .hs-yellow { background: #fff3c4; color: #7a5a00; }
+  .hs-blue { background: #e3eefb; color: #1d4e89; }
+  .hs-green { background: #e5f4ee; color: #0f6b45; }
+  .house { border: 1px solid #d8e2df; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem; background: #fff; }
+  .house-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; cursor: pointer; }
+  .house-head b { font-size: 1rem; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+  .step { background: #f6faf8; border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.86rem; }
+  .step b { display: block; margin-bottom: 0.2rem; color: var(--green); }
+  .step .muted { display: block; }
+  .parts-list { list-style: none; padding: 0; margin: 0.3rem 0 0; font-size: 0.86rem; }
+  .parts-list li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.25rem 0; border-top: 1px dashed #dfe7e4; }
 
   .skipped { margin-top: 1.1rem; }
   .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #e2e9e8; list-style: none; }
@@ -293,6 +310,7 @@
     <button id="tab-route" class="active" onclick="showTab('route')">Today's Route</button>
     <button id="tab-forecast" onclick="showTab('forecast')">Forecast</button>
     <button id="tab-board" onclick="showTab('board')">Visit Board</button>
+    <button id="tab-houses" onclick="showTab('houses')">Houses</button>
     <button id="tab-places" onclick="showTab('places')">Places</button>
     <button id="tab-duties" onclick="showTab('duties')">Duties</button>
     <button id="tab-team" onclick="showTab('team')">Team</button>
@@ -301,6 +319,7 @@
     <section id="view-route"></section>
     <section id="view-forecast" hidden></section>
     <section id="view-board" hidden></section>
+    <section id="view-houses" hidden></section>
     <section id="view-places" hidden></section>
     <section id="view-duties" hidden></section>
     <section id="view-team" hidden></section>
@@ -446,13 +465,14 @@ async function boot() {
 }
 
 function showTab(tab) {
-  for (const t of ["route", "forecast", "board", "places", "duties", "team"]) {
+  for (const t of ["route", "forecast", "board", "houses", "places", "duties", "team"]) {
     document.getElementById("tab-" + t).classList.toggle("active", t === tab);
     document.getElementById("view-" + t).hidden = t !== tab;
   }
   if (tab === "route") renderRoute();
   if (tab === "forecast") renderForecast();
   if (tab === "board") renderBoard();
+  if (tab === "houses") renderHouses();
   if (tab === "places") renderPlaces();
   if (tab === "duties") renderDuties();
   if (tab === "team") renderTeam();
@@ -527,8 +547,11 @@ function routeHtml(plan, note) {
         <button class="ghost car-btn" onclick="sendToCar(${s.lat}, ${s.lon}, '${esc(s.label).replace(/'/g, "\\'")}')"
           title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
         <span class="stop-open">▸ tap for details</span>
-        <button onclick="doneVisit(${s.visit_id})">✓ Done</button>
+        ${WALK_TYPES.includes(s.visit_type)
+          ? `<button onclick="openFinish(${s.visit_id}, '${s.visit_type}', 'finish-${s.visit_id}')">✓ Finish</button>`
+          : `<button onclick="doneVisit(${s.visit_id})">✓ Done</button>`}
       </div>
+      <div id="finish-${s.visit_id}"></div>
       <div id="stop-detail-${s.visit_id}" class="stop-detail" hidden></div>
     </li>`).join("");
   const skipped = plan.skipped.map((s) => `
@@ -720,6 +743,294 @@ async function doneVisit(id) {
   } catch (ex) { alert(ex.message); }
 }
 
+// ---------------------------------------------------------------- walks: finish, houses, parts
+
+const WALK_TYPES = ["post_walk", "punch_out", "blue_tape"];
+const RESULT_OPTS = {
+  post_walk: [["ok", "OK — installed right, nothing missing"], ["issues", "Issues — damage / missing / not done"]],
+  punch_out: [["complete", "Complete"], ["incomplete", "Incomplete — coming back"], ["no_access", "No access — coming back"], ["rescheduled", "Rescheduled"]],
+  blue_tape: [["complete", "Complete"], ["incomplete", "Incomplete — coming back"], ["no_access", "No access — coming back"], ["rescheduled", "Rescheduled"]],
+};
+const REASONS = ["damaged", "missing", "wrong", "warranty", "other"];
+const WHO_PAYS = ["warranty", "our_error", "installer", "builder", "vendor"];
+const hsClass = (st) => /OVERDUE/.test(st) ? "hs hs-red" : st === "REQUEST PUNCH" ? "hs hs-yellow"
+  : /^Blue tape/.test(st) || st === "Waiting on blue tape" ? "hs hs-blue" : st === "Done" ? "hs hs-green" : "hs";
+
+// Finish a visit with what was found. A punch/blue tape that didn't finish
+// needs the day you'll be back — that spawns the next trip on the board.
+function openFinish(visitId, visitType, slotId, after) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  if (slot.innerHTML) { slot.innerHTML = ""; return; }
+  const opts = (RESULT_OPTS[visitType] || RESULT_OPTS.punch_out)
+    .map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  slot.innerHTML = `
+    <form class="finish" onsubmit="return submitFinish(event, ${visitId}, '${slotId}')">
+      <div class="row">
+        <select id="fr-${visitId}" onchange="document.getElementById('frd-${visitId}').hidden = !['incomplete','no_access','rescheduled'].includes(this.value)">${opts}</select>
+        <label id="frd-${visitId}" hidden>back on <input type="date" id="frdate-${visitId}" /></label>
+        <label>done on <input type="date" id="fon-${visitId}" value="${todayIso()}" /></label>
+      </div>
+      <textarea id="fnotes-${visitId}" placeholder="${visitType === "post_walk" ? "What was damaged, missing or not done — this is the record if there's a claim later" : "Notes — what's left, what was found"}"></textarea>
+      <div class="row">
+        <input id="fphotos-${visitId}" placeholder="Photo folder link (OneDrive)" style="flex:1; min-width:12rem" />
+        <button type="submit">Save</button>
+        <button type="button" class="ghost" onclick="document.getElementById('${slotId}').innerHTML=''">Cancel</button>
+        <span id="ferr-${visitId}" class="error"></span>
+      </div>
+      ${visitType !== "phase_check" ? `<div class="muted">Need a part for this house? <button type="button" class="ghost" onclick="openPart(${visitId}, '${visitType}', '${slotId}')">+ Add part</button></div>` : ""}
+      <div id="fpart-${visitId}"></div>
+    </form>`;
+  slot.dataset.after = after ? "board" : "route";
+}
+
+async function submitFinish(e, visitId, slotId) {
+  e.preventDefault();
+  const result = document.getElementById("fr-" + visitId).value;
+  const err = document.getElementById("ferr-" + visitId);
+  const body = {
+    result,
+    notes: document.getElementById("fnotes-" + visitId).value.trim() || null,
+    photos_url: document.getElementById("fphotos-" + visitId).value.trim() || null,
+    return_date: document.getElementById("frdate-" + visitId).value || null,
+    completed_on: document.getElementById("fon-" + visitId).value || null,
+  };
+  if (["incomplete", "no_access", "rescheduled"].includes(result) && !body.return_date) {
+    err.textContent = "Pick the day you'll be back"; return false;
+  }
+  try {
+    await api("/autobot/visits/" + visitId + "/complete", { method: "POST", body: JSON.stringify(body) });
+    const slot = document.getElementById(slotId);
+    const after = slot.dataset.after;
+    slot.innerHTML = "";
+    if (after === "board") renderBoard();
+    else if (!document.getElementById("view-houses").hidden) renderHouses();
+    else renderRoute();
+  } catch (ex) { err.textContent = ex.message; }
+  return false;
+}
+
+// A part found on a walk: lands on the house's Parts ticket.
+function openPart(visitIdOrJob, foundOn, slotId, jobId) {
+  const holder = document.getElementById(jobId ? slotId : "fpart-" + visitIdOrJob);
+  if (!holder) return;
+  if (holder.innerHTML) { holder.innerHTML = ""; return; }
+  const key = jobId ? "j" + jobId : "v" + visitIdOrJob;
+  holder.innerHTML = `
+    <div class="finish" style="margin-top:0.3rem">
+      <div class="row">
+        <input id="pp-${key}" placeholder="Part (L-Door, toe kick…)" required style="min-width:9rem" />
+        <input id="pc-${key}" placeholder="Cabinet (W3636)" style="width:8rem" />
+        <input id="pq-${key}" type="number" min="1" value="1" style="width:4rem" />
+        <select id="pr-${key}">${REASONS.map((r) => `<option value="${r}">${r}</option>`).join("")}</select>
+        <select id="pi-${key}"><option value="tech">Tech installs</option><option value="installer">Installer installs</option></select>
+      </div>
+      <div class="row">
+        <input id="pn-${key}" placeholder="Notes" style="flex:1; min-width:10rem" />
+        <button type="button" onclick="savePart('${key}', ${jobId || "null"}, ${jobId ? "null" : visitIdOrJob}, '${foundOn}')">Add part</button>
+        <span id="pe-${key}" class="error"></span>
+      </div>
+    </div>`;
+}
+
+async function savePart(key, jobId, visitId, foundOn) {
+  const err = document.getElementById("pe-" + key);
+  try {
+    if (!jobId) {
+      // the visit knows its job
+      const v = (await api("/autobot/visits?status_filter=all")).find((x) => x.id === visitId);
+      jobId = v && v.job_id;
+      if (!jobId) throw new Error("This visit isn't tied to a house");
+    }
+    await api("/autobot/jobs/" + jobId + "/parts", { method: "POST", body: JSON.stringify({
+      part: document.getElementById("pp-" + key).value.trim(),
+      cabinet: document.getElementById("pc-" + key).value.trim() || null,
+      qty: Number(document.getElementById("pq-" + key).value) || 1,
+      reason: document.getElementById("pr-" + key).value,
+      install_by: document.getElementById("pi-" + key).value,
+      found_on: foundOn,
+      notes: document.getElementById("pn-" + key).value.trim() || null,
+    })});
+    const holder = document.getElementById("pp-" + key).closest(".finish");
+    holder.innerHTML = '<span class="ok-chip">part added</span>';
+    if (!document.getElementById("view-houses").hidden) renderHouses();
+  } catch (ex) { err.textContent = ex.message; }
+}
+
+// ---------------------------------------------------------------- houses (the punch board)
+
+let houseFilter = "open";
+let houseQ = "";
+async function renderHouses() {
+  const el = document.getElementById("view-houses");
+  el.innerHTML = `
+    <div class="row">
+      <select onchange="houseFilter=this.value;renderHouses()">
+        ${[["open", "Open houses"], ["postwalk", "Post walks due"], ["request", "Ask the super"], ["punch", "Punch open"],
+           ["blue", "Blue tape open"], ["parts", "Parts open"], ["done", "Done"], ["all", "Everything"]]
+          .map(([v, l]) => `<option value="${v}" ${v === houseFilter ? "selected" : ""}>${l}</option>`).join("")}
+      </select>
+      <input placeholder="Search address, code, community" value="${esc(houseQ)}" oninput="houseQ=this.value;renderHouses()" style="flex:1; min-width:10rem" />
+      <span id="house-count" class="muted"></span>
+    </div>
+    <div id="house-list"><p class="muted">Loading…</p></div>`;
+  try {
+    const rows = await api("/autobot/punch-board");
+    const q = houseQ.trim().toLowerCase();
+    const keep = rows.filter((r) => {
+      const st = r.house_status;
+      const f = houseFilter;
+      const ok = f === "all" || (f === "open" && st !== "Done") || (f === "done" && st === "Done")
+        || (f === "postwalk" && /post walk/i.test(st)) || (f === "request" && st === "REQUEST PUNCH")
+        || (f === "punch" && /punch/i.test(st) && st !== "REQUEST PUNCH") || (f === "blue" && /blue tape/i.test(st))
+        || (f === "parts" && r.open_parts > 0);
+      if (!ok) return false;
+      if (!q) return true;
+      return [r.address, r.job_code, r.community, r.builder, r.plan].some((x) => (x || "").toLowerCase().includes(q));
+    });
+    document.getElementById("house-count").textContent = keep.length + " of " + rows.length + " houses";
+    document.getElementById("house-list").innerHTML = keep.map(houseCard).join("")
+      || '<p class="muted">Nothing here.</p>';
+  } catch (ex) {
+    document.getElementById("house-list").innerHTML = `<p class="error">${esc(ex.message)}</p>`;
+  }
+}
+
+function stepHtml(title, w, extra) {
+  if (!w) return `<div class="step"><b>${title}</b><span class="muted">${extra || "—"}</span></div>`;
+  const when = w.status === "done"
+    ? `done ${fmtDate(w.completed_on)}${w.completed_by ? " · " + esc(w.completed_by) : ""}${w.result ? " · " + esc(w.result) : ""}`
+    : (w.scheduled_date ? `scheduled ${fmtDate(w.scheduled_date)}` : `due ${fmtDate(w.close_date)}`) + (w.overdue ? ' <span class="late">overdue</span>' : "");
+  return `<div class="step"><b>${title}${w.trip > 1 ? ` · trip ${w.trip}` : ""}</b>
+    <span>${when}</span>
+    ${w.requested_on ? `<span class="muted">asked ${fmtDate(w.requested_on)}${w.confirmed_with ? " · " + esc(w.confirmed_with) : ""}</span>` : ""}
+    ${w.closing_date ? `<span class="muted">closing ${fmtDate(w.closing_date)}</span>` : ""}
+    ${w.result_notes ? `<span class="muted">${esc(w.result_notes)}</span>` : ""}
+    ${w.photos_url ? `<a href="${esc(w.photos_url)}" target="_blank" rel="noreferrer">photos</a>` : ""}
+    ${extra || ""}</div>`;
+}
+
+function houseCard(r) {
+  const pending = (w) => w && w.status === "pending";
+  const finishBtn = (w, t) => pending(w)
+    ? `<button class="ghost" onclick="openFinish(${w.visit_id}, '${t}', 'hf-${r.job_id}')">✓ Finish</button>` : "";
+  return `
+    <div class="house" id="house-${r.job_id}">
+      <div class="house-head" onclick="toggleHouse(${r.job_id})">
+        <b>${esc(r.address)}</b>
+        <span class="muted">${esc(r.job_code || "")}${r.community ? " · " + esc(r.community) : ""}${r.builder ? " · " + esc(r.builder) : ""}</span>
+        <span class="${hsClass(r.house_status)}">${esc(r.house_status)}</span>
+        ${r.open_parts ? `<span class="hold-chip">${r.open_parts} part${r.open_parts === 1 ? "" : "s"} open</span>` : ""}
+        <span class="muted">installed ${fmtDate(r.install_date)}</span>
+      </div>
+      <div id="hd-${r.job_id}" hidden>
+        <div class="steps">
+          ${stepHtml("Post walk", r.post_walk, finishBtn(r.post_walk, "post_walk"))}
+          ${stepHtml("Full punch", r.punch, (finishBtn(r.punch, "punch_out") || "") +
+            ` <button class="ghost" onclick="openRequest(${r.job_id}, 'punch')">Punch date</button>`)}
+          ${stepHtml("Blue tape", r.blue_tape, (finishBtn(r.blue_tape, "blue_tape") || "") +
+            ` <button class="ghost" onclick="openRequest(${r.job_id}, 'blue')">Blue tape</button>`)}
+        </div>
+        <div id="hf-${r.job_id}"></div>
+        <div id="hr-${r.job_id}"></div>
+        <div class="stop-section" style="margin-top:0.5rem"><b>Parts</b>
+          <button class="ghost" onclick="openPart(null, 'service', 'hp-${r.job_id}', ${r.job_id})">+ Add part</button>
+          <div id="hp-${r.job_id}"></div>
+          <ul class="parts-list" id="hpl-${r.job_id}"><li class="muted">tap to load</li></ul>
+        </div>
+        <div class="muted" style="margin-top:0.4rem">${r.plan ? esc(r.plan) + " · " : ""}${r.super_name ? "super " + esc(r.super_name) : ""}${r.g_code ? " · " + esc(r.g_code) : ""}${r.i_code ? " · " + esc(r.i_code) : ""}</div>
+      </div>
+    </div>`;
+}
+
+async function toggleHouse(jobId) {
+  const d = document.getElementById("hd-" + jobId);
+  d.hidden = !d.hidden;
+  if (!d.hidden) loadParts(jobId);
+}
+
+async function loadParts(jobId) {
+  const ul = document.getElementById("hpl-" + jobId);
+  try {
+    const parts = await api("/autobot/jobs/" + jobId + "/parts");
+    ul.innerHTML = parts.map((p) => `
+      <li>
+        <span><b>${esc(p.part)}</b>${p.cabinet ? " · " + esc(p.cabinet) : ""} × ${p.qty}${p.reason ? " · " + esc(p.reason) : ""}${p.install_by ? " · " + (p.install_by === "installer" ? "installer" : "tech") : ""}</span>
+        <span class="${p.state === "installed" ? "ok-chip" : "hold-chip"}">${p.state.replace("_", " ")}${p.due_date && p.state === "ordered" ? " · due " + fmtDate(p.due_date) : ""}</span>
+        ${p.state === "needs_order" ? `<button class="ghost" onclick="partStep(${p.id}, ${jobId}, 'ordered')">ordered</button>` : ""}
+        ${p.state === "ordered" ? `<button class="ghost" onclick="partStep(${p.id}, ${jobId}, 'received')">received</button>` : ""}
+        ${p.state !== "installed" ? `<button class="ghost" onclick="partStep(${p.id}, ${jobId}, 'installed')">installed</button>` : ""}
+      </li>`).join("") || '<li class="muted">no parts on this house</li>';
+  } catch (ex) { ul.innerHTML = `<li class="error">${esc(ex.message)}</li>`; }
+}
+
+async function partStep(partId, jobId, step) {
+  let body = {};
+  if (step === "ordered") {
+    const due = prompt("Everluxe confirmed date (m/d/yy) — the visit schedules off this, not the order date:", "");
+    if (due === null) return;
+    body = { order_date: todayIso(), due_date: due ? isoFromMdy(due) : null };
+  } else if (step === "received") body = { received: true };
+  else body = { installed_at: todayIso() };
+  try {
+    await api("/autobot/parts/" + partId, { method: "PATCH", body: JSON.stringify(body) });
+    loadParts(jobId);
+  } catch (ex) { alert(ex.message); }
+}
+
+function isoFromMdy(s) {
+  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? "20" + m[3] : m[3];
+  return `${y}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+}
+
+// Punch date (asked / got one) or blue tape (the super called) for a house.
+function openRequest(jobId, kind) {
+  const slot = document.getElementById("hr-" + jobId);
+  if (slot.dataset.kind === kind && slot.innerHTML) { slot.innerHTML = ""; slot.dataset.kind = ""; return; }
+  slot.dataset.kind = kind;
+  slot.innerHTML = kind === "punch" ? `
+    <form class="finish" onsubmit="return submitRequest(event, ${jobId}, 'punch')">
+      <div class="row">
+        <label>asked the super on <input type="date" id="rq-on-${jobId}" value="${todayIso()}" /></label>
+        <label>date they gave <input type="date" id="rq-sched-${jobId}" /></label>
+        <input id="rq-with-${jobId}" placeholder="confirmed with" style="width:10rem" />
+        <button type="submit">Save</button>
+        <span id="rq-err-${jobId}" class="error"></span>
+      </div>
+    </form>` : `
+    <form class="finish" onsubmit="return submitRequest(event, ${jobId}, 'blue')">
+      <div class="row">
+        <label>super called on <input type="date" id="rq-on-${jobId}" value="${todayIso()}" /></label>
+        <label>house closes <input type="date" id="rq-close-${jobId}" /></label>
+        <label>going on <input type="date" id="rq-sched-${jobId}" /></label>
+        <button type="submit">Save</button>
+        <span id="rq-err-${jobId}" class="error"></span>
+      </div>
+      <input id="rq-notes-${jobId}" placeholder="What's on the blue tape list" />
+    </form>`;
+}
+
+async function submitRequest(e, jobId, kind) {
+  e.preventDefault();
+  const g = (id) => { const el = document.getElementById(id + "-" + jobId); return el ? (el.value || null) : null; };
+  const err = document.getElementById("rq-err-" + jobId);
+  try {
+    if (kind === "punch") {
+      await api("/autobot/jobs/" + jobId + "/punch-request", { method: "POST", body: JSON.stringify({
+        requested_on: g("rq-on"), scheduled_date: g("rq-sched"), confirmed_with: g("rq-with"),
+      })});
+    } else {
+      await api("/autobot/jobs/" + jobId + "/blue-tape", { method: "POST", body: JSON.stringify({
+        requested_on: g("rq-on"), closing_date: g("rq-close"), scheduled_date: g("rq-sched"), notes: g("rq-notes"),
+      })});
+    }
+    renderHouses();
+  } catch (ex) { err.textContent = ex.message; }
+  return false;
+}
+
 // ---------------------------------------------------------------- forecast
 
 async function renderForecast() {
@@ -820,10 +1131,12 @@ async function renderBoard() {
             `<option value="${w.id}" ${v.assigned_to === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}
         </select></td>
         <td>${v.status === "pending"
-          ? `<button onclick="actVisit(${v.id},'done')" title="Mark completed">✓</button>
-             <button class="ghost" onclick="actVisit(${v.id},'canceled')" title="Cancel">✕</button>`
+          ? (WALK_TYPES.includes(v.visit_type)
+              ? `<button onclick="openFinish(${v.id}, '${v.visit_type}', 'bfinish-${v.id}', renderBoard)" title="Finish with what you found">✓</button>`
+              : `<button onclick="actVisit(${v.id},'done')" title="Mark completed">✓</button>`) +
+            `<button class="ghost" onclick="actVisit(${v.id},'canceled')" title="Cancel">✕</button>`
           : `<button class="ghost" onclick="actVisit(${v.id},'pending')" title="Reopen">↩</button>`}</td>
-      </tr>`).join("") || '<tr><td colspan="9" class="muted">No visits — hit Sync on the Route tab.</td></tr>';
+      </tr><tr><td colspan="9" style="padding:0"><div id="bfinish-${v.id}"></div></td></tr>`).join("") || '<tr><td colspan="9" class="muted">No visits — hit Sync on the Route tab.</td></tr>';
   } catch (ex) {
     document.getElementById("board-rows").innerHTML =
       `<tr><td colspan="9" class="error">${esc(ex.message)}</td></tr>`;

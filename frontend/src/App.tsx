@@ -9,6 +9,7 @@ import FormsPage from "./pages/FormsPage";
 import JobsPage, { NAV_KEY as JOBS_NAV_KEY } from "./pages/JobsPage";
 import OrderingPage from "./pages/OrderingPage";
 import PhasesPage from "./pages/PhasesPage";
+import PunchBoardPage from "./pages/PunchBoardPage";
 import ReportsPage from "./pages/ReportsPage";
 import SchedulePage from "./pages/SchedulePage";
 import HeaderJobSearch from "./pages/HeaderJobSearch";
@@ -137,6 +138,7 @@ export default function App() {
   else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
+  else if (hash.startsWith("#/punch")) page = <PunchBoardPage canWrite={canWritePhases} />;
   else if (hash.startsWith("#/reports")) page = <ReportsPage hash={hash} />;
   else if (hash.startsWith("#/forms")) page = <FormsPage />;
   else if (hash.startsWith("#/archive")) page = <JobsPage archived />;
@@ -177,6 +179,7 @@ export default function App() {
               !hash.startsWith("#/ordering") &&
               !hash.startsWith("#/schedule") &&
               !hash.startsWith("#/phases") &&
+              !hash.startsWith("#/punch") &&
               !hash.startsWith("#/reports") &&
               !hash.startsWith("#/forms") &&
               !hash.startsWith("#/archive") &&
@@ -198,6 +201,9 @@ export default function App() {
           </a>
           <a href="#/phases" className={hash.startsWith("#/phases") ? "active" : ""}>
             Phases
+          </a>
+          <a href="#/punch" className={hash.startsWith("#/punch") ? "active" : ""} title="Post walks, punches, blue tape and parts on every house past install">
+            Punch
           </a>
           <a href="#/accounts" className={hash.startsWith("#/accounts") ? "active" : ""}>
             Accounts

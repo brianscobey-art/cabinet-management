@@ -2009,3 +2009,18 @@ tfoot td {
 /* Private Order Pack entry — only rendered for the owner allowlist */
 .coast-chip.coast-private { border-color: var(--action); }
 .coast-chip.coast-private b { color: var(--action); }
+
+/* ---- walks & punch board ---- */
+.hs { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #eef2f1; color: #1c2b28; white-space: nowrap; }
+.hs-red { background: #fdecea; color: #8f1717; }
+.hs-yellow { background: #fff3c4; color: #7a5a00; }
+.hs-blue { background: #e3eefb; color: #1d4e89; }
+.hs-green { background: #e5f4ee; color: #0f6b45; }
+.walk-form { background: #f6faf8; border: 1px solid #cfe0da; border-radius: 8px; padding: 10px; margin: 8px 0; display: grid; gap: 8px; }
+.walk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.walk-row label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.walk-form textarea { width: 100%; min-height: 56px; }
+.steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 6px 0; }
+.step-card { background: #fff; border: 1px solid #d8e2df; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.step-card b { display: block; color: var(--green, #125952); margin-bottom: 2px; }
+button.small { padding: 2px 8px; font-size: 12px; }

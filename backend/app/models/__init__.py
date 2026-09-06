@@ -18,7 +18,7 @@ from app.models.receipt import JobPo, PoReceipt
 from app.models.selections import HardwareSelection, RoomSelection
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
 from app.models.user import Role, User
-from app.models.visit import VISIT_STATUSES, VISIT_TYPES, Visit
+from app.models.visit import RETURN_RESULTS, VISIT_RESULTS, VISIT_STATUSES, VISIT_TYPES, Visit
 from app.models.worker import DutyAssignment, Worker, WorkerTimeOff
 
 __all__ = [
@@ -65,7 +65,7 @@ __all__ = [
     "Supplier",
     "User",
     "DutyAssignment",
-    "VISIT_STATUSES",
+    "RETURN_RESULTS", "VISIT_RESULTS", "VISIT_STATUSES",
     "VISIT_TYPES",
     "Visit",
     "Worker",

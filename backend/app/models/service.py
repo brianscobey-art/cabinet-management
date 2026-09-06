@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -57,6 +58,14 @@ class ServicePart(Base):
     # dispatches the visit the moment it's in; cosmetic leftovers spawn a follow-up.
     trade_blocking: Mapped[bool] = mapped_column(Boolean, default=False)
     received: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Why the house needs it, who puts it in, what it costs and who eats that.
+    reason: Mapped[str | None] = mapped_column(String(30), default=None)      # damaged / missing / wrong / warranty / other
+    found_on: Mapped[str | None] = mapped_column(String(20), default=None)    # post_walk / punch_out / blue_tape / service
+    install_by: Mapped[str | None] = mapped_column(String(20), default=None)  # tech / installer
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
+    who_pays: Mapped[str | None] = mapped_column(String(30), default=None)    # warranty / our_error / installer / builder / vendor
+    installed_at: Mapped[date | None] = mapped_column(Date, default=None)
+    installed_by: Mapped[str | None] = mapped_column(String(120), default=None)
 
     request: Mapped["ServiceRequest"] = relationship(back_populates="parts")
 

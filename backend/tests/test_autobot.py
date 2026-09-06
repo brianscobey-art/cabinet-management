@@ -171,7 +171,8 @@ def test_generate_spawns_and_is_idempotent(db):
     created = generate_visits(db, TODAY)
     assert created["field_measure"] == 1
     assert created["post_walk"] == 1
-    assert created["punch_out"] == 1
+    # the Nd QW house gets its punch visit too, opening at install + 14 days
+    assert created["punch_out"] == 2
     assert created["blue_tape"] == 1
     assert created["phase_check"] == 1  # community has active houses
 
@@ -616,10 +617,11 @@ def test_places_and_location(client, db):
 
 
 def test_autobot_is_tech_and_admin_only(client, db):
-    # Office roles don't work in this arena — Autobot is closed to them.
+    # Office roles see and work their own visits (KSRs carry measures and
+    # post-walks) but never configure the arena — generation stays tech/admin.
     make_user(db, role=Role.sales, email="office@example.com")
     headers = login(client, "office@example.com")
-    assert client.get("/autobot/visits", headers=headers).status_code == 403
+    assert client.get("/autobot/visits", headers=headers).status_code == 200
     assert client.post("/autobot/generate", headers=headers).status_code == 403
 
 

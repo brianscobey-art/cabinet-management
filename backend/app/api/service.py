@@ -4,6 +4,7 @@ each labor line against its part.
 """
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +40,13 @@ class PartOut(BaseModel):
     notes: str | None
     trade_blocking: bool
     received: bool
+    reason: str | None = None
+    found_on: str | None = None
+    install_by: str | None = None
+    cost: Decimal | None = None
+    who_pays: str | None = None
+    installed_at: date | None = None
+    installed_by: str | None = None
 
 
 class LineOut(BaseModel):
@@ -108,6 +116,11 @@ class PartIn(BaseModel):
     notes: str | None = Field(default=None, max_length=300)
     trade_blocking: bool = False
     received: bool = False
+    reason: str | None = Field(default=None, max_length=30)
+    found_on: str | None = Field(default=None, max_length=20)
+    install_by: str | None = Field(default=None, max_length=20)
+    cost: Decimal | None = Field(default=None, ge=0)
+    who_pays: str | None = Field(default=None, max_length=30)
 
 
 class PartPatch(BaseModel):
@@ -116,6 +129,15 @@ class PartPatch(BaseModel):
     due_date: date | None = None
     trade_blocking: bool | None = None
     received: bool | None = None
+    reason: str | None = Field(default=None, max_length=30)
+    found_on: str | None = Field(default=None, max_length=20)
+    install_by: str | None = Field(default=None, max_length=20)
+    cost: Decimal | None = Field(default=None, ge=0)
+    who_pays: str | None = Field(default=None, max_length=30)
+    installed_at: date | None = None
+    installed_by: str | None = Field(default=None, max_length=120)
+    qty: int | None = Field(default=None, ge=1)
+    notes: str | None = Field(default=None, max_length=300)
 
 
 class LineIn(BaseModel):
@@ -334,6 +356,8 @@ def add_part(sr_id: int, payload: PartIn, db: Session = Depends(get_db),
         order_number=(payload.order_number or None), order_date=payload.order_date,
         due_date=payload.due_date, qty=payload.qty, notes=(payload.notes or None),
         trade_blocking=payload.trade_blocking, received=payload.received,
+        reason=payload.reason, found_on=payload.found_on, install_by=payload.install_by,
+        cost=payload.cost, who_pays=payload.who_pays,
     )
     db.add(part)
     db.commit()

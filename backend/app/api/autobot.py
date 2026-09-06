@@ -1,7 +1,7 @@
 ﻿"""Autobot API: the universal visit board, the daily route plan, and the
 community pins the router needs. Engine logic lives in app/autobot.py."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth.deps import require_roles
 from app.autobot import (
+    BLUE_TAPE_DAYS,
     DUTIES,
+    WALK_TYPES,
+    house_board,
     INACTIVE_JOB_STATUSES,
     NATIONAL_PREFIXES,
     TRACK_TO_BLUE_STATUSES,
@@ -28,6 +31,9 @@ from app.autobot import (
 )
 from app.database import get_db
 from app.models import (
+    JobStatus,
+    RETURN_RESULTS,
+    VISIT_RESULTS,
     VISIT_STATUSES,
     VISIT_TYPES,
     Community,
@@ -35,6 +41,7 @@ from app.models import (
     Job,
     PhaseUpdate,
     Role,
+    ServicePart,
     ServiceRequest,
     User,
     Visit,
@@ -81,6 +88,16 @@ class VisitOut(BaseModel):
     completed_by: str | None
     assigned_to: int | None
     assignee: str | None  # display name; null = the tech's pool
+    # what happened, and the coordinator's request/confirmation dates
+    result: str | None = None
+    result_notes: str | None = None
+    photos_url: str | None = None
+    requested_on: date | None = None
+    confirmed_with: str | None = None
+    closing_date: date | None = None
+    return_date: date | None = None
+    trip: int = 1
+    parent_visit_id: int | None = None
 
 
 class VisitIn(BaseModel):
@@ -109,6 +126,86 @@ class VisitPatch(BaseModel):
     duration_min: int | None = Field(default=None, ge=1)
     notes: str | None = None
     assigned_to: int | None = None  # null (sent explicitly) puts it back in the tech's pool
+    result_notes: str | None = None
+    photos_url: str | None = Field(default=None, max_length=500)
+    requested_on: date | None = None
+    confirmed_with: str | None = Field(default=None, max_length=120)
+    closing_date: date | None = None
+
+
+class CompleteIn(BaseModel):
+    """Finish a visit from the field: what was found, and — when it couldn't be
+    finished — the day it comes back (which spawns the next trip)."""
+    result: str
+    notes: str | None = None
+    photos_url: str | None = Field(default=None, max_length=500)
+    return_date: date | None = None
+    completed_on: date | None = None      # blank = today
+
+
+class PunchRequestIn(BaseModel):
+    """The coordinator asked the super for a punch date, or got one back."""
+    requested_on: date | None = None
+    confirmed_with: str | None = Field(default=None, max_length=120)
+    scheduled_date: date | None = None
+    notes: str | None = None
+
+
+class BlueTapeIn(BaseModel):
+    """The super called: the homeowner walked. Due by the closing date they give."""
+    requested_on: date | None = None
+    closing_date: date | None = None
+    scheduled_date: date | None = None
+    notes: str | None = None
+
+
+class PartQuickIn(BaseModel):
+    part: str = Field(min_length=1, max_length=200)
+    cabinet: str | None = Field(default=None, max_length=100)
+    qty: int = Field(default=1, ge=1)
+    reason: str | None = Field(default=None, max_length=30)
+    found_on: str | None = Field(default=None, max_length=20)
+    install_by: str | None = Field(default=None, max_length=20)
+    vendor: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=300)
+    trade_blocking: bool = False
+
+
+class PartQuickPatch(BaseModel):
+    order_number: str | None = Field(default=None, max_length=60)
+    order_date: date | None = None
+    due_date: date | None = None
+    received: bool | None = None
+    installed_at: date | None = None
+    installed_by: str | None = Field(default=None, max_length=120)
+    install_by: str | None = Field(default=None, max_length=20)
+    cost: float | None = Field(default=None, ge=0)
+    who_pays: str | None = Field(default=None, max_length=30)
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class PartOut(BaseModel):
+    id: int
+    service_request_id: int
+    job_id: int
+    part: str
+    cabinet: str | None
+    qty: int
+    reason: str | None
+    found_on: str | None
+    install_by: str | None
+    vendor: str | None
+    order_number: str | None
+    order_date: date | None
+    due_date: date | None
+    received: bool
+    installed_at: date | None
+    installed_by: str | None
+    cost: float | None
+    who_pays: str | None
+    notes: str | None
+    trade_blocking: bool
+    state: str    # needs_order / ordered / received / installed
 
 
 class LocationIn(BaseModel):
@@ -175,6 +272,15 @@ def _out(db: Session, v: Visit, today: date) -> VisitOut:
         completed_by=v.completed_by,
         assigned_to=v.assigned_to,
         assignee=v.assignee.name if v.assignee else None,
+        result=v.result,
+        result_notes=v.result_notes,
+        photos_url=v.photos_url,
+        requested_on=v.requested_on,
+        confirmed_with=v.confirmed_with,
+        closing_date=v.closing_date,
+        return_date=v.return_date,
+        trip=v.trip or 1,
+        parent_visit_id=v.parent_visit_id,
     )
 
 
@@ -289,6 +395,244 @@ def patch_visit(
     db.commit()
     v = _visit_query(db).filter(Visit.id == visit_id).one()
     return _out(db, v, date.today())
+
+
+# ---------------------------------------------------------------- walks & punch
+# Post walk, full punch and blue tape: the visit is the record. These endpoints
+# are what the truck (Autobot) and the office (CabinetTron) both write through.
+
+BEFORE_BLUE = (JobStatus.inst, JobStatus.ndqw, JobStatus.parts, JobStatus.punch)
+
+
+@router.post("/autobot/visits/{visit_id}/complete", response_model=list[VisitOut])
+def complete_visit(
+    visit_id: int,
+    payload: CompleteIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(autobot_do),
+):
+    """Finish a visit with what was found. A punch or blue tape that could not be
+    finished (incomplete / no access / rescheduled) with a return date spawns the
+    next trip, pinned to that day. Returns [this visit, follow-up if any]."""
+    visit = db.get(Visit, visit_id)
+    if not visit:
+        raise HTTPException(404, "Visit not found")
+    if payload.result not in VISIT_RESULTS:
+        raise HTTPException(422, f"result must be one of: {', '.join(VISIT_RESULTS)}")
+    if payload.result in RETURN_RESULTS and not payload.return_date:
+        raise HTTPException(422, "Give the day you'll be back (return_date) for a visit that didn't finish")
+    visit.status = "done"
+    visit.result = payload.result
+    if payload.notes:
+        visit.result_notes = payload.notes
+    if payload.photos_url:
+        visit.photos_url = payload.photos_url
+    visit.return_date = payload.return_date
+    visit.completed_at = (
+        datetime.combine(payload.completed_on, datetime.min.time(), tzinfo=timezone.utc)
+        if payload.completed_on else datetime.now(timezone.utc)
+    )
+    visit.completed_by = user.full_name
+    out_ids = [visit.id]
+    if payload.result in RETURN_RESULTS:
+        follow = Visit(
+            visit_type=visit.visit_type, job_id=visit.job_id, community_id=visit.community_id,
+            service_request_id=visit.service_request_id, assigned_to=visit.assigned_to,
+            lat=visit.lat, lon=visit.lon,
+            open_date=payload.return_date, close_date=payload.return_date,
+            scheduled_date=payload.return_date, priority=visit.priority,
+            duration_min=visit.duration_min, status="pending",
+            notes=payload.notes or visit.notes,
+            requested_on=visit.requested_on, confirmed_with=visit.confirmed_with,
+            closing_date=visit.closing_date,
+            parent_visit_id=visit.id, trip=(visit.trip or 1) + 1,
+            created_by=user.full_name,
+        )
+        db.add(follow)
+        db.flush()
+        out_ids.append(follow.id)
+    db.commit()
+    rows = _visit_query(db).filter(Visit.id.in_(out_ids)).all()
+    rows.sort(key=lambda v: out_ids.index(v.id))
+    return [_out(db, v, date.today()) for v in rows]
+
+
+def _live_walk(db: Session, job_id: int, vtype: str) -> Visit | None:
+    return (
+        db.query(Visit)
+        .filter(Visit.job_id == job_id, Visit.visit_type == vtype, Visit.status == "pending")
+        .order_by(Visit.trip.desc(), Visit.id.desc())
+        .first()
+    )
+
+
+@router.post("/autobot/jobs/{job_id}/punch-request", response_model=VisitOut)
+def punch_request(
+    job_id: int, payload: PunchRequestIn,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    """Log that the super was asked for a punch date and/or the date they gave.
+    Uses the house's open punch visit, creating one if the generator hasn't yet."""
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    visit = _live_walk(db, job_id, "punch_out")
+    if visit is None:
+        visit = Visit(visit_type="punch_out", job_id=job_id, open_date=date.today(),
+                      close_date=date.today() + timedelta(days=7), created_by=user.full_name)
+        db.add(visit)
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        if key == "notes":
+            if value:
+                visit.notes = value
+        else:
+            setattr(visit, key, value)
+    if payload.scheduled_date:
+        visit.close_date = payload.scheduled_date
+    db.commit()
+    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), date.today())
+
+
+@router.post("/autobot/jobs/{job_id}/blue-tape", response_model=VisitOut)
+def blue_tape_request(
+    job_id: int, payload: BlueTapeIn,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    """The homeowner walked and the super sent the blue-tape list. Opens (or
+    updates) the house's blue-tape visit, due by the closing date — or four days
+    after the request when there is no closing date yet."""
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    requested = payload.requested_on or date.today()
+    visit = _live_walk(db, job_id, "blue_tape")
+    if visit is None:
+        visit = Visit(visit_type="blue_tape", job_id=job_id, created_by=user.full_name, priority=5)
+        db.add(visit)
+    visit.requested_on = requested
+    if payload.closing_date is not None:
+        visit.closing_date = payload.closing_date
+    if payload.scheduled_date is not None:
+        visit.scheduled_date = payload.scheduled_date
+    if payload.notes:
+        visit.notes = payload.notes
+    visit.open_date = visit.open_date or requested
+    visit.close_date = visit.closing_date or (requested + timedelta(days=BLUE_TAPE_DAYS))
+    if job.status in BEFORE_BLUE:
+        job.status = JobStatus.blue
+    db.commit()
+    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), date.today())
+
+
+@router.get("/autobot/jobs/{job_id}/walks", response_model=list[VisitOut], dependencies=[Depends(autobot_access)])
+def job_walks(job_id: int, db: Session = Depends(get_db)):
+    """Every post-walk, punch and blue-tape trip on the house, oldest first."""
+    rows = (
+        _visit_query(db)
+        .filter(Visit.job_id == job_id, Visit.visit_type.in_(WALK_TYPES), Visit.status != "canceled")
+        .order_by(Visit.id)
+        .all()
+    )
+    return [_out(db, v, date.today()) for v in rows]
+
+
+def _part_state(p: ServicePart) -> str:
+    if p.installed_at:
+        return "installed"
+    if p.received:
+        return "received"
+    if p.order_date or p.order_number or p.due_date:
+        return "ordered"
+    return "needs_order"
+
+
+def _part_out(p: ServicePart, job_id: int) -> PartOut:
+    return PartOut(
+        id=p.id, service_request_id=p.service_request_id, job_id=job_id,
+        part=p.part, cabinet=p.cabinet, qty=p.qty, reason=p.reason, found_on=p.found_on,
+        install_by=p.install_by, vendor=p.vendor, order_number=p.order_number,
+        order_date=p.order_date, due_date=p.due_date, received=bool(p.received),
+        installed_at=p.installed_at, installed_by=p.installed_by,
+        cost=float(p.cost) if p.cost is not None else None, who_pays=p.who_pays,
+        notes=p.notes, trade_blocking=bool(p.trade_blocking), state=_part_state(p),
+    )
+
+
+def _parts_request(db: Session, job: Job, user: User) -> ServiceRequest:
+    """The house's parts ticket — one service request titled 'Parts' that every
+    part found on a walk lands on, so the tech's parts list is in one place."""
+    sr = (
+        db.query(ServiceRequest)
+        .filter(ServiceRequest.job_id == job.id, ServiceRequest.title == "Parts")
+        .order_by(ServiceRequest.id.desc())
+        .first()
+    )
+    if sr is None:
+        sr = ServiceRequest(job_id=job.id, title="Parts", status="Parts", created_by=user.full_name)
+        db.add(sr)
+        db.flush()
+    return sr
+
+
+@router.get("/autobot/jobs/{job_id}/parts", response_model=list[PartOut], dependencies=[Depends(autobot_access)])
+def job_parts(job_id: int, db: Session = Depends(get_db)):
+    rows = (
+        db.query(ServicePart).join(ServiceRequest)
+        .filter(ServiceRequest.job_id == job_id)
+        .order_by(ServicePart.id)
+        .all()
+    )
+    return [_part_out(p, job_id) for p in rows]
+
+
+@router.post("/autobot/jobs/{job_id}/parts", response_model=PartOut, status_code=status.HTTP_201_CREATED)
+def add_job_part(
+    job_id: int, payload: PartQuickIn,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    sr = _parts_request(db, job, user)
+    part = ServicePart(
+        service_request_id=sr.id, part=payload.part.strip(), cabinet=payload.cabinet or None,
+        qty=payload.qty, reason=payload.reason, found_on=payload.found_on,
+        install_by=payload.install_by, vendor=payload.vendor or None, notes=payload.notes or None,
+        trade_blocking=payload.trade_blocking,
+    )
+    db.add(part)
+    if job.status in (JobStatus.inst, JobStatus.ndqw):
+        job.status = JobStatus.parts       # the house is waiting on parts now
+    db.commit()
+    db.refresh(part)
+    return _part_out(part, job_id)
+
+
+@router.patch("/autobot/parts/{part_id}", response_model=PartOut)
+def patch_job_part(
+    part_id: int, payload: PartQuickPatch,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    part = db.get(ServicePart, part_id)
+    if not part:
+        raise HTTPException(404, "Part not found")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("installed_at") and not data.get("installed_by"):
+        data["installed_by"] = user.full_name
+    for key, value in data.items():
+        setattr(part, key, value)
+    db.commit()
+    db.refresh(part)
+    sr = db.get(ServiceRequest, part.service_request_id)
+    return _part_out(part, sr.job_id if sr else 0)
+
+
+@router.get("/autobot/punch-board", dependencies=[Depends(autobot_access)])
+def punch_board(db: Session = Depends(get_db)):
+    """Every house past install: post walk, punch, blue tape and open parts —
+    the board the office and the truck both read."""
+    return house_board(db, date.today())
 
 
 @router.post("/autobot/generate", dependencies=[Depends(autobot_write)])
