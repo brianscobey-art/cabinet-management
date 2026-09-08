@@ -1143,7 +1143,9 @@ function PhaseReport() {
   }, [rows, showPhase12]);
 
   const visibleGroups = groups.filter((g) => selectedBuilders.has(g.builder));
-  const phase12Count = showPhase12 ? 0 : rows.filter((r) => r.phase === "12").length;
+  // Counted off the raw rows, not the visible ones: the button has to say how
+  // many houses it is holding back even while it is showing them.
+  const installedCount = rows.filter((r) => r.phase === "12").length;
 
   function toggleBuilder(name: string) {
     setSelectedBuilders((s) => {
@@ -1193,15 +1195,15 @@ function PhaseReport() {
           </button>
         </div>
         <div className="filters">
-          <label className="check-inline" title="Phase 12 = IC Cab Installed">
-            <input
-              type="checkbox"
-              checked={showPhase12}
-              onChange={(e) => setShowPhase12(e.target.checked)}
-            />
-            Show phase 12 (installed)
-            {phase12Count > 0 && <span className="muted"> · {phase12Count} hidden</span>}
-          </label>
+          <button
+            className={showPhase12 ? "toggle-btn on" : "toggle-btn"}
+            onClick={() => setShowPhase12((v) => !v)}
+            title="Phase 12 = IC Cab Installed — finished houses"
+          >
+            {showPhase12
+              ? `Hide installed (12)${installedCount ? ` · ${installedCount}` : ""}`
+              : `Show installed (12)${installedCount ? ` · ${installedCount} hidden` : ""}`}
+          </button>
           <MultiSelect
             label="Builders"
             options={builders}
@@ -1267,14 +1269,14 @@ function PhaseReport() {
           <div className="table-wrap report-table">
             <table className="phase-table">
               <colgroup>
-                <col style={{ width: "6%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "23%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "9%" }} />
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "19%" }} />
                 <col style={{ width: "14%" }} />
-                <col style={{ width: "6%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>

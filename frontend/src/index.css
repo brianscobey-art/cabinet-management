@@ -1544,7 +1544,35 @@ td.fm-col input[type="checkbox"] {
 }
 .phase-table td,
 .phase-table th {
+  /* The overlap: cells inherit `white-space: nowrap` from the global td rule,
+     and under table-layout:fixed an over-wide plan name or phase label does not
+     clip — it spills across the neighbour and the two read as one smear. Let
+     these cells wrap instead; overflow is the guard for a single long token. */
+  white-space: normal;
   overflow-wrap: anywhere;
+  overflow: hidden;
+  padding-right: 0.5rem;
+  vertical-align: top;
+}
+
+/* Filter-bar on/off switch — reads as a button, not a checkbox, and says which
+   way it is currently set. */
+.toggle-btn {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #ccd4d8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--brand-ink);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.toggle-btn:hover {
+  border-color: var(--brand);
+}
+.toggle-btn.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .fm-overdue {
