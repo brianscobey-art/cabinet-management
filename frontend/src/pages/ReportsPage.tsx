@@ -1487,7 +1487,10 @@ function SmartsheetReportView() {
       </div>
 
       <p className="muted">
-        {t.houses} houses &middot; Smartsheet pulled{" "}
+        {t.houses} houses
+        {data.hidden_closed > 0 &&
+          ` (${data.hidden_closed} closed jobs not shown)`}{" "}
+        &middot; Smartsheet pulled{" "}
         {data.pulled_at ? fmtDate(data.pulled_at) : "never"} &middot;{" "}
         {data.tracker_ok
           ? `tracker ${data.tracker_file}`

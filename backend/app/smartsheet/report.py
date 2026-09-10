@@ -28,6 +28,12 @@ from app.smartsheet.timeline import assess, learn_intervals, predict
 # Status for a house Smartsheet already calls finished.
 DONE = "complete"
 
+# The tracker's own "this job is closed" level. Brian's call 9/10/26: a closed
+# house is off the report entirely -- not greyed, not filtered by default, just
+# gone. Nothing about a finished job needs reconciling, and 81 of them were
+# crowding out the houses that do.
+CLOSED_CONST_LVL = "6.0-Clsd"
+
 FIELD_PO = "Cabinet PO"
 FIELD_ACTUAL = "Actual install"
 FIELD_WORKFLOW = "Workflow status"
@@ -254,11 +260,18 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
             "fields": fields,
         })
 
+    # Drop the closed jobs. Counted first so the report can say how many it is
+    # holding back rather than silently showing a smaller number than the
+    # tracker does.
+    hidden_closed = sum(1 for r in rows if r.get("const_lvl") == CLOSED_CONST_LVL)
+    rows = [r for r in rows if r.get("const_lvl") != CLOSED_CONST_LVL]
+
     rows.sort(key=lambda r: (r["builder"] or "~", r["subdivision"] or "~",
                              str(r["lot"] or "")))
     return {
         "generated": today.isoformat(),
         "tracker_ok": tracker_ok,
+        "hidden_closed": hidden_closed,
         "portal_files": portal_meta or {},
         "portal_coverage": portal_coverage(portal_rows or []),
         "intervals": {k: {"days": v.days, "n": v.n, "iqr": v.iqr, "usable": v.usable}

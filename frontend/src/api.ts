@@ -544,6 +544,7 @@ export interface SmartsheetReport {
   pulled_at: string | null;
   tracker_ok: boolean;
   tracker_file: string | null;
+  hidden_closed: number;
   portal_files: Record<string, string | null>;
   portal_coverage: {
     source: string;

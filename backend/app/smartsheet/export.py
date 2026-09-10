@@ -182,6 +182,11 @@ def to_xlsx(data: dict) -> io.BytesIO:
     r += 1
     ws.cell(row=r, column=1, value="With a real disagreement").font = Font(bold=True)
     _write(ws, r, 2, totals["with_differences"], centre=True)
+    if data.get("hidden_closed"):
+        r += 1
+        ws.cell(row=r, column=1, value="Closed jobs excluded (CONST LVL 6.0-Clsd)").font = Font(
+            name="Calibri", size=10, color=GREY)
+        _write(ws, r, 2, data["hidden_closed"], centre=True)
     r += 2
     for heading, bucket in (("By timeline status", "by_status"),
                             ("By match", "by_match")):
