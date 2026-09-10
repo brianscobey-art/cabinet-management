@@ -85,6 +85,10 @@ def read_vendorsuite(path: Path) -> list[dict]:
         plat = _PLAT_LOT.match(str(r.get("Plat (Lot/Block/Phase)") or ""))
         out.append({
             "source": "VendorSuite",
+            # VendorSuite's "Job Number" IS the builder job code (BUID) -- the
+            # same 9-digit number the tracker calls Builder Job Code and
+            # Smartsheet calls Lot ID. Carried through so the join can use it.
+            "buid": r.get("Job Number"),
             "subdivision": r.get("Project"),
             "lot": plat.group(1) if plat else None,
             "po_number": r.get("PO Number"),

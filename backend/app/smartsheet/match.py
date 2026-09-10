@@ -72,6 +72,21 @@ def key_of(subdivision, lot) -> tuple[str, str]:
     return (norm_sub(subdivision), norm_lot(lot))
 
 
+def norm_buid(value) -> str | None:
+    """The builder job code, however a sheet stored it.
+
+    Every system carries this same 9-digit number under a different heading --
+    the tracker calls it "Builder Job Code", Smartsheet calls it "Lot ID",
+    VendorSuite calls it "Job Number" -- and unlike a community name nobody
+    retypes it, so it joins where names do not: 202 houses against 108 on
+    community+lot. Excel hands some of them back as floats, hence the split.
+    """
+    if value is None:
+        return None
+    digits = re.sub(r"\D", "", str(value).split(".")[0])
+    return digits if len(digits) == 9 else None
+
+
 MATCHED = "matched"
 ONLY_SMARTSHEET = "not in CabinetTron"
 ONLY_CABINETTRON = "not in Smartsheet"
@@ -105,6 +120,15 @@ def index_by_key(items, sub_of, lot_of) -> dict[tuple[str, str], list]:
     return out
 
 
+def index_by_buid(items, buid_of) -> dict[str, list]:
+    out: dict[str, list] = {}
+    for item in items:
+        b = norm_buid(buid_of(item))
+        if b:
+            out.setdefault(b, []).append(item)
+    return out
+
+
 def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
          *, expected) -> list[Match]:
     """Three-way join on subdivision + lot.
@@ -128,6 +152,18 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
                       lambda r: r.get("Community") or r.get("Subdivision"),
                       lambda r: r.get("Lot #"))
 
+    # The strong key. Community names get retyped and abbreviated; a builder
+    # job code does not, so it is tried first and the name-based key is only
+    # the fallback for rows that have no BUID on one side or the other.
+    ss_b = index_by_buid(smartsheet_rows, lambda r: r.get("Lot ID"))
+    tr_b = index_by_buid(tracker_rows, lambda r: r.get("Builder Job Code"))
+
+    def tracker_for(row: dict, k: tuple[str, str]):
+        b = norm_buid(row.get("Lot ID"))
+        if b and b in tr_b:
+            return tr_b[b][0]
+        return (tr.get(k) or [None])[0]
+
     out: list[Match] = []
     for k, rows in ss.items():
         row = rows[0]
@@ -139,7 +175,7 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
             state=MATCHED if jobs_here else ONLY_SMARTSHEET,
             smartsheet=row,
             job=jobs_here[0] if jobs_here else None,
-            tracker=(tr.get(k) or [None])[0],
+            tracker=tracker_for(row, k),
             duplicates=rows[1:] + jobs_here[1:],
         ))
     # Houses the tracker treats as cabinet jobs whose Smartsheet row is not
@@ -147,14 +183,22 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     # job -- that is what the tracker is for -- so a Smartsheet row sitting
     # beside it unticked is a contradiction worth surfacing, not a filter to
     # apply quietly.
-    for k, trows in tr.items():
-        ss_here = ss.get(k)
-        if not ss_here or expected(ss_here[0]):
+    seen = {id(m.smartsheet) for m in out if m.smartsheet is not None}
+    for trow in tracker_rows:
+        k = key_of(trow.get("Community") or trow.get("Subdivision"),
+                   trow.get("Lot #"))
+        b = norm_buid(trow.get("Builder Job Code"))
+        ss_here = (ss_b.get(b) if b else None) or ss.get(k)
+        if not ss_here:
             continue
+        row = ss_here[0]
+        if expected(row) or id(row) in seen:
+            continue
+        seen.add(id(row))
         jobs_here = ct.get(k, [])
-        out.append(Match(key=k, state=NOT_TICKED, smartsheet=ss_here[0],
+        out.append(Match(key=k, state=NOT_TICKED, smartsheet=row,
                          job=jobs_here[0] if jobs_here else None,
-                         tracker=trows[0], duplicates=jobs_here[1:]))
+                         tracker=trow, duplicates=jobs_here[1:]))
 
     # Cabinet jobs we hold that Smartsheet has no row for.
     #

@@ -194,6 +194,10 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     phases = phases or {}
     portal = M.index_by_key(portal_rows or [],
                             lambda r: r.get("subdivision"), lambda r: r.get("lot"))
+    # VendorSuite carries the BUID too, so the portal column gets the same
+    # strong key rather than relying on "Project" matching a Smartsheet
+    # subdivision name.
+    portal_b = M.index_by_buid(portal_rows or [], lambda r: r.get("buid"))
     houses = [read_house(r) for r in smartsheet_rows]
     intervals = learn_intervals(houses)
 
@@ -221,7 +225,9 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
         if C.stage_of_smartsheet(ss.get("Job Status")) == C.DONE_STAGE:
             status, days_off = DONE, None
         phase = phases.get(m.job.id) if m.job else None
-        pt = (portal.get(m.key) or [None])[0]
+        pt_b = M.norm_buid(ss.get("Lot ID"))
+        pt = ((portal_b.get(pt_b) if pt_b else None) or portal.get(m.key)
+              or [None])[0]
         fields = _fields(m.job, m.tracker, ss, phase, pt)
 
         rows.append({
@@ -359,13 +365,19 @@ def portal_coverage(rows: list[dict]) -> list[dict]:
 # compared -- so it needs to be visible, not inferred from a small total.
 def unjoined_communities(tracker_rows: list[dict],
                          smartsheet_rows: list[dict]) -> list[dict]:
-    from app.smartsheet.match import norm_sub
+    from app.smartsheet.match import norm_buid, norm_sub
 
     known = {norm_sub(r.get("Subdivision")) for r in smartsheet_rows}
     known.discard("")
+    # A house that joins on its builder job code is being checked, whatever the
+    # two systems call its community. Counting purely by name overstated this
+    # by treating BUID-matched houses as blind spots.
+    known_buids = {b for b in (norm_buid(r.get("Lot ID")) for r in smartsheet_rows) if b}
     counts: dict[str, dict] = {}
     for row in tracker_rows:
         if str(row.get("CONST LVL") or "").strip() in DROPPED_CONST_LVLS:
+            continue
+        if norm_buid(row.get("Builder Job Code")) in known_buids:
             continue
         raw = row.get("Community")
         key = norm_sub(raw)
