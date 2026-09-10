@@ -64,7 +64,18 @@ def _build(db: Session) -> dict:
     phases = {p.job_id: (p.phase, p.noted_at)
               for p in db.query(PhaseUpdate).join(sub, PhaseUpdate.id == sub.c.mid)}
     tracker, ok, name = _tracker_rows()
-    data = R.build(S.stored_rows(db), jobs, tracker, phases=phases, tracker_ok=ok)
+    # The builder's own portal -- VendorSuite for DR Horton, SupplyPro for
+    # Century. Read live from the feed folders, same as the tracker leg.
+    from app.smartsheet.portal import load as load_portal
+
+    s = get_settings()
+    try:
+        portal_rows, portal_meta = load_portal(
+            s.vendorsuite_dir, s.century_dir, s.century_alt_dir)
+    except Exception as exc:  # noqa: BLE001 — the other three sources still work
+        portal_rows, portal_meta = [], {"error": str(exc)}
+    data = R.build(S.stored_rows(db), jobs, tracker, phases=phases, tracker_ok=ok,
+                   portal_rows=portal_rows, portal_meta=portal_meta)
     data["tracker_file"] = name
     latest = db.query(func.max(SmartsheetRow.pulled_at)).scalar()
     data["pulled_at"] = latest.isoformat() if latest else None

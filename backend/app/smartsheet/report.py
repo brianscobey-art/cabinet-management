@@ -28,6 +28,7 @@ from app.smartsheet.timeline import assess, learn_intervals, predict
 # Status for a house Smartsheet already calls finished.
 DONE = "complete"
 
+FIELD_PO = "Cabinet PO"
 FIELD_WORKFLOW = "Workflow status"
 FIELD_STAGE = "Construction stage"
 FIELD_PLAN = "Plan"
@@ -45,48 +46,93 @@ def _show(value) -> str | None:
     return text or None
 
 
-def _fields(job, tracker: dict | None, ss: dict, phase: tuple | None) -> list[dict]:
-    """The five compared rows for one house."""
+def _fields(job, tracker: dict | None, ss: dict, phase: tuple | None,
+            portal: dict | None = None) -> list[dict]:
+    """The compared rows for one house.
+
+    Four sources, and not every field has all four. The verdict names which
+    pair it is judging so a blank column is never mistaken for a disagreement.
+    """
     tr = tracker or {}
+    pt = portal or {}
     phase_code = phase[0] if phase else None
+
+    def _iso(value):
+        return value.isoformat() if hasattr(value, "isoformat") else value
+
+    # The portal's own view of measure and install, lifted before the
+    # comparisons because they now take part in them.
+    pt_measure, pt_install = _iso(pt.get("measure")), _iso(pt.get("install"))
 
     ct_status = getattr(job, "status", None) if job else None
     verdict_wf, note_wf = _plain(ct_status, tr.get("CONST LVL"))
 
     stage_v, stage_note = C.compare_status(phase_code, ss.get("Job Status"))
     plan_v, plan_note = C.compare_plan(getattr(job, "plan", None), ss.get("Plan Name"))
-    meas_v, meas_off = C.compare_date(
+    # Judge against the best counterpart available, not always Smartsheet. The
+    # builder's portal IS the builder's system, so where it holds a date it is
+    # the thing worth being wrong about -- and on Century it holds one 88% of
+    # the time while Smartsheet holds one almost never. Comparing to Smartsheet
+    # regardless returned "blank in Smartsheet" on a house whose CabinetTron
+    # install sat 78 days off the portal's.
+    meas_v, meas_off, meas_basis = _best(
         getattr(job, "measure_date", None), ss.get("Cabinet Measure Requested Date"),
-        tolerance=C.DATE_TOLERANCE_DAYS)
-    del_v, del_off = C.compare_date(
+        pt_measure, C.DATE_TOLERANCE_DAYS)
+    del_v, del_off, del_basis = _best(
         getattr(job, "install_date", None), ss.get("Cabinet Delivery Requested Date"),
-        tolerance=C.DELIVERY_TOLERANCE_DAYS)
+        pt_install, C.DELIVERY_TOLERANCE_DAYS)
 
     def days(off):
         return None if off is None else f"{off:+d}d"
 
+    po_v, po_note = _plain(getattr(job, "builder_po", None), pt.get("po_number"))
+
     return [
         {"label": FIELD_WORKFLOW, "basis": "CabinetTron vs tracker",
          "cabinettron": _show(ct_status), "tracker": _show(tr.get("CONST LVL")),
-         "smartsheet": None, "verdict": verdict_wf, "note": note_wf},
+         "smartsheet": None, "portal": None,
+         "verdict": verdict_wf, "note": note_wf},
         {"label": FIELD_STAGE, "basis": "phase vs Smartsheet",
          "cabinettron": _show(PHASE_LABELS.get(phase_code) if phase_code else None),
          "tracker": None, "smartsheet": _show(ss.get("Job Status")),
+         "portal": _show(pt.get("po_status")),
          "verdict": stage_v, "note": stage_note},
         {"label": FIELD_PLAN, "basis": "CabinetTron vs Smartsheet",
          "cabinettron": _show(getattr(job, "plan", None)), "tracker": _show(tr.get("Plan")),
-         "smartsheet": _show(ss.get("Plan Name")), "verdict": plan_v, "note": plan_note},
-        {"label": FIELD_MEASURE, "basis": "CabinetTron vs Smartsheet",
+         "smartsheet": _show(ss.get("Plan Name")), "portal": None,
+         "verdict": plan_v, "note": plan_note},
+        {"label": FIELD_MEASURE, "basis": meas_basis,
          "cabinettron": _show(getattr(job, "measure_date", None)),
          "tracker": _show(tr.get("Req Measure Date")),
          "smartsheet": _show(ss.get("Cabinet Measure Requested Date")),
+         "portal": _show(pt_measure),
          "verdict": meas_v, "note": days(meas_off)},
-        {"label": FIELD_DELIVERY, "basis": "install vs delivery request",
+        {"label": FIELD_DELIVERY, "basis": del_basis,
          "cabinettron": _show(getattr(job, "install_date", None)),
          "tracker": _show(tr.get("Requested Install Date")),
          "smartsheet": _show(ss.get("Cabinet Delivery Requested Date")),
+         "portal": _show(pt_install),
          "verdict": del_v, "note": days(del_off)},
+        {"label": FIELD_PO, "basis": "CabinetTron vs portal",
+         "cabinettron": _show(getattr(job, "builder_po", None)),
+         "tracker": _show(tr.get("Cabinet PO#")),
+         "smartsheet": _show(ss.get("Cabinet Invoice Number")),
+         "portal": _show(pt.get("po_number")),
+         "verdict": po_v, "note": po_note},
     ]
+
+
+def _best(ours, smartsheet, portal, tolerance: int) -> tuple[str, int | None, str]:
+    """Compare our date to the portal's when it has one, else to Smartsheet.
+
+    Returns the verdict, the signed day difference and which pair was judged,
+    so the row can say so rather than leaving the reader to guess.
+    """
+    if portal:
+        v, off = C.compare_date(ours, portal, tolerance=tolerance)
+        return v, off, "CabinetTron vs builder portal"
+    v, off = C.compare_date(ours, smartsheet, tolerance=tolerance)
+    return v, off, "CabinetTron vs Smartsheet"
 
 
 def _plain(a, b) -> tuple[str, str | None]:
@@ -104,7 +150,8 @@ def _plain(a, b) -> tuple[str, str | None]:
 
 def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
           *, phases: dict | None = None, today: dt.date | None = None,
-          tracker_ok: bool = True) -> dict:
+          tracker_ok: bool = True, portal_rows: list[dict] | None = None,
+          portal_meta: dict | None = None) -> dict:
     """One report: a row per house, plus the coverage figures that say how much
     of Smartsheet is actually filled in.
 
@@ -118,6 +165,8 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     """
     today = today or dt.date.today()
     phases = phases or {}
+    portal = M.index_by_key(portal_rows or [],
+                            lambda r: r.get("subdivision"), lambda r: r.get("lot"))
     houses = [read_house(r) for r in smartsheet_rows]
     intervals = learn_intervals(houses)
 
@@ -145,7 +194,8 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
         if C.stage_of_smartsheet(ss.get("Job Status")) == C.DONE_STAGE:
             status, days_off = DONE, None
         phase = phases.get(m.job.id) if m.job else None
-        fields = _fields(m.job, m.tracker, ss, phase)
+        pt = (portal.get(m.key) or [None])[0]
+        fields = _fields(m.job, m.tracker, ss, phase, pt)
 
         rows.append({
             # Builder comes from the sheet the row was read out of, stamped on
@@ -184,6 +234,8 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     return {
         "generated": today.isoformat(),
         "tracker_ok": tracker_ok,
+        "portal_files": portal_meta or {},
+        "portal_coverage": portal_coverage(portal_rows or []),
         "intervals": {k: {"days": v.days, "n": v.n, "iqr": v.iqr, "usable": v.usable}
                       for k, v in intervals.items()},
         "coverage": coverage(smartsheet_rows),
@@ -240,4 +292,21 @@ def coverage(smartsheet_rows: list[dict]) -> list[dict]:
             "pct": round(filled * 100 / n) if n else 0,
             "on_sheet": on_sheet,
         })
+    return out
+
+
+# How full the builder's own portal is, per source. Reported beside the
+# Smartsheet coverage because the comparison only means something next to it:
+# where the portal is empty too, nobody holds the date and Smartsheet cannot be
+# blamed for not carrying it.
+def portal_coverage(rows: list[dict]) -> list[dict]:
+    out = []
+    for source in sorted({r.get("source") for r in rows if r.get("source")}):
+        sub = [r for r in rows if r.get("source") == source]
+        n = len(sub)
+        entry = {"source": source, "rows": n}
+        for field in ("measure", "install", "punch", "po_number", "po_amount"):
+            filled = sum(1 for r in sub if r.get(field))
+            entry[field] = round(filled * 100 / n) if n else 0
+        out.append(entry)
     return out

@@ -506,6 +506,7 @@ export interface SmartsheetField {
   cabinettron: string | null;
   tracker: string | null;
   smartsheet: string | null;
+  portal: string | null;
   verdict: string;
   note: string | null;
 }
@@ -541,6 +542,16 @@ export interface SmartsheetReport {
   pulled_at: string | null;
   tracker_ok: boolean;
   tracker_file: string | null;
+  portal_files: Record<string, string | null>;
+  portal_coverage: {
+    source: string;
+    rows: number;
+    measure: number;
+    install: number;
+    punch: number;
+    po_number: number;
+    po_amount: number;
+  }[];
   builders: string[];
   intervals: Record<string, { days: number; n: number; iqr: number; usable: boolean }>;
   coverage: { field: string; filled: number; of: number; pct: number; on_sheet: boolean }[];

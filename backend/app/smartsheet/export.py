@@ -7,7 +7,12 @@ question this report was built for, so it sits second rather than buried.
 
 from __future__ import annotations
 
+import datetime as dt
 import io
+import re
+
+DATE_FMT = "m/d/yy"          # Brian's standing display format
+MONEY_FMT = '$#,##0.00;[Red]-$#,##0.00'
 
 CARTER_GREEN = "125952"
 NEG = "C0392B"
@@ -50,9 +55,50 @@ def _widths(ws, widths: list[int]) -> None:
 
 
 HOUSE_COLS = ["Builder", "Subdivision", "Lot", "Job code", "Match", "Status",
-              "Days off", "Expected cabinets", "Predicted from", "Scopes",
+              "Days off", "Expected cabinets", "Predicted from",
+              "Portal measure", "Portal install", "Portal PO", "Scopes",
               "Disagreements"]
-HOUSE_WIDTHS = [18, 24, 10, 14, 18, 14, 10, 18, 20, 30, 13]
+HOUSE_WIDTHS = [18, 24, 10, 14, 18, 14, 10, 18, 22, 15, 15, 18, 30, 13]
+# 1-indexed columns holding a number or a date -- centred, per Brian 9/10/26.
+HOUSE_CENTRED = {3, 4, 6, 7, 8, 9, 10, 11, 12, 14}
+
+_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
+
+
+def _typed(value):
+    """Write a date as a real date so Excel can format and sort it.
+
+    Everything upstream carries dates as ISO strings because that is what the
+    API returns; handing that straight to openpyxl stores TEXT, which sorts
+    lexically and ignores the number format. Converting here keeps the API
+    honest and the workbook usable.
+    """
+    if isinstance(value, str):
+        m = _ISO.match(value)
+        if m:
+            return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return value
+
+
+def _write(ws, row: int, col: int, value, *, centre: bool = False):
+    from openpyxl.styles import Alignment
+
+    typed = _typed(value)
+    cell = ws.cell(row=row, column=col, value=typed)
+    if isinstance(typed, dt.date):
+        cell.number_format = DATE_FMT
+        centre = True
+    if centre or isinstance(typed, (int, float)):
+        cell.alignment = Alignment(horizontal="center")
+    return cell
+
+
+def _pretty_from(pred: dict) -> str:
+    """'windows 8/12/26' -- the anchor scope and its date, in Brian's format."""
+    raw = str(pred.get("from_date") or "")
+    m = _ISO.match(raw)
+    shown = f"{int(m.group(2))}/{int(m.group(3))}/{m.group(1)[2:]}" if m else raw
+    return f"{pred.get('from')} {shown}".strip()
 
 
 def _house_row(r: dict) -> list:
@@ -62,9 +108,18 @@ def _house_row(r: dict) -> list:
         r.get("builder"), r.get("subdivision"), str(r.get("lot") or ""),
         r.get("job_code"), r.get("match"), r.get("status"), r.get("days_off"),
         pred.get("expected"),
-        f"{pred.get('from')} {pred.get('from_date')}" if pred else None,
+        _pretty_from(pred) if pred else None,
+        _field(r, "Measure date", "portal"),
+        _field(r, "Install / delivery", "portal"),
+        _field(r, "Cabinet PO", "portal"),
         scopes, r.get("differences") or None,
     ]
+
+
+def _field(row: dict, label: str, key: str):
+    """One value out of a house's compared fields, by label."""
+    return next((f.get(key) for f in row.get("fields", [])
+                 if f.get("label") == label), None)
 
 
 def _house_sheet(wb, name: str, rows: list[dict], *, heading: str,
@@ -81,7 +136,7 @@ def _house_sheet(wb, name: str, rows: list[dict], *, heading: str,
     _head(ws, r, HOUSE_COLS)
     for j, row in enumerate(rows, start=r + 1):
         for i, value in enumerate(_house_row(row), start=1):
-            ws.cell(row=j, column=i, value=value)
+            _write(ws, j, i, value, centre=i in HOUSE_CENTRED)
         state = row.get("status")
         if state in ACTION:
             ws.cell(row=j, column=6).font = Font(
@@ -112,10 +167,10 @@ def to_xlsx(data: dict) -> io.BytesIO:
     ws.title = "Summary"
     r = _title(ws, "Smartsheet vs CabinetTron", stamp)
     ws.cell(row=r, column=1, value="Houses").font = Font(bold=True)
-    ws.cell(row=r, column=2, value=totals["houses"])
+    _write(ws, r, 2, totals["houses"], centre=True)
     r += 1
     ws.cell(row=r, column=1, value="With a real disagreement").font = Font(bold=True)
-    ws.cell(row=r, column=2, value=totals["with_differences"])
+    _write(ws, r, 2, totals["with_differences"], centre=True)
     r += 2
     for heading, bucket in (("By timeline status", "by_status"),
                             ("By match", "by_match")):
@@ -124,7 +179,7 @@ def to_xlsx(data: dict) -> io.BytesIO:
         r += 1
         for key, count in sorted(totals[bucket].items(), key=lambda kv: -kv[1]):
             ws.cell(row=r, column=1, value=key)
-            ws.cell(row=r, column=2, value=count)
+            _write(ws, r, 2, count, centre=True)
             if key in ACTION:
                 ws.cell(row=r, column=1).font = Font(bold=True, color=NEG)
             r += 1
@@ -136,10 +191,9 @@ def to_xlsx(data: dict) -> io.BytesIO:
     r += 1
     for key, iv in data["intervals"].items():
         ws.cell(row=r, column=1, value=key)
-        ws.cell(row=r, column=2, value=iv["days"])
-        ws.cell(row=r, column=3, value=iv["n"])
-        ws.cell(row=r, column=4, value=iv["iqr"])
-        ws.cell(row=r, column=5, value="yes" if iv["usable"] else "too loose")
+        for col, val in ((2, iv["days"]), (3, iv["n"]), (4, iv["iqr"]),
+                         (5, "yes" if iv["usable"] else "too loose")):
+            _write(ws, r, col, val, centre=True)
         r += 1
     _widths(ws, [34, 14, 12, 14, 12])
 
@@ -151,14 +205,14 @@ def to_xlsx(data: dict) -> io.BytesIO:
     _head(ws, r, ["Field", "Filled", "Of", "%", "On every sheet?"])
     for j, c in enumerate(data["coverage"], start=r + 1):
         ws.cell(row=j, column=1, value=c["field"])
-        ws.cell(row=j, column=2, value=c["filled"])
-        ws.cell(row=j, column=3, value=c["of"])
-        pct = ws.cell(row=j, column=4, value=c["pct"] / 100)
+        _write(ws, j, 2, c["filled"], centre=True)
+        _write(ws, j, 3, c["of"], centre=True)
+        pct = _write(ws, j, 4, c["pct"] / 100, centre=True)
         pct.number_format = "0%"
         pct.font = Font(name="Calibri", size=11, bold=True,
                         color=NEG if c["pct"] < 25 else
                         WARN if c["pct"] < 60 else POS)
-        ws.cell(row=j, column=5, value="yes" if c["on_sheet"] else "missing on some")
+        _write(ws, j, 5, "yes" if c["on_sheet"] else "missing on some", centre=True)
     _widths(ws, [40, 10, 8, 8, 18])
     ws.freeze_panes = ws.cell(row=r + 1, column=1)
 

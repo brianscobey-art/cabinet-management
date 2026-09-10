@@ -35,6 +35,7 @@ import {
   type SmartsheetReport,
   type SmartsheetRow,
 } from "../api";
+import { fmtLot, fmtMaybeDate } from "../format";
 import { fmtDate } from "../format";
 import ManagerReportView from "./ManagerReport";
 import PoReceiptsView from "./PoReceiptsView";
@@ -1491,6 +1492,12 @@ function SmartsheetReportView() {
         {data.tracker_ok
           ? `tracker ${data.tracker_file}`
           : "tracker unavailable (workbook open in Excel) - its column reads blank"}
+        {Object.entries(data.portal_files ?? {}).map(([k, v]) => (
+          <span key={k}>
+            {" "}
+            &middot; {k} {v ?? "not found"}
+          </span>
+        ))}
       </p>
 
       <details className="ss-coverage">
@@ -1500,9 +1507,9 @@ function SmartsheetReportView() {
             <thead>
               <tr>
                 <th>Field</th>
-                <th>Filled</th>
-                <th>Of</th>
-                <th>%</th>
+                <th className="num">Filled</th>
+                <th className="num">Of</th>
+                <th className="num">%</th>
               </tr>
             </thead>
             <tbody>
@@ -1512,9 +1519,13 @@ function SmartsheetReportView() {
                     {c.field}
                     {c.on_sheet ? "" : " (absent on some sheets)"}
                   </td>
-                  <td>{c.filled}</td>
-                  <td>{c.of}</td>
-                  <td className={c.pct < 25 ? "ss-bad" : c.pct < 60 ? "ss-warn" : "ss-ok"}>
+                  <td className="num">{c.filled}</td>
+                  <td className="num">{c.of}</td>
+                  <td
+                    className={`num ${
+                      c.pct < 25 ? "ss-bad" : c.pct < 60 ? "ss-warn" : "ss-ok"
+                    }`}
+                  >
                     {c.pct}%
                   </td>
                 </tr>
@@ -1522,6 +1533,34 @@ function SmartsheetReportView() {
             </tbody>
           </table>
         </div>
+        {(data.portal_coverage ?? []).length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Builder portal</th>
+                  <th className="num">Rows</th>
+                  <th className="num">Measure</th>
+                  <th className="num">Install</th>
+                  <th className="num">Punch</th>
+                  <th className="num">PO #</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.portal_coverage.map((c) => (
+                  <tr key={c.source}>
+                    <td>{c.source}</td>
+                    <td className="num">{c.rows}</td>
+                    <td className="num">{c.measure}%</td>
+                    <td className="num">{c.install}%</td>
+                    <td className="num">{c.punch}%</td>
+                    <td className="num">{c.po_number}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </details>
 
       <div className="table-wrap">
@@ -1539,10 +1578,10 @@ function SmartsheetReportView() {
             <tr>
               <th>Builder</th>
               <th>Subdivision</th>
-              <th>Lot</th>
-              <th>Job code</th>
-              <th>Status</th>
-              <th>Expected cabinets</th>
+              <th className="num">Lot</th>
+              <th className="num">Job code</th>
+              <th className="num">Status</th>
+              <th className="num">Expected cabinets</th>
               <th>Scopes we supply</th>
             </tr>
           </thead>
@@ -1555,8 +1594,8 @@ function SmartsheetReportView() {
                   <tr className="clickable" onClick={() => setOpen(isOpen ? null : k)}>
                     <td>{r.builder ?? "-"}</td>
                     <td>{r.subdivision ?? "-"}</td>
-                    <td>{r.lot ?? "-"}</td>
-                    <td>
+                    <td className="num">{fmtLot(r.lot)}</td>
+                    <td className="num">
                       {r.job_code ? (
                         <a href={`#/jobs/${r.job_id}`} onClick={(e) => e.stopPropagation()}>
                           {r.job_code}
@@ -1565,13 +1604,13 @@ function SmartsheetReportView() {
                         <span className="muted">none</span>
                       )}
                     </td>
-                    <td className={SS_ACTION.has(r.status) ? "ss-bad" : undefined}>
+                    <td className={`num ${SS_ACTION.has(r.status) ? "ss-bad" : ""}`}>
                       {r.status}
                       {r.days_off != null && SS_ACTION.has(r.status)
                         ? ` ${r.days_off > 0 ? "+" : ""}${r.days_off}d`
                         : ""}
                     </td>
-                    <td>
+                    <td className="num">
                       {r.prediction ? fmtDate(r.prediction.expected) : "-"}
                       {r.differences > 0 && (
                         <span className="ss-flag"> {r.differences} differ</span>
@@ -1593,10 +1632,11 @@ function SmartsheetReportView() {
                           <thead>
                             <tr>
                               <th>Field</th>
-                              <th>CabinetTron</th>
-                              <th>3.0 Tracker</th>
-                              <th>Smartsheet</th>
-                              <th>Verdict</th>
+                              <th className="num">CabinetTron</th>
+                              <th className="num">3.0 Tracker</th>
+                              <th className="num">Smartsheet</th>
+                              <th className="num">Builder portal</th>
+                              <th className="num">Verdict</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1606,10 +1646,11 @@ function SmartsheetReportView() {
                                   {f.label}
                                   <em className="muted"> - {f.basis}</em>
                                 </td>
-                                <td>{f.cabinettron ?? "-"}</td>
-                                <td>{f.tracker ?? "-"}</td>
-                                <td>{f.smartsheet ?? "-"}</td>
-                                <td className={f.verdict === "differ" ? "ss-bad" : undefined}>
+                                <td className="num">{fmtMaybeDate(f.cabinettron)}</td>
+                                <td className="num">{fmtMaybeDate(f.tracker)}</td>
+                                <td className="num">{fmtMaybeDate(f.smartsheet)}</td>
+                                <td className="num">{fmtMaybeDate(f.portal)}</td>
+                                <td className={`num ${f.verdict === "differ" ? "ss-bad" : ""}`}>
                                   {f.verdict}
                                   {f.note ? ` (${f.note})` : ""}
                                 </td>

@@ -282,6 +282,9 @@ button:disabled {
   justify-content: space-between;
   gap: 1rem;
   margin: 0.5rem 0 1rem;
+  /* A title beside a report chooser does not fit on a phone; without wrapping
+     the pair simply runs past the right edge. */
+  flex-wrap: wrap;
 }
 
 .page-head h2 {
@@ -643,6 +646,9 @@ h3.kb-head {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.9rem;
+  /* Arrows, Today, the month and the install count overran a 375px screen by
+     about 100px. Wrapping costs a line and keeps all of it on screen. */
+  flex-wrap: wrap;
 }
 
 .cal-nav button {
@@ -742,11 +748,30 @@ h3.kb-head {
 .cal-chip-code {
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Both of these are load-bearing: ellipsis does nothing without nowrap, and
+     a flex child will not shrink below its content without min-width:0 -- so
+     a job code was pushing the chip wider than its calendar day instead of
+     truncating inside it. */
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .cal-chip-sales {
   flex-shrink: 0;
   opacity: 0.85;
+}
+
+/* A calendar day is ~35px wide on a phone, which cannot hold a job code AND a
+   salesperson. flex-shrink:0 on the name meant it refused to give way and
+   pushed the chip past the edge of its day, so below tablet width the name
+   steps aside and the code -- the thing you tap -- keeps the room. */
+@media (max-width: 640px) {
+  .cal-chip-sales {
+    display: none;
+  }
+  .cal-chip {
+    min-width: 0;
+  }
 }
 
 .cal-chip.not-ordered {
@@ -921,9 +946,23 @@ th.stage-col {
   margin: 0.25rem 0 0.75rem;
 }
 
+/* Numbers, dates and dollars are centred in their cell (Brian's call 9/10/26).
+   Applies everywhere .num is used, so the whole app agrees rather than each
+   table deciding for itself. nowrap keeps a date or an amount on one line; in
+   a fixed-layout table that would spill across the neighbouring cell, so
+   .phase-table overrides it back to wrapping further down. */
 td.num,
 th.num {
-  text-align: right;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Money and dates written straight into a cell without the .num class. */
+td.money,
+th.money,
+td.date,
+th.date {
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -1543,7 +1582,9 @@ td.fm-col input[type="checkbox"] {
   width: 100%;
 }
 .phase-table td,
-.phase-table th {
+.phase-table th,
+.phase-table td.num,
+.phase-table th.num {
   /* The overlap: cells inherit `white-space: nowrap` from the global td rule,
      and under table-layout:fixed an over-wide plan name or phase label does not
      clip — it spills across the neighbour and the two read as one smear. Let
@@ -1573,6 +1614,18 @@ td.fm-col input[type="checkbox"] {
   background: var(--brand);
   border-color: var(--brand);
   color: #fff;
+}
+
+/* On a phone these seven columns get about 50px each, which turns a lot number
+   like "G001" into "G00". Percentage widths cannot fix that -- there is not
+   enough room. Below tablet width the table keeps usable columns and scrolls
+   inside .table-wrap instead, which is the one place horizontal scrolling is
+   right. Screen only: the printed community sheets are full-width and must
+   keep fitting the page. */
+@media screen and (max-width: 900px) {
+  .phase-table {
+    min-width: 760px;
+  }
 }
 
 .fm-overdue {

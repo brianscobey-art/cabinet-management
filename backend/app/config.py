@@ -74,6 +74,14 @@ class Settings(BaseSettings):
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
         r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
     )
+    # Brian keeps SupplyPro exports in two places (9/10/26): the Downloads
+    # folder the feed imports from, and the builder folder he works out of.
+    # Both currently hold the same newest file, but the report reads whichever
+    # is actually newest rather than assuming they stay in step.
+    century_alt_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
+        r"\Townsend Shared File\Sales\Builders\Century Complete"
+    )
     feed_sync_hour: int = 7  # legacy single-hour fallback (kept for compatibility)
     # Hours (in feed_sync_tz) to run the feed sync. Comma-separated for multiple
     # runs a day. Default 5 AM + noon Central. Cloud runs on UTC, so the tz matters.

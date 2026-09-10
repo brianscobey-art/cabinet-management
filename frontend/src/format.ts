@@ -15,3 +15,27 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!y || !m || !d) return iso;
   return `${m}/${d}/${String(y).padStart(4, "0").slice(2)}`;
 }
+
+
+// Values that arrive as opaque strings from an API can still BE dates. The
+// report shows CabinetTron, tracker and Smartsheet values side by side and any
+// of them may hold an ISO date, so format what looks like one and leave the
+// rest alone. Anchored so "4.0-Punch" and "2026 Rebate" are never mistaken for
+// dates.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/;
+
+export function fmtMaybeDate(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  return ISO_DATE.test(text) ? fmtDate(text) : text;
+}
+
+// Excel exports numeric cells as floats, so a lot number arrives as "1189.0"
+// and a lot named "0004" keeps its padding. Show the number people actually
+// use, without touching genuinely alphanumeric lots like A027 or 24B.
+export function fmtLot(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value).trim();
+  const m = /^(\d+)(?:\.0+)?$/.exec(text);
+  return m ? String(Number(m[1])) : text;
+}
