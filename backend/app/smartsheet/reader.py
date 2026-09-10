@@ -48,11 +48,30 @@ def rows_from_xlsx(path: str | Path) -> list[dict]:
     if not rows:
         return []
     header = [str(h or "").strip() for h in rows[0]]
-    return [
-        {header[i]: v for i, v in enumerate(r) if i < len(header) and header[i]}
-        for r in rows[1:]
-        if any(x is not None for x in r)
-    ]
+    return [_row(header, r) for r in rows[1:] if any(x is not None for x in r)]
+
+
+def _row(header: list[str], values) -> dict:
+    """Zip a row against its header, first non-empty wins on a duplicate name.
+
+    Both sheets carry a column twice -- Century has "Cabinets" and "Cabinets "
+    (trailing space), DR has "Cabinet Delivery Request" twice. Stripping the
+    whitespace makes them collide, and a plain dict comprehension lets the LAST
+    one win, which is the empty decoy: Century's cabinet-house count silently
+    fell from 46 to 14 that way. Keeping the first non-empty value is stable
+    whichever order the duplicates appear in.
+    """
+    out: dict = {}
+    for i, value in enumerate(values):
+        if i >= len(header):
+            break
+        name = header[i]
+        if not name:
+            continue
+        if name in out and out[name] not in (None, ""):
+            continue
+        out[name] = value
+    return out
 
 
 def rows_from_api(sheet_id: int, token: str) -> list[dict]:
@@ -73,9 +92,14 @@ def rows_from_api(sheet_id: int, token: str) -> list[dict]:
         rec = {}
         for cell in row.get("cells", []):
             title = titles.get(cell.get("columnId"))
-            if title:
-                # displayValue keeps a picklist's text; value keeps real dates.
-                rec[title] = cell.get("value", cell.get("displayValue"))
+            if not title:
+                continue
+            # displayValue keeps a picklist's text; value keeps real dates.
+            value = cell.get("value", cell.get("displayValue"))
+            # Same duplicate-title trap as the workbook reader -- see _row.
+            if title in rec and rec[title] not in (None, ""):
+                continue
+            rec[title] = value
         if rec:
             out.append(rec)
     return out

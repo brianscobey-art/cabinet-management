@@ -16,6 +16,7 @@ from app.models.phase import PhaseUpdate
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
 from app.models.receipt import JobPo, PoReceipt
 from app.models.selections import HardwareSelection, RoomSelection
+from app.models.smartsheet import SmartsheetHistory, SmartsheetRow
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
 from app.models.user import Role, User
 from app.models.visit import RETURN_RESULTS, VISIT_RESULTS, VISIT_STATUSES, VISIT_TYPES, Visit
@@ -62,6 +63,8 @@ __all__ = [
     "ServicePart",
     "ServiceRequest",
     "ShipStatus",
+    "SmartsheetHistory",
+    "SmartsheetRow",
     "Supplier",
     "User",
     "DutyAssignment",

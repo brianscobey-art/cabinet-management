@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # The in-app assistant. Empty = the assistant is off and says so rather
     # than failing oddly. Billed per question, so it is admin-only for now.
     anthropic_api_key: str = ""
+
+    # Smartsheet — Tract Builder Management sheets, READ ONLY. With a token the
+    # nightly sync pulls straight from the API; without one it reads .xlsx
+    # exports dropped in smartsheet_dir, so the report works either way.
+    smartsheet_api_token: str = ""
+    smartsheet_dir: str = r"C:\Users\Brian SE6\Downloads"
+    smartsheet_sync_hour: int = 2
     assistant_admin_only: bool = True
 
     # Where generated order/export files land (gitignored).
