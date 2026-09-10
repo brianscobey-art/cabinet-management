@@ -1,3 +1,4 @@
+import datetime as _dt
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -46,6 +47,27 @@ def _run_tracker_poll() -> None:
             logger.info("Tracker poll: %s", result)
     except Exception as exc:  # noqa: BLE001 — a poll failure must not kill the scheduler
         logger.warning("Tracker poll failed: %s", exc)
+
+
+def _run_smartsheet_first_fill() -> None:
+    """Shortly after boot: pull the sheets IF we hold none yet.
+
+    A fresh deploy would otherwise show an empty report until the 02:15 run.
+    Guarded on the table being empty, so a normal restart costs one COUNT and
+    does not re-pull. Runs on the scheduler rather than at startup so a slow R2
+    hydrate cannot hold up the health check.
+    """
+    from app.database import SessionLocal
+    from app.models import SmartsheetRow
+
+    try:
+        with SessionLocal() as db:
+            if db.query(SmartsheetRow.id).first() is not None:
+                return
+        logger.info("Smartsheet: no rows held, doing a first fill")
+        _run_smartsheet_sync()
+    except Exception as exc:  # noqa: BLE001 — never kill the scheduler
+        logger.warning("Smartsheet first fill failed: %s", exc)
 
 
 def _run_smartsheet_sync() -> None:
@@ -149,6 +171,10 @@ async def lifespan(app: FastAPI):
     # the sheets are typed in during the day -- so one run beats polling.
     jobs.append(lambda s: s.add_job(
         _run_smartsheet_sync, "cron", hour=settings.smartsheet_sync_hour, minute=15
+    ))
+    jobs.append(lambda s: s.add_job(
+        _run_smartsheet_first_fill, "date",
+        run_date=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=45),
     ))
     logger.info("Smartsheet sync scheduled at %02d:15 (%s)",
                 settings.smartsheet_sync_hour,
