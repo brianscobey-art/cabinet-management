@@ -184,7 +184,8 @@ def to_xlsx(data: dict) -> io.BytesIO:
     _write(ws, r, 2, totals["with_differences"], centre=True)
     if data.get("hidden_closed"):
         r += 1
-        ws.cell(row=r, column=1, value="Closed jobs excluded (CONST LVL 6.0-Clsd)").font = Font(
+        ws.cell(row=r, column=1,
+                value="Closed + void jobs excluded (CONST LVL 6.0-Clsd, 8.0-Void)").font = Font(
             name="Calibri", size=10, color=GREY)
         _write(ws, r, 2, data["hidden_closed"], centre=True)
     r += 2

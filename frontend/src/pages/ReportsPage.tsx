@@ -1489,7 +1489,7 @@ function SmartsheetReportView() {
       <p className="muted">
         {t.houses} houses
         {data.hidden_closed > 0 &&
-          ` (${data.hidden_closed} closed jobs not shown)`}{" "}
+          ` (${data.hidden_closed} closed/void jobs not shown)`}{" "}
         &middot; Smartsheet pulled{" "}
         {data.pulled_at ? fmtDate(data.pulled_at) : "never"} &middot;{" "}
         {data.tracker_ok

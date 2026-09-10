@@ -28,11 +28,12 @@ from app.smartsheet.timeline import assess, learn_intervals, predict
 # Status for a house Smartsheet already calls finished.
 DONE = "complete"
 
-# The tracker's own "this job is closed" level. Brian's call 9/10/26: a closed
-# house is off the report entirely -- not greyed, not filtered by default, just
-# gone. Nothing about a finished job needs reconciling, and 81 of them were
-# crowding out the houses that do.
-CLOSED_CONST_LVL = "6.0-Clsd"
+# Tracker levels that take a house off the report entirely -- not greyed, not
+# filtered by default, just gone. Brian's call 9/10/26: a job that is finished
+# or cancelled has nothing left to reconcile, and 106 of them were crowding out
+# the houses that do. Read off the tracker's own CONST LVL rather than any
+# status the app derives, so it follows what Brian types into the DATA table.
+DROPPED_CONST_LVLS = {"6.0-Clsd", "8.0-Void"}
 
 FIELD_PO = "Cabinet PO"
 FIELD_ACTUAL = "Actual install"
@@ -263,8 +264,8 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     # Drop the closed jobs. Counted first so the report can say how many it is
     # holding back rather than silently showing a smaller number than the
     # tracker does.
-    hidden_closed = sum(1 for r in rows if r.get("const_lvl") == CLOSED_CONST_LVL)
-    rows = [r for r in rows if r.get("const_lvl") != CLOSED_CONST_LVL]
+    hidden_closed = sum(1 for r in rows if r.get("const_lvl") in DROPPED_CONST_LVLS)
+    rows = [r for r in rows if r.get("const_lvl") not in DROPPED_CONST_LVLS]
 
     rows.sort(key=lambda r: (r["builder"] or "~", r["subdivision"] or "~",
                              str(r["lot"] or "")))
