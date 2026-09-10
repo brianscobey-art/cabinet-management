@@ -273,6 +273,7 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
         "generated": today.isoformat(),
         "tracker_ok": tracker_ok,
         "hidden_closed": hidden_closed,
+        "unjoined": unjoined_communities(tracker_rows, smartsheet_rows),
         "portal_files": portal_meta or {},
         "portal_coverage": portal_coverage(portal_rows or []),
         "intervals": {k: {"days": v.days, "n": v.n, "iqr": v.iqr, "usable": v.usable}
@@ -349,3 +350,28 @@ def portal_coverage(rows: list[dict]) -> list[dict]:
             entry[field] = round(filled * 100 / n) if n else 0
         out.append(entry)
     return out
+
+
+# Tracker communities that never find a Smartsheet counterpart. Reported rather
+# than fuzzy-matched: difflib pairs "Colonial East TH" with "Colonial East SF",
+# and townhomes are not single-family houses. Every entry here is a blind spot
+# in the "cabinets not ticked" check -- those houses simply are not being
+# compared -- so it needs to be visible, not inferred from a small total.
+def unjoined_communities(tracker_rows: list[dict],
+                         smartsheet_rows: list[dict]) -> list[dict]:
+    from app.smartsheet.match import norm_sub
+
+    known = {norm_sub(r.get("Subdivision")) for r in smartsheet_rows}
+    known.discard("")
+    counts: dict[str, dict] = {}
+    for row in tracker_rows:
+        if str(row.get("CONST LVL") or "").strip() in DROPPED_CONST_LVLS:
+            continue
+        raw = row.get("Community")
+        key = norm_sub(raw)
+        if not key or key in known:
+            continue
+        entry = counts.setdefault(key, {
+            "community": str(raw), "builder": row.get("Full Builder"), "houses": 0})
+        entry["houses"] += 1
+    return sorted(counts.values(), key=lambda e: -e["houses"])

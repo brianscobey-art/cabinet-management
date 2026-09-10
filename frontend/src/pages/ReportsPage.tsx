@@ -1414,6 +1414,7 @@ function SmartsheetReportView() {
   const [busy, setBusy] = useState(false);
   const [builder, setBuilder] = useState("");
   const [status, setStatus] = useState("");
+  const [match, setMatch] = useState("");
   const [onlyDiffs, setOnlyDiffs] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -1441,14 +1442,19 @@ function SmartsheetReportView() {
       (r) =>
         (!builder || r.builder === builder) &&
         (!status || r.status === status) &&
+        (!match || r.match === match) &&
         (!onlyDiffs || r.differences > 0)
     );
-  }, [data, builder, status, onlyDiffs]);
+  }, [data, builder, status, match, onlyDiffs]);
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading...</p>;
 
   const t = data.totals;
+  const untickedCount = data.rows.filter(
+    (r) => r.match === "cabinets not ticked in Smartsheet"
+  ).length;
+  const unjoinedHouses = (data.unjoined ?? []).reduce((n, u) => n + u.houses, 0);
   const rowKey = (r: SmartsheetRow) => `${r.builder}|${r.subdivision}|${r.lot}`;
 
   return (
@@ -1476,6 +1482,16 @@ function SmartsheetReportView() {
               </option>
             ))}
         </select>
+        <select value={match} onChange={(e) => setMatch(e.target.value)}>
+          <option value="">All match states</option>
+          {Object.entries(t.by_match)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => (
+              <option key={k} value={k}>
+                {k} ({n})
+              </option>
+            ))}
+        </select>
         <label className="check-inline">
           <input
             type="checkbox"
@@ -1489,7 +1505,9 @@ function SmartsheetReportView() {
       <p className="muted">
         {t.houses} houses
         {data.hidden_closed > 0 &&
-          ` (${data.hidden_closed} closed/void jobs not shown)`}{" "}
+          ` (${data.hidden_closed} closed/void jobs not shown)`}
+        {unjoinedHouses > 0 &&
+          ` \u00b7 ${unjoinedHouses} tracker houses in communities Smartsheet does not name the same way`}{" "}
         &middot; Smartsheet pulled{" "}
         {data.pulled_at ? fmtDate(data.pulled_at) : "never"} &middot;{" "}
         {data.tracker_ok
@@ -1502,6 +1520,20 @@ function SmartsheetReportView() {
           </span>
         ))}
       </p>
+
+      {untickedCount > 0 && (
+        <p className="ss-alert">
+          <b>{untickedCount}</b>{" "}
+          {untickedCount === 1 ? "house is" : "houses are"} in the 3.0 tracker as
+          a cabinet job but the Cabinets box is not ticked in Smartsheet.{" "}
+          <button
+            className="link-btn"
+            onClick={() => setMatch("cabinets not ticked in Smartsheet")}
+          >
+            Show {untickedCount === 1 ? "it" : "them"}
+          </button>
+        </p>
+      )}
 
       <details className="ss-coverage">
         <summary>How much of Smartsheet is filled in, over cabinet houses only</summary>
@@ -1558,6 +1590,31 @@ function SmartsheetReportView() {
                     <td className="num">{c.install}%</td>
                     <td className="num">{c.punch}%</td>
                     <td className="num">{c.po_number}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(data.unjoined ?? []).length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    Tracker community with no Smartsheet match &mdash; these
+                    houses are not being checked at all
+                  </th>
+                  <th>Builder</th>
+                  <th className="num">Houses</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.unjoined.map((u) => (
+                  <tr key={u.community}>
+                    <td>{u.community}</td>
+                    <td>{u.builder ?? "\u2014"}</td>
+                    <td className="num">{u.houses}</td>
                   </tr>
                 ))}
               </tbody>

@@ -545,6 +545,7 @@ export interface SmartsheetReport {
   tracker_ok: boolean;
   tracker_file: string | null;
   hidden_closed: number;
+  unjoined: { community: string; builder: string | null; houses: number }[];
   portal_files: Record<string, string | null>;
   portal_coverage: {
     source: string;

@@ -25,9 +25,11 @@ _TRAILING_ZEROS = re.compile(r"\.0+$")
 
 
 def norm_sub(value) -> str:
-    """Community name down to letters and digits: 'Hodges Bayou Ph 2 50s' and
-    'Hodges Bayou PH 2 50s' must land on the same key."""
-    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+    """Community name down to letters and digits, then through the alias map:
+    'Hodges Bayou Ph 2 50s' and 'Hodges Bayou PH 2 50s' must land on the same
+    key, and so must the tracker's name for a community and Smartsheet's."""
+    flat = re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+    return COMMUNITY_ALIASES.get(flat, flat)
 
 
 def norm_lot(value) -> str:
@@ -48,6 +50,24 @@ def norm_lot(value) -> str:
     return re.sub(r"[^a-z0-9-]", "", raw.lower())
 
 
+# The tracker and Smartsheet name the same community differently, which is why
+# only 14 of 51 tracker communities joined. Fuzzy matching is NOT safe here:
+# difflib pairs "Colonial East TH" with "Colonial East SF", and townhomes and
+# single-family are different houses on different lots. So the mapping is
+# explicit and only holds pairs that are unambiguous -- an abbreviation, a
+# spelling, or a phase written two ways. Anything needing a judgement call is
+# left unmatched and reported instead, for Brian to confirm.
+#
+# Keys and values are already normalised (see norm_sub).
+COMMUNITY_ALIASES: dict[str, str] = {
+    "colonialeastth": "colonialeasttownhomes",
+    "gardenvillaths": "gardenvillastownhomes",
+    "ashetonvillage": "ashtonvillage",
+    "hodgesbayouph250s": "hodgesbayouphaseii50s",
+    "hodgesbayouph3horton": "hodgesbayouphaseiii",
+}
+
+
 def key_of(subdivision, lot) -> tuple[str, str]:
     return (norm_sub(subdivision), norm_lot(lot))
 
@@ -55,6 +75,11 @@ def key_of(subdivision, lot) -> tuple[str, str]:
 MATCHED = "matched"
 ONLY_SMARTSHEET = "not in CabinetTron"
 ONLY_CABINETTRON = "not in Smartsheet"
+# The 3.0 tracker carries the house as a cabinet job, but its Smartsheet row
+# does not have the Cabinets box ticked. Smartsheet is the sheet that decides
+# whether we supply cabinets, so one of the two is wrong and somebody has to
+# say which. Brian asked for these by name 9/10/26.
+NOT_TICKED = "cabinets not ticked in Smartsheet"
 
 
 @dataclass
@@ -117,6 +142,20 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
             tracker=(tr.get(k) or [None])[0],
             duplicates=rows[1:] + jobs_here[1:],
         ))
+    # Houses the tracker treats as cabinet jobs whose Smartsheet row is not
+    # ticked for cabinets. Every row in the tracker's DATA table IS a cabinet
+    # job -- that is what the tracker is for -- so a Smartsheet row sitting
+    # beside it unticked is a contradiction worth surfacing, not a filter to
+    # apply quietly.
+    for k, trows in tr.items():
+        ss_here = ss.get(k)
+        if not ss_here or expected(ss_here[0]):
+            continue
+        jobs_here = ct.get(k, [])
+        out.append(Match(key=k, state=NOT_TICKED, smartsheet=ss_here[0],
+                         job=jobs_here[0] if jobs_here else None,
+                         tracker=trows[0], duplicates=jobs_here[1:]))
+
     # Cabinet jobs we hold that Smartsheet has no row for.
     #
     # Only within a subdivision Smartsheet already tracks. Without that guard

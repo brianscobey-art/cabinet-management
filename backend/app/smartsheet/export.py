@@ -233,6 +233,21 @@ def to_xlsx(data: dict) -> io.BytesIO:
     _widths(ws, [40, 10, 8, 8, 18])
     ws.freeze_panes = ws.cell(row=r + 1, column=1)
 
+    # --- 2b. Where the check cannot see ------------------------------------
+    if data.get("unjoined"):
+        ws = wb.create_sheet("Not being checked")
+        r = _title(ws, "Tracker communities Smartsheet does not name the same way",
+                   "These houses are never compared, so a missing Cabinets tick "
+                   "on any of them would not show up. Each needs its Smartsheet "
+                   "name confirmed before it can be matched.")
+        _head(ws, r, ["Tracker community", "Builder", "Houses"])
+        for j, u in enumerate(data["unjoined"], start=r + 1):
+            ws.cell(row=j, column=1, value=u["community"])
+            ws.cell(row=j, column=2, value=u["builder"])
+            _write(ws, j, 3, u["houses"], centre=True)
+        _widths(ws, [38, 30, 10])
+        ws.freeze_panes = ws.cell(row=r + 1, column=1)
+
     # --- 3. Needs action ----------------------------------------------------
     action = [r_ for r_ in rows if r_.get("status") in ACTION
               or r_.get("differences")]
