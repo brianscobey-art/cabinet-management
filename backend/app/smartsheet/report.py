@@ -29,11 +29,17 @@ from app.smartsheet.timeline import assess, learn_intervals, predict
 DONE = "complete"
 
 FIELD_PO = "Cabinet PO"
+FIELD_ACTUAL = "Actual install"
 FIELD_WORKFLOW = "Workflow status"
 FIELD_STAGE = "Construction stage"
 FIELD_PLAN = "Plan"
 FIELD_MEASURE = "Measure date"
 FIELD_DELIVERY = "Install / delivery"
+
+
+# The tracker sheet fills empty cells with formula output rather than leaving
+# them blank, so these arrive as text and would otherwise read as real values.
+_EMPTY_TEXT = {"na", "n/a", "#n/a", "none", "-", "0", "00:00:00"}
 
 
 def _show(value) -> str | None:
@@ -43,6 +49,8 @@ def _show(value) -> str | None:
     if value in (None, ""):
         return None
     text = str(getattr(value, "value", value)).strip()
+    if text.lower() in _EMPTY_TEXT:
+        return None
     return text or None
 
 
@@ -86,6 +94,12 @@ def _fields(job, tracker: dict | None, ss: dict, phase: tuple | None,
         return None if off is None else f"{off:+d}d"
 
     po_v, po_note = _plain(getattr(job, "builder_po", None), pt.get("po_number"))
+    # The tracker's ACTUAL install date -- what really happened, as opposed to
+    # the requested date the other columns carry. Judged against the portal
+    # where it has one, since that is the builder's own record of the same day.
+    act_v, act_off = C.compare_date(
+        tr.get("Actual Install Date"), pt_install or ss.get("Cabinet Delivery Requested Date"),
+        tolerance=C.DELIVERY_TOLERANCE_DAYS)
 
     return [
         {"label": FIELD_WORKFLOW, "basis": "CabinetTron vs tracker",
@@ -113,6 +127,12 @@ def _fields(job, tracker: dict | None, ss: dict, phase: tuple | None,
          "smartsheet": _show(ss.get("Cabinet Delivery Requested Date")),
          "portal": _show(pt_install),
          "verdict": del_v, "note": days(del_off)},
+        {"label": FIELD_ACTUAL, "basis": "tracker Actual Install Date",
+         "cabinettron": _show(getattr(job, "install_date", None)),
+         "tracker": _show(tr.get("Actual Install Date")),
+         "smartsheet": _show(ss.get("Cabinet Delivery Requested Date")),
+         "portal": _show(pt_install),
+         "verdict": act_v, "note": days(act_off)},
         {"label": FIELD_PO, "basis": "CabinetTron vs portal",
          "cabinettron": _show(getattr(job, "builder_po", None)),
          "tracker": _show(tr.get("Cabinet PO#")),
@@ -223,6 +243,11 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
                 "days": pred.days, "n": pred.n,
                 "window": [pred.window[0].isoformat(), pred.window[1].isoformat()],
             },
+            # Straight from the tracker's DATA table, shown as their own
+            # columns rather than only inside the expanded detail -- these are
+            # the two Brian reads first.
+            "const_lvl": _show((m.tracker or {}).get("CONST LVL")),
+            "actual_install": _show((m.tracker or {}).get("Actual Install Date")),
             "status": status,
             "days_off": days_off,
             "differences": sum(1 for f in fields if f["verdict"] == C.DIFFER),

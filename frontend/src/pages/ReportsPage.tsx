@@ -1566,13 +1566,15 @@ function SmartsheetReportView() {
       <div className="table-wrap">
         <table className="phase-table">
           <colgroup>
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "7%" }} />
             <col style={{ width: "12%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "20%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "13%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -1580,6 +1582,8 @@ function SmartsheetReportView() {
               <th>Subdivision</th>
               <th className="num">Lot</th>
               <th className="num">Job code</th>
+              <th className="num">CONST LVL</th>
+              <th className="num">Actual install</th>
               <th className="num">Status</th>
               <th className="num">Expected cabinets</th>
               <th>Scopes we supply</th>
@@ -1592,8 +1596,8 @@ function SmartsheetReportView() {
               return (
                 <Fragment key={k}>
                   <tr className="clickable" onClick={() => setOpen(isOpen ? null : k)}>
-                    <td>{r.builder ?? "-"}</td>
-                    <td>{r.subdivision ?? "-"}</td>
+                    <td>{r.builder ?? "—"}</td>
+                    <td>{r.subdivision ?? "—"}</td>
                     <td className="num">{fmtLot(r.lot)}</td>
                     <td className="num">
                       {r.job_code ? (
@@ -1604,6 +1608,8 @@ function SmartsheetReportView() {
                         <span className="muted">none</span>
                       )}
                     </td>
+                    <td className="num">{r.const_lvl ?? "—"}</td>
+                    <td className="num">{fmtMaybeDate(r.actual_install)}</td>
                     <td className={`num ${SS_ACTION.has(r.status) ? "ss-bad" : ""}`}>
                       {r.status}
                       {r.days_off != null && SS_ACTION.has(r.status)
@@ -1611,16 +1617,16 @@ function SmartsheetReportView() {
                         : ""}
                     </td>
                     <td className="num">
-                      {r.prediction ? fmtDate(r.prediction.expected) : "-"}
+                      {r.prediction ? fmtDate(r.prediction.expected) : "—"}
                       {r.differences > 0 && (
                         <span className="ss-flag"> {r.differences} differ</span>
                       )}
                     </td>
-                    <td>{Object.keys(r.scopes).join(", ") || "-"}</td>
+                    <td>{Object.keys(r.scopes).join(", ") || "—"}</td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={7} className="ss-detail">
+                      <td colSpan={9} className="ss-detail">
                         {r.prediction && (
                           <p className="muted">
                             Expected {fmtDate(r.prediction.expected)} - from {r.prediction.from} on{" "}

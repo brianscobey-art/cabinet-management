@@ -54,13 +54,14 @@ def _widths(ws, widths: list[int]) -> None:
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
-HOUSE_COLS = ["Builder", "Subdivision", "Lot", "Job code", "Match", "Status",
-              "Days off", "Expected cabinets", "Predicted from",
+HOUSE_COLS = ["Builder", "Subdivision", "Lot", "Job code", "CONST LVL",
+              "Actual install", "Match", "Status", "Days off",
+              "Expected cabinets", "Predicted from",
               "Portal measure", "Portal install", "Portal PO", "Scopes",
               "Disagreements"]
-HOUSE_WIDTHS = [18, 24, 10, 14, 18, 14, 10, 18, 22, 15, 15, 18, 30, 13]
+HOUSE_WIDTHS = [18, 24, 10, 14, 14, 14, 18, 14, 10, 18, 22, 15, 15, 18, 30, 13]
 # 1-indexed columns holding a number or a date -- centred, per Brian 9/10/26.
-HOUSE_CENTRED = {3, 4, 6, 7, 8, 9, 10, 11, 12, 14}
+HOUSE_CENTRED = {3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 16}
 
 _ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 
@@ -105,8 +106,9 @@ def _house_row(r: dict) -> list:
     pred = r.get("prediction") or {}
     scopes = ", ".join(sorted(r.get("scopes") or {}))
     return [
-        r.get("builder"), r.get("subdivision"), str(r.get("lot") or ""),
-        r.get("job_code"), r.get("match"), r.get("status"), r.get("days_off"),
+        r.get("builder"), r.get("subdivision"), _lot(r.get("lot")),
+        r.get("job_code"), r.get("const_lvl"), r.get("actual_install"),
+        r.get("match"), r.get("status"), r.get("days_off"),
         pred.get("expected"),
         _pretty_from(pred) if pred else None,
         _field(r, "Measure date", "portal"),
@@ -114,6 +116,15 @@ def _house_row(r: dict) -> list:
         _field(r, "Cabinet PO", "portal"),
         scopes, r.get("differences") or None,
     ]
+
+
+def _lot(value) -> str:
+    """Excel exports numeric cells as floats, so a lot arrives as "21.0". Show
+    the number people use; leave A027 and 24B alone. Matches fmtLot in the web
+    view so the workbook and the page never disagree about a lot number."""
+    text = str(value or "").strip()
+    m = re.fullmatch(r"(\d+)(?:\.0+)?", text)
+    return str(int(m.group(1))) if m else text
 
 
 def _field(row: dict, label: str, key: str):
@@ -139,7 +150,7 @@ def _house_sheet(wb, name: str, rows: list[dict], *, heading: str,
             _write(ws, j, i, value, centre=i in HOUSE_CENTRED)
         state = row.get("status")
         if state in ACTION:
-            ws.cell(row=j, column=6).font = Font(
+            ws.cell(row=j, column=8).font = Font(
                 name="Calibri", size=11, bold=True,
                 color=NEG if state == "overdue" else WARN)
     _widths(ws, HOUSE_WIDTHS)

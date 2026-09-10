@@ -531,6 +531,8 @@ export interface SmartsheetRow {
   scopes: Record<string, string>;
   timeline: { scope: string; label: string; date: string }[];
   prediction: SmartsheetPrediction | null;
+  const_lvl: string | null;
+  actual_install: string | null;
   status: string;
   days_off: number | null;
   differences: number;

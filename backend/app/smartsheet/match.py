@@ -93,8 +93,15 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
     ct = index_by_key(jobs,
                       lambda j: j.community.name if j.community else None,
                       lambda j: j.lot_number)
+    # The 3.0 tracker's DATA table calls it "Community", not "Subdivision".
+    # Keying on the wrong name is silent -- .get returns None, every row keys to
+    # ("", ...) and gets dropped, so the tracker column simply reads blank on
+    # every house and looks like missing data rather than a broken join. It sat
+    # at 0 of 608 rows that way. Both names are accepted so a rename in either
+    # direction cannot bring it back.
     tr = index_by_key(tracker_rows,
-                      lambda r: r.get("Subdivision"), lambda r: r.get("Lot #"))
+                      lambda r: r.get("Community") or r.get("Subdivision"),
+                      lambda r: r.get("Lot #"))
 
     out: list[Match] = []
     for k, rows in ss.items():
