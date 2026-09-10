@@ -32,6 +32,19 @@ SHEETS: dict[str, int] = {
 CABINET_REPORT_ID = 6103204382068612
 
 
+def _informative(value) -> bool:
+    """Whether a value should beat another for the same duplicated column.
+
+    Ordering matters: True beats False beats nothing. Both sheets carry a
+    column twice ("Cabinets" and "Cabinets "), and the two copies disagree --
+    one holds the tick, the other holds an unticked box. Treating False as a
+    real value let it block the True and reported two ticked Century houses as
+    unticked; treating False as nothing loses the difference between "somebody
+    said no" and "nobody said". Ranking them keeps both.
+    """
+    return value is not None and value is not False and value != ""
+
+
 def rows_from_xlsx(path: str | Path) -> list[dict]:
     """First worksheet only. The second sheet in a Smartsheet export is the
     comment log, which is a different shape and not row data."""
@@ -68,7 +81,7 @@ def _row(header: list[str], values) -> dict:
         name = header[i]
         if not name:
             continue
-        if name in out and out[name] not in (None, ""):
+        if name in out and _informative(out[name]):
             continue
         out[name] = value
     return out
@@ -108,14 +121,14 @@ def rows_from_api(sheet_id: int, token: str) -> list[dict]:
                 continue
             # displayValue keeps a picklist's text; value keeps real dates.
             value = cell.get("value", cell.get("displayValue"))
-            # A CHECKBOX arrives as a real bool. scopes.provides() lowercases
-            # str(value), so True -> "true" matches; False must become empty
-            # rather than the string "false", which is truthy to a human reader
-            # and to any later "is there anything here" test.
-            if value is False:
-                value = None
+            # A CHECKBOX arrives as a real bool and BOTH values carry meaning:
+            # False is somebody deciding no, an absent cell is nobody deciding.
+            # Collapsing False into None loses that -- it reported a
+            # deliberately unticked house as "(never set)". Kept as a bool;
+            # every consumer already handles it (provides() sees "false" and
+            # declines, _show()/_value() treat it as blank text).
             # Same duplicate-title trap as the workbook reader -- see _row.
-            if title in rec and rec[title] not in (None, ""):
+            if title in rec and _informative(rec[title]):
                 continue
             rec[title] = value
         if rec:

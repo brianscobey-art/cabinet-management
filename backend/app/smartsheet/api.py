@@ -55,6 +55,24 @@ def _tracker_rows() -> tuple[list[dict], bool, str | None]:
     return [], False, None
 
 
+def _with_audit(db: Session, data: dict) -> dict:
+    """Attach the tracker-first audit. Export only.
+
+    It is ~284 rows x 26 fields that the web report never renders, and the JSON
+    response is already half a megabyte, so the page must not pay for it.
+    """
+    from app.smartsheet import audit
+
+    # Re-reading the tracker is free -- _tracker_rows caches on the file's
+    # identity -- and keeps 1.5MB of raw rows out of the report dict, where the
+    # web endpoint would have had to remember to strip them.
+    tracker, _, _ = _tracker_rows()
+    data["audit"] = audit.build(tracker, S.stored_rows(db),
+                                drop_levels=R.DROPPED_CONST_LVLS)
+    data["audit_summary"] = audit.summary(data["audit"])
+    return data
+
+
 def _build(db: Session) -> dict:
     jobs = (db.query(Job)
             .options(joinedload(Job.community), joinedload(Job.account))
@@ -111,7 +129,7 @@ def smartsheet_export(db: Session = Depends(get_db)):
     """Excel: a summary tab, the coverage evidence, then one tab per builder."""
     from app.smartsheet.export import to_xlsx
 
-    data = _build(db)
+    data = _with_audit(db, _build(db))
     buf = to_xlsx(data)
     name = f"Smartsheet vs CabinetTron {dt.date.today():%m%d%y}.xlsx"
     return StreamingResponse(

@@ -46,7 +46,7 @@ FIELD_DELIVERY = "Install / delivery"
 
 # The tracker sheet fills empty cells with formula output rather than leaving
 # them blank, so these arrive as text and would otherwise read as real values.
-_EMPTY_TEXT = {"na", "n/a", "#n/a", "none", "-", "0", "00:00:00"}
+_EMPTY_TEXT = {"na", "n/a", "#n/a", "none", "-", "0", "00:00:00", "false"}
 
 
 def _show(value) -> str | None:

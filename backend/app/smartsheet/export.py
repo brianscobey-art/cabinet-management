@@ -164,6 +164,7 @@ def _house_sheet(wb, name: str, rows: list[dict], *, heading: str,
 def to_xlsx(data: dict) -> io.BytesIO:
     from openpyxl import Workbook
     from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
 
     rows = data["rows"]
     totals = data["totals"]
@@ -247,6 +248,43 @@ def to_xlsx(data: dict) -> io.BytesIO:
             _write(ws, j, 3, u["houses"], centre=True)
         _widths(ws, [38, 30, 10])
         ws.freeze_panes = ws.cell(row=r + 1, column=1)
+
+    # --- 2c. What Smartsheet holds for the houses we have -------------------
+    if data.get("audit"):
+        from app.smartsheet import audit as A
+
+        rows_a = data["audit"]
+        summ = data.get("audit_summary") or {}
+        ws = wb.create_sheet("Our houses in Smartsheet")
+        sub = (f"{summ.get('houses', 0)} live DR Horton and Century houses from the "
+               f"3.0 tracker  |  {summ.get('found', 0)} found in Smartsheet, "
+               f"{summ.get('missing', 0)} not there at all  |  "
+               f"{summ.get('no_dates', 0)} carry no Smartsheet dates  |  "
+               f"average {summ.get('avg_filled', 0)} of {len(A.SCORED)} date fields")
+        r = _title(ws, "Our houses, and what Smartsheet has for them", sub)
+        _head(ws, r, A.COLUMNS)
+        # Dates and counts centred; the identity columns stay left.
+        centred = {A.COLUMNS.index(c) + 1 for c in A.COLUMNS
+                   if c.startswith("SS ") or c in ("Lot", "BUID", "CONST LVL",
+                                                   "Actual install", "In Smartsheet")}
+        centred.discard(A.COLUMNS.index("SS scopes") + 1)
+        for j, row in enumerate(rows_a, start=r + 1):
+            for i, col in enumerate(A.COLUMNS, start=1):
+                cell = _write(ws, j, i, row.get(col), centre=i in centred)
+            # A house Smartsheet has never heard of is the strongest finding on
+            # the sheet; colour it rather than leaving it to be scrolled past.
+            if row.get("In Smartsheet") == "NO":
+                ws.cell(row=j, column=A.COLUMNS.index("In Smartsheet") + 1).font = Font(
+                    name="Calibri", size=11, bold=True, color=NEG)
+        widths = []
+        for c in A.COLUMNS:
+            widths.append(30 if c == "SS scopes" else 22 if c == "Community"
+                          else 20 if c in ("Builder", "Job code") else 15)
+        _widths(ws, widths)
+        ws.freeze_panes = ws.cell(row=r + 1, column=6)
+        if rows_a:
+            ws.auto_filter.ref = (f"A{r}:{get_column_letter(len(A.COLUMNS))}"
+                                  f"{r + len(rows_a)}")
 
     # --- 3. Needs action ----------------------------------------------------
     action = [r_ for r_ in rows if r_.get("status") in ACTION

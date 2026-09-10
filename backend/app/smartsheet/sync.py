@@ -35,7 +35,8 @@ TRACKED_FIELDS = (
 
 
 def _value(raw) -> str | None:
-    if raw is None:
+    """Text for storage. An unticked checkbox is not the word "False"."""
+    if raw is None or raw is False:
         return None
     text = str(raw).strip()
     return text or None
