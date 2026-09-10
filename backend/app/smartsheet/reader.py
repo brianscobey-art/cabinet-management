@@ -76,13 +76,25 @@ def _row(header: list[str], values) -> dict:
 
 def rows_from_api(sheet_id: int, token: str) -> list[dict]:
     """Live pull. Read-only by construction: this module has no writer, and
-    nothing may write to Smartsheet without Brian saying so per change."""
-    import requests
+    nothing may write to Smartsheet without Brian saying so per change.
 
-    resp = requests.get(
+    httpx, not requests -- requests is not a dependency of this project and is
+    not installed, so the first version of this would have failed with a
+    missing module the moment a token was set. httpx is already here for the
+    DOMO pulls.
+    """
+    import httpx
+
+    resp = httpx.get(
         f"https://api.smartsheet.com/2.0/sheets/{sheet_id}",
+        # These sheets are ~257 columns wide and mostly empty; asking for the
+        # blank cells back would multiply the payload for nothing.
+        params={"exclude": "nonexistentCells"},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=90,
+        # A Master sheet is ~250 columns by ~500 rows; the default 5s is not
+        # enough and a timeout here silently drops that builder for the night.
+        timeout=120.0,
+        follow_redirects=True,
     )
     resp.raise_for_status()
     payload = resp.json()
@@ -96,6 +108,12 @@ def rows_from_api(sheet_id: int, token: str) -> list[dict]:
                 continue
             # displayValue keeps a picklist's text; value keeps real dates.
             value = cell.get("value", cell.get("displayValue"))
+            # A CHECKBOX arrives as a real bool. scopes.provides() lowercases
+            # str(value), so True -> "true" matches; False must become empty
+            # rather than the string "false", which is truthy to a human reader
+            # and to any later "is there anything here" test.
+            if value is False:
+                value = None
             # Same duplicate-title trap as the workbook reader -- see _row.
             if title in rec and rec[title] not in (None, ""):
                 continue
