@@ -63,7 +63,7 @@ def _run_smartsheet_sync() -> None:
     try:
         with SessionLocal() as db:
             result = sync(db, token=s.smartsheet_api_token or None,
-                          folder=s.smartsheet_dir)
+                          folder=s.smartsheet_folder)
         logger.info("Smartsheet sync (%s): %s", result["source"], result["sheets"])
     except Exception as exc:  # noqa: BLE001 — must not kill the scheduler
         logger.warning("Smartsheet sync failed: %s", exc)

@@ -92,7 +92,7 @@ def smartsheet_report(db: Session = Depends(get_db),
 def smartsheet_sync(db: Session = Depends(get_db)):
     """Pull now rather than waiting for the nightly run."""
     s = get_settings()
-    return S.sync(db, token=s.smartsheet_api_token or None, folder=s.smartsheet_dir)
+    return S.sync(db, token=s.smartsheet_api_token or None, folder=s.smartsheet_folder)
 
 
 @router.get("/reports/smartsheet/export", dependencies=[Depends(read_access)])

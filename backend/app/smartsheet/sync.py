@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -51,13 +52,30 @@ def _sheet_rows(builder: str, sheet_id: int, token: str | None,
     # "<Builder> - Tract Builder Management Master MMDDYY.xlsx".
     stem = builder.split()[0]
     files = sorted(folder.glob(f"{stem}*Tract Builder Management Master*.xlsx"),
-                   key=lambda p: p.stat().st_mtime, reverse=True)
+                   key=_export_age, reverse=True)
     for f in files[:3]:
         try:
             return rows_from_xlsx(f)
         except (PermissionError, OSError):
             continue
     return []
+
+
+_DATED = re.compile(r"(\d{2})(\d{2})(\d{2})(?=\.[^.]+$)")
+
+
+def _export_age(path: Path) -> tuple:
+    """Sort key: the MMDDYY in the filename first, mtime only as a tiebreak.
+
+    mtime is not trustworthy here. In the cloud these files arrive over R2 and
+    are stamped with the object's upload time, so a batch uploaded together all
+    look the same age -- and an export from two days ago could beat today's.
+    The date in the name is what the file is FOR, which is the thing that
+    matters. (Same reasoning as scripts/archive_combined_reports.year_of.)
+    """
+    m = _DATED.search(path.name)
+    dated = (f"20{m.group(3)}{m.group(1)}{m.group(2)}" if m else "")
+    return (dated, path.stat().st_mtime)
 
 
 def _record_history(db: Session, key: tuple[str, str], row: dict,
@@ -104,6 +122,19 @@ def sync(db: Session, *, token: str | None = None, folder: str | Path | None = N
     folder = Path(folder) if folder else None
     result: dict[str, object] = {"source": "api" if token else "files", "sheets": {}}
     total_changes = 0
+
+    # In the cloud there are no local exports -- the PC uploads them to R2 and
+    # the server pulls them down first, the same bridge the tracker and Vendor
+    # Suite feeds use. No-op on the source PC, where the files are already here.
+    if not token:
+        try:
+            from app.config import get_settings
+            from app.storage import hydrate_feeds
+
+            if get_settings().r2_pull_enabled:
+                result["hydrated"] = hydrate_feeds()
+        except Exception as exc:  # noqa: BLE001 — a pull failure must not stop a
+            result["hydrated"] = {"error": str(exc)}   # sync of whatever is here
 
     for builder, sheet_id in SHEETS.items():
         try:

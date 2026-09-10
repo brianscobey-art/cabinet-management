@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     smartsheet_api_token: str = ""
     smartsheet_dir: str = r"C:\Users\Brian SE6\Downloads"
     smartsheet_sync_hour: int = 2
+
+    @property
+    def smartsheet_folder(self) -> str:
+        """Brian's export folder on the PC; in the cloud, a folder on the feed
+        disk beside the other feeds (hydrated from R2). Same self-configuring
+        trick as po_receipt_folder, so Render needs no extra env var."""
+        from pathlib import Path as _P
+
+        p = _P(self.smartsheet_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "smartsheet")
     assistant_admin_only: bool = True
 
     # Where generated order/export files land (gitignored).
