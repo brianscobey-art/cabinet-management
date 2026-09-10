@@ -499,6 +499,80 @@ export interface PhaseReportRow {
 
 export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");
 
+// ---- Smartsheet vs CabinetTron ---------------------------------------------
+export interface SmartsheetField {
+  label: string;
+  basis: string;
+  cabinettron: string | null;
+  tracker: string | null;
+  smartsheet: string | null;
+  verdict: string;
+  note: string | null;
+}
+
+export interface SmartsheetPrediction {
+  expected: string;
+  from: string;
+  from_date: string;
+  days: number;
+  n: number;
+  window: [string, string];
+}
+
+export interface SmartsheetRow {
+  builder: string | null;
+  subdivision: string | null;
+  lot: string | null;
+  address: string | null;
+  job_code: string | null;
+  job_id: number | null;
+  match: string;
+  scopes: Record<string, string>;
+  timeline: { scope: string; label: string; date: string }[];
+  prediction: SmartsheetPrediction | null;
+  status: string;
+  days_off: number | null;
+  differences: number;
+  fields: SmartsheetField[];
+}
+
+export interface SmartsheetReport {
+  generated: string;
+  pulled_at: string | null;
+  tracker_ok: boolean;
+  tracker_file: string | null;
+  builders: string[];
+  intervals: Record<string, { days: number; n: number; iqr: number; usable: boolean }>;
+  coverage: { field: string; filled: number; of: number; pct: number; on_sheet: boolean }[];
+  totals: {
+    houses: number;
+    with_differences: number;
+    by_status: Record<string, number>;
+    by_match: Record<string, number>;
+  };
+  rows: SmartsheetRow[];
+}
+
+export const getSmartsheetReport = () => api<SmartsheetReport>("/reports/smartsheet");
+
+export const syncSmartsheet = () =>
+  api<Record<string, unknown>>("/reports/smartsheet/sync", { method: "POST" });
+
+export async function exportSmartsheet(): Promise<void> {
+  // Plain <a href> would carry no Authorization header and 401.
+  const resp = await fetch("/api/reports/smartsheet/export", {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new Error("Export failed");
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Smartsheet vs CabinetTron.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export interface ReportInfo {
   key: string;
   name: string;

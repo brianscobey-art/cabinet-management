@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   DomoPLReport,
   InstallWeekRow,
@@ -27,6 +27,13 @@ import {
   openDocument,
   refreshDomoPL,
   refreshJobPL,
+} from "../api";
+import {
+  exportSmartsheet,
+  getSmartsheetReport,
+  syncSmartsheet,
+  type SmartsheetReport,
+  type SmartsheetRow,
 } from "../api";
 import { fmtDate } from "../format";
 import ManagerReportView from "./ManagerReport";
@@ -122,6 +129,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       </div>
 
       {key === "phases" && <PhaseReport />}
+      {key === "smartsheet" && <SmartsheetReportView />}
       {key === "open-po" && <OpenPOReportView />}
       {key === "po-status" && <PoStatusView />}
       {key === "revenue-builder" && <RevenueBuilderView />}
@@ -1391,4 +1399,243 @@ function MultiSelect({
 
 function groupKey(row: PhaseReportRow) {
   return `${row.account_name}||${row.community_name ?? ""}`;
+}
+
+
+// ---------------------------------------------------------------- Smartsheet
+// Statuses that mean somebody has to do something. One set, so the filter, the
+// row highlight and the count can never drift apart.
+const SS_ACTION = new Set(["overdue", "due now", "off plan"]);
+
+function SmartsheetReportView() {
+  const [data, setData] = useState<SmartsheetReport | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [builder, setBuilder] = useState("");
+  const [status, setStatus] = useState("");
+  const [onlyDiffs, setOnlyDiffs] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+
+  function load() {
+    getSmartsheetReport().then(setData).catch((e) => setError(e.message));
+  }
+  useEffect(load, []);
+
+  async function pull() {
+    setBusy(true);
+    setError("");
+    try {
+      await syncSmartsheet();
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    return data.rows.filter(
+      (r) =>
+        (!builder || r.builder === builder) &&
+        (!status || r.status === status) &&
+        (!onlyDiffs || r.differences > 0)
+    );
+  }, [data, builder, status, onlyDiffs]);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return <p className="muted">Loading...</p>;
+
+  const t = data.totals;
+  const rowKey = (r: SmartsheetRow) => `${r.builder}|${r.subdivision}|${r.lot}`;
+
+  return (
+    <div>
+      <div className="filters no-print">
+        <button onClick={pull} disabled={busy}>
+          {busy ? "Pulling..." : "Pull from Smartsheet"}
+        </button>
+        <button onClick={() => exportSmartsheet().catch((e) => setError(e.message))}>
+          Export to Excel
+        </button>
+        <select value={builder} onChange={(e) => setBuilder(e.target.value)}>
+          <option value="">All builders</option>
+          {data.builders.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All statuses</option>
+          {Object.entries(t.by_status)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => (
+              <option key={k} value={k}>
+                {k} ({n})
+              </option>
+            ))}
+        </select>
+        <label className="check-inline">
+          <input
+            type="checkbox"
+            checked={onlyDiffs}
+            onChange={(e) => setOnlyDiffs(e.target.checked)}
+          />
+          Only disagreements ({t.with_differences})
+        </label>
+      </div>
+
+      <p className="muted">
+        {t.houses} houses &middot; Smartsheet pulled{" "}
+        {data.pulled_at ? fmtDate(data.pulled_at) : "never"} &middot;{" "}
+        {data.tracker_ok
+          ? `tracker ${data.tracker_file}`
+          : "tracker unavailable (workbook open in Excel) - its column reads blank"}
+      </p>
+
+      <details className="ss-coverage">
+        <summary>How much of Smartsheet is filled in, over cabinet houses only</summary>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Filled</th>
+                <th>Of</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.coverage.map((c) => (
+                <tr key={c.field}>
+                  <td>
+                    {c.field}
+                    {c.on_sheet ? "" : " (absent on some sheets)"}
+                  </td>
+                  <td>{c.filled}</td>
+                  <td>{c.of}</td>
+                  <td className={c.pct < 25 ? "ss-bad" : c.pct < 60 ? "ss-warn" : "ss-ok"}>
+                    {c.pct}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <div className="table-wrap">
+        <table className="phase-table">
+          <colgroup>
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "20%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Builder</th>
+              <th>Subdivision</th>
+              <th>Lot</th>
+              <th>Job code</th>
+              <th>Status</th>
+              <th>Expected cabinets</th>
+              <th>Scopes we supply</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const k = rowKey(r);
+              const isOpen = open === k;
+              return (
+                <Fragment key={k}>
+                  <tr className="clickable" onClick={() => setOpen(isOpen ? null : k)}>
+                    <td>{r.builder ?? "-"}</td>
+                    <td>{r.subdivision ?? "-"}</td>
+                    <td>{r.lot ?? "-"}</td>
+                    <td>
+                      {r.job_code ? (
+                        <a href={`#/jobs/${r.job_id}`} onClick={(e) => e.stopPropagation()}>
+                          {r.job_code}
+                        </a>
+                      ) : (
+                        <span className="muted">none</span>
+                      )}
+                    </td>
+                    <td className={SS_ACTION.has(r.status) ? "ss-bad" : undefined}>
+                      {r.status}
+                      {r.days_off != null && SS_ACTION.has(r.status)
+                        ? ` ${r.days_off > 0 ? "+" : ""}${r.days_off}d`
+                        : ""}
+                    </td>
+                    <td>
+                      {r.prediction ? fmtDate(r.prediction.expected) : "-"}
+                      {r.differences > 0 && (
+                        <span className="ss-flag"> {r.differences} differ</span>
+                      )}
+                    </td>
+                    <td>{Object.keys(r.scopes).join(", ") || "-"}</td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={7} className="ss-detail">
+                        {r.prediction && (
+                          <p className="muted">
+                            Expected {fmtDate(r.prediction.expected)} - from {r.prediction.from} on{" "}
+                            {fmtDate(r.prediction.from_date)} plus {r.prediction.days} days,
+                            learned from {r.prediction.n} houses.
+                          </p>
+                        )}
+                        <table className="ss-fields">
+                          <thead>
+                            <tr>
+                              <th>Field</th>
+                              <th>CabinetTron</th>
+                              <th>3.0 Tracker</th>
+                              <th>Smartsheet</th>
+                              <th>Verdict</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.fields.map((f) => (
+                              <tr key={f.label}>
+                                <td>
+                                  {f.label}
+                                  <em className="muted"> - {f.basis}</em>
+                                </td>
+                                <td>{f.cabinettron ?? "-"}</td>
+                                <td>{f.tracker ?? "-"}</td>
+                                <td>{f.smartsheet ?? "-"}</td>
+                                <td className={f.verdict === "differ" ? "ss-bad" : undefined}>
+                                  {f.verdict}
+                                  {f.note ? ` (${f.note})` : ""}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {r.timeline.length > 0 && (
+                          <p className="ss-timeline">
+                            {r.timeline.map((step) => (
+                              <span key={step.scope}>
+                                <b>{step.label}</b> {fmtDate(step.date)}
+                              </span>
+                            ))}
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.length === 0 && <p className="muted">Nothing matches those filters.</p>}
+    </div>
+  );
 }

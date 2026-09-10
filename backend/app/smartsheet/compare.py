@@ -41,8 +41,13 @@ _SS_STAGE = {
     "foundation": 1, "framing": 2, "rough in": 4, "roughin": 4,
     "drywall": 5, "interior trim": 6, "int trim": 6, "trim": 6,
     "screens": 7, "locksets": 7, "lockset": 7, "paint": 7,
+    "flatwork (driveway)": 7, "flatwork": 7,
     "cabinet": 8, "cabinets": 8, "complete": 9,
 }
+
+# The stage that means the house is finished. A finished house cannot be
+# "overdue" for cabinets that went in months ago.
+DONE_STAGE = 9
 
 # CabinetTron phase code -> the same ladder.
 _PHASE_STAGE = {
@@ -60,9 +65,20 @@ DELIVERY_TOLERANCE_DAYS = 7
 # Measure dates are the same field in both systems, so only rounding slack.
 DATE_TOLERANCE_DAYS = 1
 
-_SERIES = re.compile(r"^(?:drh|ex|dr|ch|c)\s*\d*\s+", re.I)   # DRH1 / EX2 / DR
-_ELEVATION = re.compile(r"\s+[A-Z]{1,2}\d{1,2}\s*$")           # Cabot A1
+# Leading series token -- an EXPLICIT list, not "any short word". Matching any
+# 1-4 letter first word ate the plan names themselves: "ALAB 46" became "46"
+# and "Madi A" became "A".
+_SERIES = re.compile(r"^(?:drh|ex|dr|ch|cc|c)\d{0,2}\s+(?=\S)", re.I)
+# A trailing elevation, in any of the shapes the two systems use: "A1", "B1",
+# "C13", a bare number ("ALAB 46"), or a lone letter ("Madi A").
+_ELEVATION = re.compile(r"\s+(?:[A-Za-z]{1,2}\d{1,3}|\d{1,3}|[A-Za-z])\s*$")
 _SUFFIX = re.compile(r"\s+(std|standard|[lr]|left|right)\s*$", re.I)
+# "roanoake" vs "roanoka" scores exactly 0.80; the three genuine mismatches in
+# the live data (Rhett/Victoria, Destin/Hawthorne, Beau/Ozark) all score under
+# 0.30, so there is a wide margin between typo and wrong house.
+PLAN_SIMILARITY = 0.80
+# Size variants -- "Roanoake 30in" and "Roanoake" are the same plan to a builder.
+_SIZE = re.compile(r"\s*\d+\s*(?:in|inch|\")\s*", re.I)
 
 
 def plan_name(value) -> str:
@@ -70,11 +86,12 @@ def plan_name(value) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    text = _ELEVATION.sub("", text)
     text = _SERIES.sub("", text)
-    for _ in range(3):                       # 'Oxford STD R' needs two passes
-        stripped = _SUFFIX.sub("", text)
-        if stripped == text:
+    text = _SIZE.sub(" ", text)
+    # Suffixes and elevations stack: "Oxford STD R", "Madison STD A".
+    for _ in range(4):
+        stripped = _ELEVATION.sub("", _SUFFIX.sub("", text)).strip()
+        if stripped == text or not stripped:
             break
         text = stripped
     # Anything after a comma is an option list ('Beau, B1DRWS'), not the plan.
@@ -92,7 +109,16 @@ def plans_agree(a: str, b: str) -> bool:
     # of four or more characters is the same plan; below that the risk of two
     # genuinely different plans colliding outweighs the false alarm it saves.
     short, long = sorted((a, b), key=len)
-    return len(short) >= 4 and short in long
+    if len(short) >= 4 and short in long:
+        return True
+    # One system spells it "Roanoake", the other "Roanoke". A near match on the
+    # plan name is a typo, not two different houses. The threshold is set to
+    # keep the real ones apart: Rhett/Victoria, Destin/Hawthorne and Beau/Ozark
+    # all score far below it, and those are exactly the mismatches worth having.
+    from difflib import SequenceMatcher
+
+    return (len(short) >= 4
+            and SequenceMatcher(None, a, b).ratio() >= PLAN_SIMILARITY)
 
 
 def stage_of_smartsheet(value) -> int | None:

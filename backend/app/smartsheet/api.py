@@ -1,0 +1,110 @@
+"""Endpoints for the Smartsheet timeline + discrepancy report."""
+
+from __future__ import annotations
+
+import datetime as dt
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+from app.api.deps import read_access, write_access
+from app.config import get_settings
+from app.database import get_db
+from app.models import Job, PhaseUpdate, SmartsheetRow
+from app.smartsheet import report as R
+from app.smartsheet import sync as S
+
+router = APIRouter(tags=["smartsheet"])
+
+
+# Parsing the 3.0 tracker costs ~19 seconds -- it is a large .xlsm and openpyxl
+# cannot open it read-only here (the DATA table's range comes from ws.tables).
+# Doing that on every page load made the report unusable, so the parse is cached
+# against the file's identity: same name, size and mtime means same rows, and a
+# saved workbook re-reads on the next request.
+_TRACKER_CACHE: dict[str, object] = {"key": None, "rows": [], "ok": False, "name": None}
+
+
+def _tracker_rows() -> tuple[list[dict], bool, str | None]:
+    """Newest READABLE 3.0 tracker. The live .xlsm is routinely open in Excel,
+    so fall through the recent copies rather than reporting no data."""
+    try:
+        from app.storage import TRACKER_GLOB
+        from scripts.import_tracker import load_rows
+    except Exception:  # noqa: BLE001 — tracker reader unavailable in this deploy
+        return [], False, None
+    folder = Path(get_settings().tracker_dir)
+    if not folder.is_dir():
+        return [], False, None
+    files = sorted(folder.glob(TRACKER_GLOB), key=lambda p: p.stat().st_mtime,
+                   reverse=True)
+    for f in files[:5]:
+        try:
+            stat = f.stat()
+            key = f"{f.name}|{stat.st_size}|{int(stat.st_mtime)}"
+            if _TRACKER_CACHE["key"] == key:
+                return _TRACKER_CACHE["rows"], True, _TRACKER_CACHE["name"]
+            rows = load_rows(f)
+            _TRACKER_CACHE.update(key=key, rows=rows, ok=True, name=f.name)
+            return rows, True, f.name
+        except (PermissionError, OSError):
+            continue
+    return [], False, None
+
+
+def _build(db: Session) -> dict:
+    jobs = (db.query(Job)
+            .options(joinedload(Job.community), joinedload(Job.account))
+            .all())
+    sub = (db.query(PhaseUpdate.job_id, func.max(PhaseUpdate.id).label("mid"))
+           .group_by(PhaseUpdate.job_id).subquery())
+    phases = {p.job_id: (p.phase, p.noted_at)
+              for p in db.query(PhaseUpdate).join(sub, PhaseUpdate.id == sub.c.mid)}
+    tracker, ok, name = _tracker_rows()
+    data = R.build(S.stored_rows(db), jobs, tracker, phases=phases, tracker_ok=ok)
+    data["tracker_file"] = name
+    latest = db.query(func.max(SmartsheetRow.pulled_at)).scalar()
+    data["pulled_at"] = latest.isoformat() if latest else None
+    return data
+
+
+@router.get("/reports/smartsheet", dependencies=[Depends(read_access)])
+def smartsheet_report(db: Session = Depends(get_db),
+                      builder: str | None = Query(None),
+                      status: str | None = Query(None)):
+    """The full report. Filtering happens here so the browser is not handed
+    3,000 houses to sift on every keystroke."""
+    data = _build(db)
+    rows = data["rows"]
+    if builder:
+        rows = [r for r in rows if r["builder"] == builder]
+    if status:
+        rows = [r for r in rows if r["status"] == status]
+    data["rows"] = rows
+    data["builders"] = sorted({r["builder"] for r in data["rows"] if r["builder"]})
+    return data
+
+
+@router.post("/reports/smartsheet/sync", dependencies=[Depends(write_access)])
+def smartsheet_sync(db: Session = Depends(get_db)):
+    """Pull now rather than waiting for the nightly run."""
+    s = get_settings()
+    return S.sync(db, token=s.smartsheet_api_token or None, folder=s.smartsheet_dir)
+
+
+@router.get("/reports/smartsheet/export", dependencies=[Depends(read_access)])
+def smartsheet_export(db: Session = Depends(get_db)):
+    """Excel: a summary tab, the coverage evidence, then one tab per builder."""
+    from app.smartsheet.export import to_xlsx
+
+    data = _build(db)
+    buf = to_xlsx(data)
+    name = f"Smartsheet vs CabinetTron {dt.date.today():%m%d%y}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )

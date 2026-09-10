@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.accounts import router as accounts_router
 from app.api.assistant import router as assistant_router
+from app.smartsheet.api import router as smartsheet_router
 from app.api.autobot import router as autobot_router
 from app.api.documents import router as documents_router
 from app.api.fieldmeasure import router as fieldmeasure_router
@@ -45,6 +46,27 @@ def _run_tracker_poll() -> None:
             logger.info("Tracker poll: %s", result)
     except Exception as exc:  # noqa: BLE001 — a poll failure must not kill the scheduler
         logger.warning("Tracker poll failed: %s", exc)
+
+
+def _run_smartsheet_sync() -> None:
+    """Nightly: refresh the Tract Builder Management sheets.
+
+    Read-only. With SMARTSHEET_API_TOKEN set this pulls the eleven sheets off
+    the API; without one it reads .xlsx exports from smartsheet_dir, so the
+    report still works and the switch is a config value.
+    """
+    from app.config import get_settings
+    from app.database import SessionLocal
+    from app.smartsheet.sync import sync
+
+    s = get_settings()
+    try:
+        with SessionLocal() as db:
+            result = sync(db, token=s.smartsheet_api_token or None,
+                          folder=s.smartsheet_dir)
+        logger.info("Smartsheet sync (%s): %s", result["source"], result["sheets"])
+    except Exception as exc:  # noqa: BLE001 — must not kill the scheduler
+        logger.warning("Smartsheet sync failed: %s", exc)
 
 
 def _run_slow_poll() -> None:
@@ -123,6 +145,15 @@ async def lifespan(app: FastAPI):
             ", ".join(f"{h:02d}:00" for h in settings.feed_sync_hour_list),
             settings.feed_sync_tz,
         )
+    # Smartsheet, once a night. Nothing downstream of it is time-critical --
+    # the sheets are typed in during the day -- so one run beats polling.
+    jobs.append(lambda s: s.add_job(
+        _run_smartsheet_sync, "cron", hour=settings.smartsheet_sync_hour, minute=15
+    ))
+    logger.info("Smartsheet sync scheduled at %02d:15 (%s)",
+                settings.smartsheet_sync_hour,
+                "API" if settings.smartsheet_api_token else "file exports")
+
     if settings.autobot_sync_minutes > 0:
         jobs.append(lambda s: s.add_job(
             _run_autobot_sync, "interval", minutes=settings.autobot_sync_minutes
@@ -224,6 +255,7 @@ app.include_router(fieldmeasure_router)
 app.include_router(service_router)
 app.include_router(autobot_router)
 app.include_router(assistant_router)
+app.include_router(smartsheet_router)
 
 # Sterling (COAST pricing) — self-contained app at /sterling, own Excel-backed store
 from app.sterling_app import mount as _mount_sterling  # noqa: E402

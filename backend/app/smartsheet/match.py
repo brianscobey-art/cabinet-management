@@ -110,9 +110,16 @@ def join(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
             tracker=(tr.get(k) or [None])[0],
             duplicates=rows[1:] + jobs_here[1:],
         ))
-    # Cabinet jobs we hold that Smartsheet has no row for at all.
+    # Cabinet jobs we hold that Smartsheet has no row for.
+    #
+    # Only within a subdivision Smartsheet already tracks. Without that guard
+    # this reports every retail counter sale, homeowner job and one-off custom
+    # builder as "missing from Smartsheet" -- 381 rows across 30 accounts that
+    # were never going to appear in a tract builder sheet. A lot missing from a
+    # subdivision Smartsheet DOES track is a real gap; the rest is not.
+    known_subdivisions = {k[0] for k in ss}
     for k, jobs_here in ct.items():
-        if k in ss:
+        if k in ss or k[0] not in known_subdivisions:
             continue
         out.append(Match(key=k, state=ONLY_CABINETTRON, job=jobs_here[0],
                          tracker=(tr.get(k) or [None])[0],

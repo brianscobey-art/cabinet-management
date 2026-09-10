@@ -166,6 +166,11 @@ REPORTS = [
     ReportInfo(key="po-receipts", name="PO Receipts (Deliveries)", category="Operations",
                description="Product deliveries received at the Dothan warehouse (from DOMO), matched to "
                            "each job by PO, plus POs ordered but not yet received."),
+    ReportInfo(key="smartsheet", name="Smartsheet vs CabinetTron", category="Operations",
+               description="Every tract house Smartsheet tracks, what scopes we supply on it, and "
+                           "where Smartsheet, the 3.0 tracker and CabinetTron disagree. Cabinet dates "
+                           "are predicted from the scopes that run ahead of them, so a house can be "
+                           "flagged overdue even where Smartsheet's own cabinet fields are blank."),
     ReportInfo(key="open-service", name="Open Service Requests", category="Operations",
                description="Every service request with work still open — job, date created, material status, and scheduled completion date."),
     ReportInfo(key="revenue-builder", name="Revenue by Builder & Community", category="Sales",

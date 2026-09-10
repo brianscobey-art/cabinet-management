@@ -25,6 +25,9 @@ from app.smartsheet.timeline import assess, learn_intervals, predict
 # check against the tracker, while construction stage only makes sense as
 # CabinetTron's phase against Smartsheet's job status. All three values are
 # still shown -- the verdict just says which pair it is judging.
+# Status for a house Smartsheet already calls finished.
+DONE = "complete"
+
 FIELD_WORKFLOW = "Workflow status"
 FIELD_STAGE = "Construction stage"
 FIELD_PLAN = "Plan"
@@ -136,6 +139,11 @@ def build(smartsheet_rows: list[dict], jobs: list, tracker_rows: list[dict],
         # it is simply out of scope for the prediction.
         status, days_off = (assess(house, pred, today) if house
                             else (M.ONLY_CABINETTRON, None))
+        # A house Smartsheet already calls Complete is done, whatever the
+        # prediction says. Without this the flagged list fills with finished
+        # 2025 houses -- 23 of the first 59 -- and the real ones drown.
+        if C.stage_of_smartsheet(ss.get("Job Status")) == C.DONE_STAGE:
+            status, days_off = DONE, None
         phase = phases.get(m.job.id) if m.job else None
         fields = _fields(m.job, m.tracker, ss, phase)
 

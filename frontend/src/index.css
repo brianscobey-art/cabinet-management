@@ -2052,3 +2052,64 @@ tfoot td {
 .step-card { background: #fff; border: 1px solid #d8e2df; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .step-card b { display: block; color: var(--green, #125952); margin-bottom: 2px; }
 button.small { padding: 2px 8px; font-size: 12px; }
+
+/* --- Smartsheet vs CabinetTron report ------------------------------------ */
+/* Coverage sits in a <details> because it is evidence you go looking for, not
+   something you need in your face on every visit. */
+.ss-coverage {
+  margin: 0 0 1rem;
+}
+.ss-coverage summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--brand-ink);
+  padding: 0.4rem 0;
+}
+.ss-bad { color: #c0392b; font-weight: 600; }
+.ss-warn { color: #b7791f; font-weight: 600; }
+.ss-ok { color: #2f6f5e; font-weight: 600; }
+
+.ss-flag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #fdeeee;
+  color: #c0392b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* The expanded row. Its own light ground so a long detail block reads as
+   belonging to the row above it rather than as more rows. */
+.ss-detail {
+  background: #f7faf9;
+  padding: 0.75rem 1rem 1rem;
+  white-space: normal;
+}
+.ss-detail > p { margin: 0 0 0.6rem; }
+
+.ss-fields {
+  width: 100%;
+  font-size: 0.85rem;
+  background: #fff;
+}
+.ss-fields th {
+  position: static;   /* nested table — sticky headers would float over the page */
+  font-size: 0.78rem;
+}
+.ss-fields td {
+  white-space: normal;
+  vertical-align: top;
+}
+.ss-fields em { font-style: normal; font-size: 0.78rem; }
+
+.ss-timeline {
+  margin: 0.7rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  font-size: 0.82rem;
+  color: var(--gray);
+}
+.ss-timeline b { color: var(--brand-ink); font-weight: 600; margin-right: 0.25rem; }
