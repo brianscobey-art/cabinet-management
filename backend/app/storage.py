@@ -49,7 +49,17 @@ def _client(s: Settings):
         aws_access_key_id=s.r2_access_key_id,
         aws_secret_access_key=s.r2_secret_access_key,
         region_name="auto",
-        config=Config(signature_version="s3v4"),
+        # botocore >= 1.36 sends every upload as aws-chunked with a trailing
+        # checksum. R2 accepts the first attempt, but a retry cannot rewind the
+        # chunked wrapper -- UnseekableStreamError -- and that killed 1,296 of
+        # 5,137 scheduled uploads on this PC (one run in four), every one of
+        # them uncaught, so anything later in FEED_SOURCES never got a turn.
+        # "when_required" is the documented setting for S3-compatible stores.
+        config=Config(
+            signature_version="s3v4",
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+        ),
     )
 
 
@@ -162,9 +172,15 @@ def upload_feeds(settings: Settings | None = None) -> dict:
                     continue  # already up there, unchanged
             except Exception:  # noqa: BLE001 - not present → upload
                 pass
-            client.upload_file(str(f), s.r2_bucket, key,
-                               ExtraArgs={"Metadata": {"src-mtime": src_mtime}})
-            pushed += 1
+            # One file failing must not take the rest of the run with it. The
+            # tracker is first in FEED_SOURCES and changes constantly; when its
+            # upload hiccuped, po-receipts (last) never ran at all.
+            try:
+                client.upload_file(str(f), s.r2_bucket, key,
+                                   ExtraArgs={"Metadata": {"src-mtime": src_mtime}})
+                pushed += 1
+            except Exception as exc:  # noqa: BLE001
+                print(f"  {key}: upload failed ({type(exc).__name__}: {str(exc)[:80]}) - next run retries")
         result[prefix] = pushed
 
     for attr, prefix, pattern, keep in FEED_SOURCES:
