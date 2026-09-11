@@ -84,7 +84,7 @@ def max_receipt_date(rows) -> str | None:
     return max(dates) if dates else None
 
 
-def run(login: bool, headed: bool) -> int:
+def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
     from playwright.sync_api import sync_playwright
 
     s = get_settings()
@@ -103,8 +103,8 @@ def run(login: bool, headed: bool) -> int:
 
             if login:
                 print("Sign in to DOMO in the browser window (SSO/MFA are yours to do).")
-                print(f"Waiting up to {LOGIN_WAIT_S // 60} minutes for the session...")
-                deadline = time.time() + LOGIN_WAIT_S
+                print(f"Waiting up to {wait_s // 60} minutes for the session...")
+                deadline = time.time() + wait_s
                 while time.time() < deadline:
                     rows, status = query(ctx, ds)
                     if status == 200:
@@ -134,9 +134,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--login", action="store_true", help="open a window and wait for Brian to sign in")
     ap.add_argument("--headed", action="store_true", help="run the pull with a visible window")
+    ap.add_argument("--wait", type=int, default=LOGIN_WAIT_S // 60,
+                    help="minutes to wait for sign-in with --login (default 10)")
     a = ap.parse_args()
     try:
-        sys.exit(run(a.login, a.headed))
+        sys.exit(run(a.login, a.headed, a.wait * 60))
     except Exception as exc:  # noqa: BLE001 — the status file is how failures get seen
         write_status("error", error=f"{type(exc).__name__}: {exc}"[:300])
         print(f"error: {exc}")
