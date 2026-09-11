@@ -46,6 +46,24 @@ PROFILE = BACKEND.parents[1] / "domo-profile"
 STATUS = BACKEND.parents[1] / "ai-health" / "domo_receipts.json"
 LOGIN_WAIT_S = 600
 
+# Drawn onto whatever page the login window is showing, and re-drawn after
+# every SSO redirect. The first hand-off failed because Brian signed in to his
+# everyday Chrome instead: this window is a separate profile, plain Chromium,
+# and nothing on screen said so.
+_BANNER_JS = """
+(() => {
+  document.getElementById('__ckb_banner')?.remove();
+  const d = document.createElement('div');
+  d.id = '__ckb_banner';
+  d.textContent = 'SIGN IN TO DOMO IN THIS WINDOW - CabinetTron receipt pull. '
+                + 'It closes by itself once the session works.';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;'
+    + 'background:#125952;color:#fff;font:bold 18px/1.4 sans-serif;'
+    + 'padding:14px 20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+  document.body?.appendChild(d);
+})();
+"""
+
 
 def write_status(state: str, **extra) -> None:
     STATUS.parent.mkdir(parents=True, exist_ok=True)
@@ -106,7 +124,18 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                 print(f"Waiting up to {wait_s // 60} minutes for the session...")
                 deadline = time.time() + wait_s
                 while time.time() < deadline:
-                    rows, status = query(ctx, ds)
+                    try:
+                        for pg in ctx.pages:
+                            pg.evaluate(_BANNER_JS)
+                        rows, status = query(ctx, ds)
+                    except Exception as exc:  # noqa: BLE001
+                        # The window was closed before the session verified.
+                        # Not an error in the code -- an abandoned sign-in.
+                        if "closed" in str(exc).lower():
+                            print("Window closed before sign-in completed.")
+                            write_status("signed-out", note="login window closed")
+                            return 2
+                        raise
                     if status == 200:
                         print(f"Signed in. Query works: {len(rows)} receipts. Profile saved.")
                         write_status("ok", rows=len(rows), note="login verified")
@@ -127,7 +156,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
             write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out))
             return 0
         finally:
-            ctx.close()
+            try:
+                ctx.close()
+            except Exception:  # noqa: BLE001 — already gone
+                pass
 
 
 def main() -> None:
