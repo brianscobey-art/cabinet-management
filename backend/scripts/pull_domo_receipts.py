@@ -124,9 +124,17 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                 print(f"Waiting up to {wait_s // 60} minutes for the session...")
                 deadline = time.time() + wait_s
                 while time.time() < deadline:
-                    try:
-                        for pg in ctx.pages:
+                    # The banner races SSO redirects: evaluate() on a page that
+                    # is mid-navigation throws "execution context destroyed",
+                    # and that happened at the exact moment the sign-in landed.
+                    # A missing banner for one 5-second tick is nothing; a
+                    # crashed login window is the whole hand-off lost.
+                    for pg in ctx.pages:
+                        try:
                             pg.evaluate(_BANNER_JS)
+                        except Exception:  # noqa: BLE001
+                            pass
+                    try:
                         rows, status = query(ctx, ds)
                     except Exception as exc:  # noqa: BLE001
                         # The window was closed before the session verified.
