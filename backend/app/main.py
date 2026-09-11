@@ -49,6 +49,43 @@ def _run_tracker_poll() -> None:
         logger.warning("Tracker poll failed: %s", exc)
 
 
+def _run_job_tracker_push() -> None:
+    """Nightly: push the live job list to the CabinetTron Job Tracker sheet.
+
+    Runs after the pull, not before -- the pull is what refreshes everything
+    this sends. The ONLY write CabinetTron makes to Smartsheet.
+    """
+    from pathlib import Path
+
+    from app.config import get_settings
+    from app.smartsheet.job_tracker import push, shape
+    from app.storage import TRACKER_GLOB
+
+    s = get_settings()
+    if not (s.smartsheet_push_enabled and s.smartsheet_api_token
+            and s.smartsheet_job_sheet_id):
+        return
+    try:
+        from scripts.import_tracker import load_rows
+
+        rows = []
+        folder = Path(s.tracker_dir)
+        for f in sorted(folder.glob(TRACKER_GLOB),
+                        key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
+            try:
+                rows = load_rows(f)
+                break
+            except (PermissionError, OSError):
+                continue        # routinely open in Excel; try the next copy
+        if not rows:
+            logger.warning("Job tracker push skipped: no readable tracker")
+            return
+        result = push(s.smartsheet_api_token, s.smartsheet_job_sheet_id, shape(rows))
+        logger.info("Job tracker push: %s", result)
+    except Exception as exc:  # noqa: BLE001 — never kill the scheduler
+        logger.warning("Job tracker push failed: %s", exc)
+
+
 def _run_smartsheet_first_fill() -> None:
     """Shortly after boot: pull the sheets IF we hold none yet.
 
@@ -172,6 +209,14 @@ async def lifespan(app: FastAPI):
     jobs.append(lambda s: s.add_job(
         _run_smartsheet_sync, "cron", hour=settings.smartsheet_sync_hour, minute=15
     ))
+    # 45 minutes after the pull, so the push sends freshly-synced data.
+    if settings.smartsheet_push_enabled and settings.smartsheet_job_sheet_id:
+        jobs.append(lambda s: s.add_job(
+            _run_job_tracker_push, "cron",
+            hour=settings.smartsheet_sync_hour, minute=45,
+        ))
+        logger.info("Job tracker push scheduled at %02d:45 -> sheet %s",
+                    settings.smartsheet_sync_hour, settings.smartsheet_job_sheet_id)
     jobs.append(lambda s: s.add_job(
         _run_smartsheet_first_fill, "date",
         run_date=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=45),

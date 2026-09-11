@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     # exports dropped in smartsheet_dir, so the report works either way.
     smartsheet_api_token: str = ""
     smartsheet_dir: str = r"C:\Users\Brian SE6\Downloads"
+    # The one Smartsheet CabinetTron WRITES to -- the job tracker it creates and
+    # owns, in the K&B workspace. Nothing else in the Smartsheet package writes
+    # anything; the eleven Tract Builder Management Masters are read-only and
+    # stay that way until Brian says otherwise (9/11/26: "not yet").
+    # Set the id to 0 to stop the push without touching code.
+    smartsheet_job_sheet_id: int = 3603600134590340
+    smartsheet_push_enabled: bool = True
+
     smartsheet_sync_hour: int = 2
 
     @property

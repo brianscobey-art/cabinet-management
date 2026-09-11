@@ -2179,3 +2179,14 @@ button.small { padding: 2px 8px; font-size: 12px; }
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+
+/* Confirmation after the one action on this page that changes something
+   outside the app. */
+.ss-pushed {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.85rem;
+  border-left: 4px solid var(--brand);
+  background: #eef5f4;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}

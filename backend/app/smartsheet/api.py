@@ -124,6 +124,29 @@ def smartsheet_sync(db: Session = Depends(get_db)):
     return S.sync(db, token=s.smartsheet_api_token or None, folder=s.smartsheet_folder)
 
 
+@router.post("/reports/smartsheet/push", dependencies=[Depends(write_access)])
+def smartsheet_push(db: Session = Depends(get_db)):
+    """Push the live job list to the CabinetTron Job Tracker sheet, now.
+
+    The only write CabinetTron makes to Smartsheet, and it targets one sheet it
+    created and owns. write_access rather than read_access on purpose: this
+    changes something outside the app.
+    """
+    from app.smartsheet.job_tracker import push, shape
+
+    s = get_settings()
+    if not s.smartsheet_api_token:
+        return {"error": "no Smartsheet token configured"}
+    if not (s.smartsheet_push_enabled and s.smartsheet_job_sheet_id):
+        return {"error": "push disabled"}
+    rows, ok, name = _tracker_rows()
+    if not ok or not rows:
+        return {"error": "tracker unreadable (open in Excel?)"}
+    records = shape(rows)
+    result = push(s.smartsheet_api_token, s.smartsheet_job_sheet_id, records)
+    return {"tracker": name, "jobs": len(records), **result}
+
+
 @router.get("/reports/smartsheet/export", dependencies=[Depends(read_access)])
 def smartsheet_export(db: Session = Depends(get_db)):
     """Excel: a summary tab, the coverage evidence, then one tab per builder."""

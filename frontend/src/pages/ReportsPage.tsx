@@ -31,6 +31,7 @@ import {
 import {
   exportSmartsheet,
   getSmartsheetReport,
+  pushJobTracker,
   syncSmartsheet,
   type SmartsheetReport,
   type SmartsheetRow,
@@ -1412,6 +1413,8 @@ function SmartsheetReportView() {
   const [data, setData] = useState<SmartsheetReport | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushed, setPushed] = useState("");
   const [builder, setBuilder] = useState("");
   const [status, setStatus] = useState("");
   const [match, setMatch] = useState("");
@@ -1433,6 +1436,24 @@ function SmartsheetReportView() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function pushTracker() {
+    setPushing(true);
+    setError("");
+    setPushed("");
+    try {
+      const r = (await pushJobTracker()) as Record<string, number | string>;
+      setPushed(
+        r.error
+          ? String(r.error)
+          : `Smartsheet updated: ${r.added} added, ${r.updated} updated (${r.jobs} live jobs)`
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPushing(false);
     }
   }
 
@@ -1465,6 +1486,13 @@ function SmartsheetReportView() {
         </button>
         <button onClick={() => exportSmartsheet().catch((e) => setError(e.message))}>
           Export to Excel
+        </button>
+        <button
+          onClick={pushTracker}
+          disabled={pushing}
+          title="Writes the live job list to the CabinetTron Job Tracker sheet in Smartsheet"
+        >
+          {pushing ? "Pushing..." : "Push job tracker → Smartsheet"}
         </button>
         <select value={builder} onChange={(e) => setBuilder(e.target.value)}>
           <option value="">All builders</option>
@@ -1520,6 +1548,8 @@ function SmartsheetReportView() {
           </span>
         ))}
       </p>
+
+      {pushed && <p className="ss-pushed">{pushed}</p>}
 
       {untickedCount > 0 && (
         <p className="ss-alert">

@@ -573,6 +573,11 @@ export const getSmartsheetReport = () => api<SmartsheetReport>("/reports/smartsh
 export const syncSmartsheet = () =>
   api<Record<string, unknown>>("/reports/smartsheet/sync", { method: "POST" });
 
+// The one call that WRITES to Smartsheet — it pushes the live job list to the
+// CabinetTron Job Tracker sheet and touches nothing else.
+export const pushJobTracker = () =>
+  api<Record<string, unknown>>("/reports/smartsheet/push", { method: "POST" });
+
 export async function exportSmartsheet(): Promise<void> {
   // Plain <a href> would carry no Authorization header and 401.
   const resp = await fetch("/api/reports/smartsheet/export", {
