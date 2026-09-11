@@ -1628,6 +1628,36 @@ td.fm-col input[type="checkbox"] {
   }
 }
 
+/* The phase report prints LANDSCAPE. Eight columns on a portrait page gave
+   the Lot and Job code columns about an inch each, and fixed layout plus
+   overflow-wrap:anywhere -- right for the screen -- split "0003" into
+   "000 / 3" and "DRDELA-0003" onto two lines. Same named-page mechanism as
+   the QC service report (@page qc-landscape). */
+@page phase-landscape {
+  size: landscape;
+  margin: 0.4in;
+}
+
+.phase-print {
+  page: phase-landscape;
+}
+
+@media print {
+  /* Lot and Job code are single tokens that mean nothing split. On a
+     landscape page they fit; if a code ever does not, clipping the tail is
+     better than a stacked one. Everything else keeps wrapping. */
+  .phase-table td:nth-child(1),
+  .phase-table th:nth-child(1),
+  .phase-table td:nth-child(2),
+  .phase-table th:nth-child(2) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .phase-table {
+    font-size: 9.5pt;
+  }
+}
+
 .fm-overdue {
   background: #fdeeee;
   -webkit-print-color-adjust: exact;

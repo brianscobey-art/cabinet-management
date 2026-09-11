@@ -1198,7 +1198,7 @@ function PhaseReport() {
   const selectedCount = visibleGroups.filter((g) => selected.has(g.key)).length;
 
   return (
-    <div>
+    <div className="phase-print">
       <div className="no-print">
         <div className="page-head" style={{ justifyContent: "flex-end" }}>
           <button onClick={() => window.print()} disabled={selectedCount === 0}>
