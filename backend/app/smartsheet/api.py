@@ -132,7 +132,7 @@ def smartsheet_push(db: Session = Depends(get_db)):
     created and owns. write_access rather than read_access on purpose: this
     changes something outside the app.
     """
-    from app.smartsheet.job_tracker import push, shape
+    from app.smartsheet.job_tracker import apply_formats, push, shape
 
     s = get_settings()
     if not s.smartsheet_api_token:
@@ -144,6 +144,13 @@ def smartsheet_push(db: Session = Depends(get_db)):
         return {"error": "tracker unreadable (open in Excel?)"}
     records = shape(rows)
     result = push(s.smartsheet_api_token, s.smartsheet_job_sheet_id, records)
+    # Formatting lives on the column and survives a push, so this is a no-op
+    # almost every time -- it is here so a rebuilt or hand-edited sheet comes
+    # back to the agreed layout without anyone remembering to ask.
+    try:
+        apply_formats(s.smartsheet_api_token, s.smartsheet_job_sheet_id)
+    except Exception as exc:  # noqa: BLE001 — the rows are already in
+        result["format_warning"] = str(exc)
     return {"tracker": name, "jobs": len(records), **result}
 
 

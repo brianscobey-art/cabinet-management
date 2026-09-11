@@ -52,13 +52,74 @@ COLUMNS: list[tuple[str, str | None, str]] = [
     ("Actual Install", "Actual Install Date", "DATE"),
     ("Install Week", "Install Week", "TEXT_NUMBER"),
     ("Installer", "Installer", "TEXT_NUMBER"),
-    ("Install Payment", "Labor Total", "TEXT_NUMBER"),
+    ("Install Payment", "Labor Total", "MONEY"),
     # Not from the tracker -- stamped by the push so nobody has to guess how
     # old the sheet is. A Smartsheet row carries no "when did this arrive".
     ("Updated", None, "DATE"),
 ]
 
 PRIMARY = "Job Code"
+
+# Written as a NUMBER, not text, so Smartsheet can format it as money and so
+# the column can be summed. Everything else on the sheet is text or a date.
+MONEY_COLUMNS = {"Install Payment"}
+
+# Brian's list, 9/11/26. The long free-text columns (Builder, Address, City,
+# Super, House Plan, Installer) stay left-aligned, where a ragged right edge
+# reads better than a ragged both-edges.
+CENTERED = {
+    "Job Code", "BUID", "Ashley's Code", "G-Code", "I-Code", "Lot #", "State",
+    "CONST LVL", "Requested Install", "Actual Install", "Install Week",
+    "Install Payment", "Updated",
+}
+
+# Smartsheet's format descriptor is 16 comma-delimited positions. The indexes
+# below were confirmed against the live API, not taken from memory -- currency
+# index 1 turns out to be ARGENTINE PESOS ("AR$ 682.00"). USD is 13.
+_F_HALIGN, _F_CURRENCY, _F_DECIMALS, _F_THOUSANDS, _F_NUMFMT = 6, 11, 12, 13, 14
+_ALIGN_CENTER, _USD, _NUMFMT_CURRENCY = "2", "13", "2"
+# Install pay is whole dollars -- 327 values in the tracker, none with cents --
+# so two decimal places would be two characters of noise on every row.
+_DECIMALS = "0"
+
+# There is deliberately no date format here. Smartsheet has no date position in
+# the descriptor: a DATE cell renders in each VIEWER's regional preference, so
+# m/d/yy is a per-user setting rather than something the sheet can impose.
+# Brian's account is en_US, which already renders m/d/yy.
+
+
+def _column_format(title: str) -> str | None:
+    fields = [""] * 16
+    if title in CENTERED:
+        fields[_F_HALIGN] = _ALIGN_CENTER
+    if title in MONEY_COLUMNS:
+        fields[_F_CURRENCY] = _USD
+        fields[_F_DECIMALS] = _DECIMALS
+        fields[_F_THOUSANDS] = "1"
+        fields[_F_NUMFMT] = _NUMFMT_CURRENCY
+    return ",".join(fields) if any(fields) else None
+
+
+def apply_formats(token: str, sheet_id: int) -> dict:
+    """Centre the columns Brian asked for and make Install Payment money.
+
+    Idempotent, and safe to re-run: formatting lives on the column, so it
+    survives every push and only needs re-applying if the sheet is rebuilt.
+    """
+    with _client(token) as c:
+        r = c.get(f"/sheets/{sheet_id}", params={"exclude": "nonexistentCells"})
+        r.raise_for_status()
+        cols = {col["title"].strip(): col["id"] for col in r.json().get("columns", [])}
+        done = []
+        for title, _src, _kind in COLUMNS:
+            fmt = _column_format(title)
+            cid = cols.get(title)
+            if fmt is None or cid is None:
+                continue
+            resp = c.put(f"/sheets/{sheet_id}/columns/{cid}", json={"format": fmt})
+            resp.raise_for_status()
+            done.append(title)
+    return {"formatted": done}
 
 # CONST LVL values that take a job off the sheet: finished or cancelled.
 DROPPED_CONST_LVLS = {"6.0-Clsd", "8.0-Void"}
@@ -90,6 +151,11 @@ def _clean(raw, kind: str):
     # Excel hands integers back as floats: a lot is 1189, not 1189.0.
     if text.endswith(".0") and text[:-2].replace("-", "").isdigit():
         text = text[:-2]
+    if kind == "MONEY":
+        try:
+            return float(text.replace("$", "").replace(",", ""))
+        except ValueError:
+            return None
     return text
 
 
@@ -124,13 +190,17 @@ def _client(token: str) -> httpx.Client:
     )
 
 
+def _api_type(kind: str) -> str:
+    """Our kinds map onto Smartsheet's two: MONEY is a number, so TEXT_NUMBER."""
+    return "DATE" if kind == "DATE" else "TEXT_NUMBER"
+
+
 def create_sheet(token: str, name: str, workspace_id: int) -> dict:
     """Create the sheet. Called once; after that the id is configuration."""
     body = {
         "name": name,
         "columns": [
-            {"title": t, "type": k, "primary": t == PRIMARY}
-            if t == PRIMARY else {"title": t, "type": k}
+            {"title": t, "type": _api_type(k), **({"primary": True} if t == PRIMARY else {})}
             for t, _, k in COLUMNS
         ],
     }
