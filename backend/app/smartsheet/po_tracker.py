@@ -54,6 +54,13 @@ COLUMNS: list[tuple[str, str]] = [
     ("Order Date", "DATE"),
     ("Ship Date", "DATE"),
     ("Tent Due Date", "DATE"),
+    # What Brian typed when the truck came.
+    ("Actual Receipt Date", "DATE"),
+    # What DOMO says. "Received?" is yes only when the PO Receipt List carries
+    # this PO's order number -- never inferred from the typed date, because the
+    # point of the column is to show what the store's system knows.
+    ("Received?", "TEXT_NUMBER"),
+    ("Receipt #", "TEXT_NUMBER"),
     ("Receipt Date", "DATE"),
     ("Cycle Days", "TEXT_NUMBER"),
     ("Supplier", "TEXT_NUMBER"),
@@ -76,7 +83,8 @@ PRIMARY = "Item"
 MONEY_COLUMNS = {"Cost", "Landed Cost"}
 CENTERED = {
     "Job Code", "Line", "Our PO #", "Factory Order #", "Sales Order #", "Cost",
-    "Order Date", "Ship Date", "Tent Due Date", "Receipt Date", "Cycle Days",
+    "Order Date", "Ship Date", "Tent Due Date", "Actual Receipt Date",
+    "Received?", "Receipt #", "Receipt Date", "Cycle Days",
     "Landed Cost", "Duplicate?", "BUID", "CONST LVL", "Install Date",
     "Install Week", "I-Code", "G-Code", "Ashley's Code", "Updated",
 }
@@ -224,11 +232,15 @@ def resolve(lines: list[dict], data_rows: list[dict], receipts: dict[str, dict],
             kind = "DATE" if title == "Install Date" else "TEXT"
             rec[title] = _clean(job.get(col), kind)
         rcpt = receipts.get(str(rec["Our PO #"]))
-        rec["Receipt Date"] = ((rcpt or {}).get("receipt_date")
-                               or rec.get("Actual Receipt Date"))
+        rec["Received?"] = "yes" if rcpt else "no"
+        rec["Receipt #"] = (rcpt or {}).get("receipt_number")
+        rec["Receipt Date"] = (rcpt or {}).get("receipt_date")
         rec["Supplier"] = (rcpt or {}).get("supplier")
         rec["Landed Cost"] = (rcpt or {}).get("landed_cost")
-        od, rd = rec.get("Order Date"), rec.get("Receipt Date")
+        # Cycle time prefers the store's receipt; the typed date stands in only
+        # when DOMO has nothing, and that is the workbook's own rule.
+        od = rec.get("Order Date")
+        rd = rec.get("Receipt Date") or rec.get("Actual Receipt Date")
         rec["Cycle Days"] = (
             (dt.date.fromisoformat(rd) - dt.date.fromisoformat(od)).days
             if od and rd else None)
@@ -328,13 +340,21 @@ KEY_COLUMN = "Row Key"
 
 
 def _ensure_key_column(c: httpx.Client, sheet_id: int, cols: dict) -> dict:
-    if KEY_COLUMN in cols:
+    """Add whatever the sheet is missing: the Row Key, and any column added to
+    COLUMNS since the sheet was created. New columns go where they sit in
+    COLUMNS, so a field added mid-list lands beside its neighbours rather than
+    at the far right; Row Key stays last."""
+    want = [(t, _api_type(k)) for t, k in COLUMNS] + [(KEY_COLUMN, "TEXT_NUMBER")]
+    missing = [(i, t, k) for i, (t, k) in enumerate(want) if t not in cols]
+    if not missing:
         return cols
-    r = c.post(f"/sheets/{sheet_id}/columns",
-               json=[{"title": KEY_COLUMN, "type": "TEXT_NUMBER", "index": len(cols)}])
-    r.raise_for_status()
-    for col in r.json()["result"] if isinstance(r.json()["result"], list) else [r.json()["result"]]:
-        cols[col["title"]] = col["id"]
+    for i, t, k in missing:
+        r = c.post(f"/sheets/{sheet_id}/columns",
+                   json=[{"title": t, "type": k, "index": min(i, len(cols))}])
+        r.raise_for_status()
+        res = r.json()["result"]
+        for col in (res if isinstance(res, list) else [res]):
+            cols[col["title"]] = col["id"]
     return cols
 
 

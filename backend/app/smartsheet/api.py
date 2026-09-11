@@ -183,9 +183,19 @@ def _po_records(db: Session, tracker_rows: list[dict]) -> list[dict]:
     f = _tracker_file()
     if f is None:
         return []
+    # Pull DOMO first (or the newest PO Receipt List export when there is no
+    # token), so "Received?" reflects the store's latest, not last night's.
+    try:
+        from app.po_receipts import refresh_receipts
+
+        refresh_receipts(db, with_potracker=False)
+        db.commit()
+    except Exception:  # noqa: BLE001 — stale receipts beat no sheet
+        db.rollback()
     receipts: dict[str, dict] = {}
     for rc in db.query(PoReceipt).filter(PoReceipt.order_number.isnot(None)):
         receipts.setdefault(str(rc.order_number).strip().split(".")[0], {
+            "receipt_number": rc.receipt_number,
             "receipt_date": rc.receipt_date.isoformat() if rc.receipt_date else None,
             "supplier": rc.supplier,
             "landed_cost": float(rc.landed_cost) if rc.landed_cost is not None else None,
