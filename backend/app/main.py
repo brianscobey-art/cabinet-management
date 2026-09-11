@@ -58,7 +58,7 @@ def _run_job_tracker_push() -> None:
     from pathlib import Path
 
     from app.config import get_settings
-    from app.smartsheet.job_tracker import push, shape
+    from app.smartsheet.job_tracker import apply_formats, push, shape
     from app.storage import TRACKER_GLOB
 
     s = get_settings()
@@ -81,6 +81,9 @@ def _run_job_tracker_push() -> None:
             logger.warning("Job tracker push skipped: no readable tracker")
             return
         result = push(s.smartsheet_api_token, s.smartsheet_job_sheet_id, shape(rows))
+        # No-op almost always; it is here so a rebuilt or hand-edited sheet
+        # returns to the agreed layout without anyone having to ask.
+        apply_formats(s.smartsheet_api_token, s.smartsheet_job_sheet_id)
         logger.info("Job tracker push: %s", result)
     except Exception as exc:  # noqa: BLE001 — never kill the scheduler
         logger.warning("Job tracker push failed: %s", exc)
