@@ -71,18 +71,44 @@ def write_status(state: str, **extra) -> None:
     STATUS.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def query(context, dataset_id: str):
-    """The same SQL po_receipts uses, through the profile's cookies.
-    Returns (rows, http_status)."""
+# The bookmarklet's fetch, verbatim: from INSIDE the page, same origin,
+# credentials included. Used when the out-of-page request is refused, which
+# tells cookies-present-but-headers-wrong apart from genuinely signed out.
+_FETCH_JS = """async ({ds, sql}) => {
+  const r = await fetch('/api/query/v1/execute/' + ds, {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+    body: JSON.stringify({sql}),
+  });
+  if (!r.ok) return {status: r.status};
+  const j = await r.json();
+  return {status: 200, rows: j.rows || []};
+}"""
+
+
+def query(context, dataset_id: str, page=None):
+    """The same SQL po_receipts uses, through the profile's session.
+    Returns (rows, http_status, route). Tries Playwright's request context
+    first; if that is refused and a page on the DOMO origin is available,
+    retries from inside the page the way the bookmarklet does."""
     r = context.request.post(
         f"{DOMO}/api/query/v1/execute/{dataset_id}",
         data=json.dumps({"sql": _RECEIPT_SQL}),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         timeout=120_000,
     )
-    if r.status != 200:
-        return None, r.status
-    return r.json().get("rows", []), 200
+    if r.status == 200:
+        return r.json().get("rows", []), 200, "request"
+    first = r.status
+    if page is not None and page.url.startswith(DOMO):
+        try:
+            res = page.evaluate(_FETCH_JS, {"ds": dataset_id, "sql": _RECEIPT_SQL})
+            if res.get("status") == 200:
+                return res.get("rows", []), 200, "page-fetch"
+            return None, res.get("status", first), f"page-fetch (request gave {first})"
+        except Exception:  # noqa: BLE001 — mid-navigation; report the first answer
+            pass
+    return None, first, "request"
 
 
 def save_csv(rows, folder: Path) -> Path:
@@ -123,6 +149,7 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                 print("Sign in to DOMO in the browser window (SSO/MFA are yours to do).")
                 print(f"Waiting up to {wait_s // 60} minutes for the session...")
                 deadline = time.time() + wait_s
+                last_status = None
                 while time.time() < deadline:
                     # The banner races SSO redirects: evaluate() on a page that
                     # is mid-navigation throws "execution context destroyed",
@@ -135,7 +162,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                         except Exception:  # noqa: BLE001
                             pass
                     try:
-                        rows, status = query(ctx, ds)
+                        rows, status, route = query(ctx, ds, page)
+                        if status != 200 and status != last_status:
+                            print(f"  DOMO says {status} via {route} at {page.url[:60]}")
+                            last_status = status
                     except Exception as exc:  # noqa: BLE001
                         # The window was closed before the session verified.
                         # Not an error in the code -- an abandoned sign-in.
@@ -145,23 +175,23 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                             return 2
                         raise
                     if status == 200:
-                        print(f"Signed in. Query works: {len(rows)} receipts. Profile saved.")
-                        write_status("ok", rows=len(rows), note="login verified")
+                        print(f"Signed in. Query works via {route}: {len(rows)} receipts. Profile saved.")
+                        write_status("ok", rows=len(rows), note=f"login verified via {route}")
                         return 0
                     time.sleep(5)
                 print("Timed out waiting for sign-in.")
                 write_status("signed-out", note="login timed out")
                 return 2
 
-            rows, status = query(ctx, ds)
+            rows, status, route = query(ctx, ds, page)
             if status != 200:
-                print(f"DOMO returned {status}: not signed in. Run with --login.")
-                write_status("signed-out", http=status)
+                print(f"DOMO returned {status} via {route} at {page.url[:80]}: not signed in. Run with --login.")
+                write_status("signed-out", http=status, route=route, url=page.url[:120])
                 return 2
             out = save_csv(rows, folder)
             as_of = max_receipt_date(rows)
-            print(f"{len(rows)} receipts -> {out.name}  (latest receipt {as_of})")
-            write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out))
+            print(f"{len(rows)} receipts via {route} -> {out.name}  (latest receipt {as_of})")
+            write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out), route=route)
             return 0
         finally:
             try:
