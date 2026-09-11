@@ -154,6 +154,70 @@ def smartsheet_push(db: Session = Depends(get_db)):
     return {"tracker": name, "jobs": len(records), **result}
 
 
+def _tracker_file():
+    """The newest tracker workbook that can be opened. POTracker lives in the
+    same workbook as DATA, on a different sheet."""
+    from app.storage import TRACKER_GLOB
+
+    folder = Path(get_settings().tracker_dir)
+    if not folder.is_dir():
+        return None
+    for f in sorted(folder.glob(TRACKER_GLOB), key=lambda p: p.stat().st_mtime,
+                    reverse=True)[:5]:
+        try:
+            with open(f, "rb"):
+                return f
+        except (PermissionError, OSError):
+            continue
+    return None
+
+
+def _po_records(db: Session, tracker_rows: list[dict]) -> list[dict]:
+    """POTracker lines resolved against DATA and CabinetTron's receipts, shaped
+    as job parents with PO children. Receipts come from po_receipts (the DOMO
+    pipeline) rather than the block pasted beside the workbook's table, so the
+    sheet moves when the receipts do."""
+    from app.models import PoReceipt
+    from app.smartsheet import po_tracker as P
+
+    f = _tracker_file()
+    if f is None:
+        return []
+    receipts: dict[str, dict] = {}
+    for rc in db.query(PoReceipt).filter(PoReceipt.order_number.isnot(None)):
+        receipts.setdefault(str(rc.order_number).strip().split(".")[0], {
+            "receipt_date": rc.receipt_date.isoformat() if rc.receipt_date else None,
+            "supplier": rc.supplier,
+            "landed_cost": float(rc.landed_cost) if rc.landed_cost is not None else None,
+        })
+    return P.shape(P.resolve(P.read_potracker(f), tracker_rows, receipts))
+
+
+@router.post("/reports/smartsheet/push-pos", dependencies=[Depends(write_access)])
+def smartsheet_push_pos(db: Session = Depends(get_db)):
+    """Push POTracker to the CabinetTron PO Tracker sheet, now. The second of
+    the two sheets CabinetTron writes; still never the Masters."""
+    from app.smartsheet import po_tracker as P
+
+    s = get_settings()
+    if not s.smartsheet_api_token:
+        return {"error": "no Smartsheet token configured"}
+    if not (s.smartsheet_push_enabled and s.smartsheet_po_sheet_id):
+        return {"error": "push disabled"}
+    rows, ok, name = _tracker_rows()
+    if not ok or not rows:
+        return {"error": "tracker unreadable (open in Excel?)"}
+    records = _po_records(db, rows)
+    if not records:
+        return {"error": "POTracker unreadable"}
+    result = P.push(s.smartsheet_api_token, s.smartsheet_po_sheet_id, records)
+    try:
+        P.apply_formats(s.smartsheet_api_token, s.smartsheet_po_sheet_id)
+    except Exception as exc:  # noqa: BLE001
+        result["format_warning"] = str(exc)
+    return {"tracker": name, **result}
+
+
 @router.get("/reports/smartsheet/export", dependencies=[Depends(read_access)])
 def smartsheet_export(db: Session = Depends(get_db)):
     """Excel: a summary tab, the coverage evidence, then one tab per builder."""

@@ -32,6 +32,7 @@ import {
   exportSmartsheet,
   getSmartsheetReport,
   pushJobTracker,
+  pushPoTracker,
   syncSmartsheet,
   type SmartsheetReport,
   type SmartsheetRow,
@@ -1439,6 +1440,24 @@ function SmartsheetReportView() {
     }
   }
 
+  async function pushPos() {
+    setPushing(true);
+    setError("");
+    setPushed("");
+    try {
+      const r = (await pushPoTracker()) as Record<string, number | string>;
+      setPushed(
+        r.error
+          ? String(r.error)
+          : `PO tracker updated: ${r.added} added, ${r.updated} updated (${r.jobs} jobs, ${r.po_lines} PO lines)`
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPushing(false);
+    }
+  }
+
   async function pushTracker() {
     setPushing(true);
     setError("");
@@ -1493,6 +1512,13 @@ function SmartsheetReportView() {
           title="Writes the live job list to the CabinetTron Job Tracker sheet in Smartsheet"
         >
           {pushing ? "Pushing..." : "Push job tracker → Smartsheet"}
+        </button>
+        <button
+          onClick={pushPos}
+          disabled={pushing}
+          title="Writes POTracker to the CabinetTron PO Tracker sheet in Smartsheet"
+        >
+{pushing ? "Pushing..." : "Push PO tracker → Smartsheet"}
         </button>
         <select value={builder} onChange={(e) => setBuilder(e.target.value)}>
           <option value="">All builders</option>

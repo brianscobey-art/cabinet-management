@@ -578,6 +578,9 @@ export const syncSmartsheet = () =>
 export const pushJobTracker = () =>
   api<Record<string, unknown>>("/reports/smartsheet/push", { method: "POST" });
 
+export const pushPoTracker = () =>
+  api<Record<string, unknown>>("/reports/smartsheet/push-pos", { method: "POST" });
+
 export async function exportSmartsheet(): Promise<void> {
   // Plain <a href> would carry no Authorization header and 401.
   const resp = await fetch("/api/reports/smartsheet/export", {

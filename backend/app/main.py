@@ -89,6 +89,32 @@ def _run_job_tracker_push() -> None:
         logger.warning("Job tracker push failed: %s", exc)
 
 
+def _run_po_tracker_push() -> None:
+    """Nightly: POTracker -> the CabinetTron PO Tracker sheet. After the job
+    tracker push; the same tracker read feeds both."""
+    from app.config import get_settings
+    from app.database import SessionLocal
+    from app.smartsheet import po_tracker as P
+    from app.smartsheet.api import _po_records, _tracker_rows
+
+    s = get_settings()
+    if not (s.smartsheet_push_enabled and s.smartsheet_api_token
+            and s.smartsheet_po_sheet_id):
+        return
+    try:
+        rows, ok, _ = _tracker_rows()
+        if not ok or not rows:
+            logger.warning("PO tracker push skipped: no readable tracker")
+            return
+        with SessionLocal() as db:
+            records = _po_records(db, rows)
+        result = P.push(s.smartsheet_api_token, s.smartsheet_po_sheet_id, records)
+        P.apply_formats(s.smartsheet_api_token, s.smartsheet_po_sheet_id)
+        logger.info("PO tracker push: %s", result)
+    except Exception as exc:  # noqa: BLE001 — never kill the scheduler
+        logger.warning("PO tracker push failed: %s", exc)
+
+
 def _run_smartsheet_first_fill() -> None:
     """Shortly after boot: pull the sheets IF we hold none yet.
 
@@ -220,6 +246,13 @@ async def lifespan(app: FastAPI):
         ))
         logger.info("Job tracker push scheduled at %02d:45 -> sheet %s",
                     settings.smartsheet_sync_hour, settings.smartsheet_job_sheet_id)
+    if settings.smartsheet_push_enabled and settings.smartsheet_po_sheet_id:
+        jobs.append(lambda s: s.add_job(
+            _run_po_tracker_push, "cron",
+            hour=settings.smartsheet_sync_hour + 1, minute=0,
+        ))
+        logger.info("PO tracker push scheduled at %02d:00 -> sheet %s",
+                    settings.smartsheet_sync_hour + 1, settings.smartsheet_po_sheet_id)
     jobs.append(lambda s: s.add_job(
         _run_smartsheet_first_fill, "date",
         run_date=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=45),

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Set the id to 0 to stop the push without touching code.
     smartsheet_job_sheet_id: int = 3603600134590340
     smartsheet_push_enabled: bool = True
+    # The PO tracker sheet -- one parent row per job, its POTracker lines
+    # beneath. Same rules: CabinetTron owns it, never the Masters. 0 disables.
+    smartsheet_po_sheet_id: int = 2088438751776644
 
     smartsheet_sync_hour: int = 2
 
