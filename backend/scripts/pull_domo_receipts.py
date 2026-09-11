@@ -44,6 +44,13 @@ DOMO = "https://carterlumber.domo.com"
 # Durable, outside the repo and outside Downloads (which gets swept).
 PROFILE = BACKEND.parents[1] / "domo-profile"
 STATUS = BACKEND.parents[1] / "ai-health" / "domo_receipts.json"
+# The signed-in session, captured the moment --login verifies and re-injected
+# on every run. Needed because DOMO's auth cookie is a SESSION cookie, and
+# Chromium drops session cookies on each fresh launch -- a persistent profile
+# only keeps them when the browser is restored, which a scheduled headless
+# start never is. Two verified sign-ins were lost this way before this file
+# existed.
+STATE = PROFILE / "state.json"
 LOGIN_WAIT_S = 600
 
 # Drawn onto whatever page the login window is showing, and re-drawn after
@@ -142,6 +149,11 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
             viewport={"width": 1280, "height": 900},
         )
         try:
+            if STATE.exists():
+                try:
+                    ctx.add_cookies(json.loads(STATE.read_text(encoding="utf-8")).get("cookies", []))
+                except Exception as exc:  # noqa: BLE001 — a bad file is a re-login, not a crash
+                    print(f"saved session unreadable ({exc}); continuing without it")
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.goto(DOMO, wait_until="domcontentloaded", timeout=60_000)
 
@@ -175,7 +187,9 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                             return 2
                         raise
                     if status == 200:
-                        print(f"Signed in. Query works via {route}: {len(rows)} receipts. Profile saved.")
+                        ctx.storage_state(path=str(STATE))
+                        print(f"Signed in. Query works via {route}: {len(rows)} receipts. "
+                              f"Session saved to {STATE.name}.")
                         write_status("ok", rows=len(rows), note=f"login verified via {route}")
                         return 0
                     time.sleep(5)
@@ -188,6 +202,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
                 print(f"DOMO returned {status} via {route} at {page.url[:80]}: not signed in. Run with --login.")
                 write_status("signed-out", http=status, route=route, url=page.url[:120])
                 return 2
+            try:
+                ctx.storage_state(path=str(STATE))   # keep any rolled cookies
+            except Exception:  # noqa: BLE001
+                pass
             out = save_csv(rows, folder)
             as_of = max_receipt_date(rows)
             print(f"{len(rows)} receipts via {route} -> {out.name}  (latest receipt {as_of})")
