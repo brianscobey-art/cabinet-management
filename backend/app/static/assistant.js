@@ -64,6 +64,11 @@
     "th{background:#eef3f2;font-weight:600}",
     "code{background:#eef3f2;padding:1px 4px;border-radius:3px;font-size:12px}",
     "@media (max-width:520px){.panel{right:8px;left:8px;width:auto;bottom:76px;height:calc(100vh - 96px)}}",
+    // The widget lives in a shadow root, so the page's own print rules
+    // (.no-print) never reach it -- and it printed on every page of the
+    // phase report, bottom-right of each sheet. Hidden here, at the only
+    // layer that can see it.
+    "@media print{.launch,.panel{display:none!important}}",
   ].join("");
 
   var host = document.createElement("div");
