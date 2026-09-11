@@ -203,6 +203,28 @@ def _po_records(db: Session, tracker_rows: list[dict]) -> list[dict]:
     return P.shape(P.resolve(P.read_potracker(f), tracker_rows, receipts))
 
 
+def _stamp_po_summary(db: Session, result: dict) -> None:
+    """After a PO push: when the newest receipt is from, and when this ran.
+    m/d/yy, Brian's format. Non-fatal -- the rows are already in."""
+    from app.models import PoReceipt
+    from app.smartsheet import po_tracker as P
+
+    s = get_settings()
+    try:
+        newest = db.query(func.max(PoReceipt.receipt_date)).scalar()
+        as_of = f"{newest.month}/{newest.day}/{newest:%y}" if newest else "none loaded"
+        now = dt.datetime.now()
+        P.set_summary(s.smartsheet_api_token, s.smartsheet_po_sheet_id, {
+            "Receipts as of": as_of,
+            # %I zero-pads the hour and lstrip only reaches the month, so this
+            # is built by hand: 4:58 PM, not 04:58 PM.
+            "Last push": f"{now.month}/{now.day}/{now:%y} {now.hour % 12 or 12}:{now:%M %p}",
+        })
+        result["receipts_as_of"] = as_of
+    except Exception as exc:  # noqa: BLE001
+        result["summary_warning"] = str(exc)
+
+
 @router.post("/reports/smartsheet/push-pos", dependencies=[Depends(write_access)])
 def smartsheet_push_pos(db: Session = Depends(get_db)):
     """Push POTracker to the CabinetTron PO Tracker sheet, now. The second of
@@ -225,6 +247,7 @@ def smartsheet_push_pos(db: Session = Depends(get_db)):
         P.apply_formats(s.smartsheet_api_token, s.smartsheet_po_sheet_id)
     except Exception as exc:  # noqa: BLE001
         result["format_warning"] = str(exc)
+    _stamp_po_summary(db, result)
     return {"tracker": name, **result}
 
 

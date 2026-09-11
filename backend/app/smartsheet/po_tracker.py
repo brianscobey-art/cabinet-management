@@ -333,6 +333,28 @@ def apply_formats(token: str, sheet_id: int) -> dict:
     return {"formatted": done}
 
 
+def set_summary(token: str, sheet_id: int, fields: dict[str, str]) -> dict:
+    """Write name -> value into the sheet's Summary panel, creating fields as
+    needed. Used for "Receipts as of": the Received? column is only as good as
+    the newest receipt pull, and a reader has no other way to know how old that
+    is. Text fields on purpose -- values arrive already formatted m/d/yy."""
+    with _client(token) as c:
+        r = c.get(f"/sheets/{sheet_id}/summary/fields")
+        r.raise_for_status()
+        have = {f["title"]: f["id"] for f in r.json().get("data", [])}
+        missing = [t for t in fields if t not in have]
+        if missing:
+            r = c.post(f"/sheets/{sheet_id}/summary/fields",
+                       json=[{"title": t, "type": "TEXT_NUMBER"} for t in missing])
+            r.raise_for_status()
+            for f in r.json()["result"]:
+                have[f["title"]] = f["id"]
+        r = c.put(f"/sheets/{sheet_id}/summary/fields",
+                  json=[{"id": have[t], "objectValue": v} for t, v in fields.items()])
+        r.raise_for_status()
+    return {"summary": list(fields)}
+
+
 # Where a row's identity is kept on the sheet. Hidden from the reader by being
 # the last column; without it the parent/child rows could only be matched by
 # re-deriving keys from cell text, which breaks the moment someone edits one.

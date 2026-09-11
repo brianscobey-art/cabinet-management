@@ -106,10 +106,13 @@ def _run_po_tracker_push() -> None:
         if not ok or not rows:
             logger.warning("PO tracker push skipped: no readable tracker")
             return
+        from app.smartsheet.api import _stamp_po_summary
+
         with SessionLocal() as db:
             records = _po_records(db, rows)
-        result = P.push(s.smartsheet_api_token, s.smartsheet_po_sheet_id, records)
-        P.apply_formats(s.smartsheet_api_token, s.smartsheet_po_sheet_id)
+            result = P.push(s.smartsheet_api_token, s.smartsheet_po_sheet_id, records)
+            P.apply_formats(s.smartsheet_api_token, s.smartsheet_po_sheet_id)
+            _stamp_po_summary(db, result)
         logger.info("PO tracker push: %s", result)
     except Exception as exc:  # noqa: BLE001 — never kill the scheduler
         logger.warning("PO tracker push failed: %s", exc)
