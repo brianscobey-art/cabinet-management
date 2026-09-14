@@ -1384,7 +1384,8 @@ function contractHtml(j, hwFinish = "") {
   return `<!DOCTYPE html><html><head><title>${esc(docName)}</title><style>
     /* WYSIWYG: page is exactly Letter content width on screen and in print (narrow 0.25in margins) */
     @page { size: letter; margin: 0.25in; }
-    body { font-family: "Segoe UI", system-ui, sans-serif; color: #111; font-size: 13px;
+    html { background: #fff; color-scheme: light; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; color: #111; background: #fff; font-size: 13px;
       width: 8in; margin: 14px auto 40px; }
     @media print { body { margin: 0 auto; } }
     .band { background: #125952; color: #fff; font-weight: 700; text-align: center; padding: 4px 8px; }
@@ -1404,6 +1405,12 @@ function contractHtml(j, hwFinish = "") {
     .ctr { text-align: center; }
     .tot { font-weight: 800; }
     .validity { font-size: 11.5px; text-align: center; }
+    .disc { font-size: 11.5px; line-height: 1.35; }
+    .disc td { vertical-align: top; }
+    .cb { display: inline-block; width: 14px; height: 14px; border: 1.5px solid #111; border-radius: 2px;
+      text-align: center; line-height: 12px; font-size: 12px; font-weight: 800; margin: 1px 6px 0 0; }
+    body.plan-priced .cb::after { content: "¹3"; }
+    body.plan-priced .disc .lead { background: #fff3c4; }
     .sig { margin-top: 18px; display: flex; gap: 60px; }
     .sig > div { flex: 1; }
     .sigline { border-bottom: 1.5px solid #111; height: 26px; }
@@ -1424,6 +1431,10 @@ function contractHtml(j, hwFinish = "") {
     </select>
     <button id="printBtn">Print</button>
     <span style="font-size:12px; opacity:.8">Pick the schedule, then Print</span>
+    <label style="margin-left:auto; display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer"
+      title="Check when this quote was priced off the builder's plans and the house has not been field measured yet">
+      <input type="checkbox" id="planPriced"> Priced from plan dimensions (not field measured)
+    </label>
   </div>
   <div class="sheet">
     <table class="noborder"><tr>
@@ -1487,6 +1498,17 @@ function contractHtml(j, hwFinish = "") {
       <tr><td style="min-height:36px; height:40px; vertical-align:top">${esc(j.notes ?? "")}</td></tr>
       <tr><td style="text-align:center; font-weight:700">Note: Shoe molding supplied. Labor to install shoe molding not included.</td></tr>
     </table>
+    <table class="disc" style="margin-top:8px">
+      <tr><td class="band">Plan-Based Pricing</td></tr>
+      <tr><td><span class="cb"></span><strong class="lead">Priced from plan dimensions.</strong>
+        When this box is checked, the pricing in this agreement is based on the dimensions shown on the builder's
+        plans; the house has not yet been field measured. Carter Kitchen and Bath will field measure the house
+        once it is framed. If the field measurements differ from the plans, the customer may choose either to
+        <strong>(a)</strong> adjust the framing to match the plan dimensions this pricing is based on, with no change
+        to the contract amount, or <strong>(b)</strong> have Carter Kitchen and Bath revise the cabinet layout to fit
+        the house as built, in which case the final contract amount may increase or decrease to reflect the change.
+        Any revision will be presented in writing for approval before cabinets are ordered.</td></tr>
+    </table>
     <table class="noborder" style="margin-top:10px"><tr>
       <td style="width:34%; vertical-align:top">
         <table><tr><td class="band">*Price Validity</td></tr>
@@ -1542,6 +1564,9 @@ function contractHtml(j, hwFinish = "") {
       document.getElementById("schedBody").innerHTML = rows;
     }
     document.getElementById("schedSel").onchange = function(e) { renderSched(e.target.value); };
+    document.getElementById("planPriced").onchange = function(e) {
+      document.body.classList.toggle("plan-priced", e.target.checked);
+    };
     document.getElementById("printBtn").onclick = function() {
       if (!document.getElementById("schedSel").value) {
         alert("Select a payment schedule before printing.");
