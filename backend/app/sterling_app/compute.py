@@ -338,6 +338,8 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
     install_rate = matrix_rate(db, "install_rate")
     knob_mat = matrix_rate(db, "knob_material")
     knob_labor = matrix_rate(db, "knob_labor")
+    handle_mat = matrix_rate(db, "handle_material")
+    handle_labor = matrix_rate(db, "handle_labor")
     default_margin = matrix_rate(db, "national_margin")
 
     items_q = db.query(PlanTemplateItem)
@@ -401,6 +403,15 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             if cogs_no_hw else Decimal("0.00")
         )
         hardware_sale = money(sale - sale_no_hw)
+        # The two hardware families as options on top of cabinets-only, each
+        # priced at the plan's margin: 3910 = knobs (the default in the row
+        # above), 156 = pulls. Material is taxed, labor is not.
+        def hw_option(mat: Decimal, labor: Decimal) -> Decimal:
+            hw_cogs = money(p["hw_qty"] * mat) + money(money(p["hw_qty"] * mat) * tax_pct) + money(p["hw_qty"] * labor)
+            with_hw = money(sell_from_margin(cogs_no_hw + hw_cogs, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            return money(with_hw - sale_no_hw) if cogs_no_hw else Decimal("0.00")
+        hardware_sale_knob = hw_option(knob_mat, knob_labor)
+        hardware_sale_handle = hw_option(handle_mat, handle_labor)
         # A typed-in sale replaces the calculated one. Hardware keeps its
         # calculated price; the cabinets absorb the difference. The margin
         # shown is what that price actually earns.
@@ -423,6 +434,7 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             "sale_override": sale_override,
             "cogs_no_hardware": cogs_no_hw, "sale_no_hardware": sale_no_hw,
             "hardware_cogs": money(cogs - cogs_no_hw), "hardware_sale": hardware_sale,
+            "hardware_sale_knob": hardware_sale_knob, "hardware_sale_handle": hardware_sale_handle,
             # Tops are at charge rates already — added AFTER margin (Brian's rule)
             "tops": tops, "total": money(sale + tops),
         })
