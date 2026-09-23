@@ -130,6 +130,8 @@
   }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--red); }
+  /* a price Brian typed in — never a calculated one */
+  .manual, input.manual { color: var(--red) !important; font-weight: 700; }
   .empty { padding: 34px; text-align: center; color: var(--muted); }
   .inline-edit { width: 90px; }
   @media (max-width: 760px) {
@@ -1760,12 +1762,14 @@ async function renderNational() {
               <td class="num">${money(r.assembly)}</td>
               <td class="num">${money(r.install)}</td>
               <td class="num">${money(r.cogs)}</td>
-              <td class="num"><input type="number" min="0" max="99" step="1" class="inline-edit nat-margin"
-                style="width:64px" value="${r.margin_override !== null ? Math.round(Number(r.margin_override)) : ""}"
-                placeholder="${Math.round(Number(data.default_margin))}"></td>
-              <td class="num"><strong>${money(r.sale)}</strong></td>
+              <td class="num"><input type="number" min="0" max="99" step="1" class="inline-edit nat-margin${r.sale_override !== null ? " manual" : ""}"
+                style="width:64px" value="${r.sale_override !== null ? Math.round(Number(r.margin_pct)) : r.margin_override !== null ? Math.round(Number(r.margin_override)) : ""}"
+                placeholder="${Math.round(Number(data.default_margin))}" ${r.sale_override !== null ? `disabled title="What the entered sale price earns. Clear the sale to price by margin again."` : ""}></td>
+              <td class="num"><input type="number" min="0" step="1" class="inline-edit nat-sale${r.sale_override !== null ? " manual" : ""}"
+                style="width:92px; font-weight:700" value="${Math.round(Number(r.sale))}"
+                title="${r.sale_override !== null ? "Manually entered sale price — clear the box to go back to the calculated price" : "Calculated from COGS and margin. Type a price to override it (shows in red)."}"></td>
               <td class="num"><button class="ghost small nat-tops" title="Laminate tops calculator (Top Pricing Sheet)">${Number(r.tops) ? money(r.tops) : "Tops…"}</button></td>
-              <td class="num"><strong>${money(r.total)}</strong></td>
+              <td class="num"><strong${r.sale_override !== null ? ` class="manual" title="Includes a manually entered sale price"` : ""}>${money(r.total)}</strong></td>
             </tr>`).join("")}`).join("")
           : `<tr><td colspan="14" class="empty">No plan templates loaded — run the DRH workbook import on the Catalog page.</td></tr>`}
         </tbody>
@@ -1777,6 +1781,16 @@ async function renderNational() {
     await api("/settings", {method:"PUT", body: {national_margin: Number(e.target.value)}});
     renderNational();
   });
+  $$(".nat-sale").forEach(inp => inp.addEventListener("change", async e => {
+    const tr = e.target.closest("tr");
+    const row = data.rows.find(r => r.division === tr.dataset.div && r.plan === tr.dataset.plan);
+    const v = e.target.value.trim();
+    // typing the calculated price back is the same as clearing the override
+    const sale = v === "" || (row && Math.round(Number(v)) === Math.round(Number(row.sale)) && row.sale_override === null)
+      ? null : Number(v);
+    await api("/national-pricing/sale", {method:"PUT", body: {division: tr.dataset.div, plan: tr.dataset.plan, sale}});
+    renderNational();
+  }));
   $$(".nat-margin").forEach(inp => inp.addEventListener("change", async e => {
     const tr = e.target.closest("tr");
     await api("/national-pricing/margin", {method:"PUT", body: {
@@ -1882,7 +1896,9 @@ async function natPlanDialog(division, plan, doorStyle) {
     ${cell("List", t.list_total)}${cell("Cabinets", t.cabinets)}${cell("Freight", t.freight)}
     ${cell(`Hdw (${t.hardware_qty} pc)`, t.hardware_material)}${cell("Tax", t.tax)}
     ${cell(`Assembly (${t.assembly_boxes} bx)`, t.assembly)}${cell(`Install (${t.install_units} bx)`, t.install)}
-    ${cell("COGS", t.cogs)}<div class="spacer"></div>${cell(`Sale @ ${pct(t.margin_pct)}`, t.sale, true)}
+    ${cell("COGS", t.cogs)}<div class="spacer"></div>${t.sale_override !== null && t.sale_override !== undefined
+      ? `<div class="t"><div class="label">Sale · entered manually</div><div class="value manual" style="font-size:20px">${money(t.sale)}</div></div>`
+      : cell(`Sale @ ${pct(t.margin_pct)}`, t.sale, true)}
     ${Number(t.tops) ? cell("Tops", t.tops) + cell("Total", t.total) : ""}</div>`;
   const step = (label, math, v, bold) => `<tr${bold ? ' class="sub"' : ""}><td>${label}</td>
     <td class="muted" style="font-size:12px">${math}</td><td class="num">${money(v)}</td></tr>`;
@@ -1896,8 +1912,10 @@ async function natPlanDialog(division, plan, doorStyle) {
     step("Assembly", `${t.assembly_boxes} boxes × ${money(r.assem_rate)}${d.units_source === "plan" ? " · boxes from the plan's install record" : " · boxes from each SKU"}`, t.assembly),
     step("Install", `${t.install_units} boxes × ${money(r.install_rate)} = ${money(t.install_cabinet)}, plus knob labor ${t.hardware_qty} × ${money(r.knob_labor)} = ${money(t.hardware_labor)}`, t.install),
     step("COGS", "cabinets + freight + hardware + tax + assembly + install", t.cogs, true),
-    step(`Sale @ ${pct(t.margin_pct)}${t.margin_override !== null && t.margin_override !== undefined ? " (this plan's margin)" : " (default margin)"}`,
-         `${money(t.cogs)} ÷ (1 − ${pct(t.margin_pct)}), rounded to whole dollars`, t.sale, true),
+    ...(t.sale_override !== null && t.sale_override !== undefined
+      ? [step(`<span class="manual">Sale — entered manually</span>`, `typed in on the National tab, not calculated; earns ${pct(t.margin_pct)} over COGS`, t.sale, true)]
+      : [step(`Sale @ ${pct(t.margin_pct)}${t.margin_override !== null && t.margin_override !== undefined ? " (this plan's margin)" : " (default margin)"}`,
+         `${money(t.cogs)} ÷ (1 − ${pct(t.margin_pct)}), rounded to whole dollars`, t.sale, true)]),
     ...(Number(t.tops) ? [
       step("Countertops", `Top Pricing form, added AFTER margin — kitchen ${money(t.tops_kitchen)}, vanity ${money(t.tops_vanity)}`, t.tops),
       step("Total", "sale + countertops", t.total, true)] : []),
@@ -2195,10 +2213,10 @@ function printNationalSummary(rows, filt, defaultMargin) {
   const line = r => `<tr><td><strong>${esc(r.plan)}</strong></td>
     ${cols.slice(0, 8).map(k => `<td class="num">${money(r[k])}</td>`).join("")}
     <td class="num">${pct(r.margin_pct)}</td>
-    ${hwSep ? `<td class="num">${money(r.sale_no_hardware)}</td><td class="num">${money(r.hardware_sale)}</td>` : ""}
-    <td class="num tot">${money(r.sale)}</td>
+    ${hwSep ? `<td class="num${r.sale_override !== null ? " manual" : ""}">${money(r.sale_no_hardware)}</td><td class="num">${money(r.hardware_sale)}</td>` : ""}
+    <td class="num tot${r.sale_override !== null ? " manual" : ""}" ${r.sale_override !== null ? `title="Manually entered"` : ""}>${money(r.sale)}</td>
     <td class="num">${Number(r.tops) ? money(r.tops) : "—"}</td>
-    <td class="num tot">${money(r.total)}</td></tr>`;
+    <td class="num tot${r.sale_override !== null ? " manual" : ""}">${money(r.total)}</td></tr>`;
   const totals = (rs, label) => `<tr class="sum"><td>${label}</td>
     ${cols.slice(0, 8).map(k => `<td class="num">${money(sum(rs, k))}</td>`).join("")}
     <td class="num">${sum(rs, "sale") ? pct((sum(rs, "sale") - sum(rs, "cogs")) / sum(rs, "sale") * 100) : "—"}</td>
@@ -2222,6 +2240,7 @@ function printNationalSummary(rows, filt, defaultMargin) {
     .num { text-align: center; font-variant-numeric: tabular-nums; }
     .tot { font-weight: 700; color: #125952; }
     .sum td { font-weight: 700; color: #125952; border-top: 2px solid #dde5e3; background: #f7faf9; }
+    .manual { color: #c0392b !important; }
     .foot { margin-top: 18px; color:#64807a; font-size: 10px; }
   </style></head><body>
     <div class="eyes">EYES ONLY-Internal Use</div>
@@ -2238,7 +2257,7 @@ function printNationalSummary(rows, filt, defaultMargin) {
         <tbody>${groups.get(div).map(line).join("")}${groups.size > 1 ? totals(groups.get(div), esc(div) + " total") : ""}</tbody>
       </table>`).join("")}
     <table style="margin-top:10px"><tbody>${totals(rows, "All checked plans")}</tbody></table>
-    <div class="foot">COGS = cabinets (list × multiplier) + freight + hardware + tax + assembly + install. Sale = COGS ÷ (1 − margin), whole dollars. Tops are added after margin.</div>
+    <div class="foot">COGS = cabinets (list × multiplier) + freight + hardware + tax + assembly + install. Sale = COGS ÷ (1 − margin), whole dollars. Tops are added after margin.${rows.some(r => r.sale_override !== null) ? ` <span class="manual">Red sale prices were entered manually, not calculated; their margin column is what that price earns.</span>` : ""}</div>
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }

@@ -81,6 +81,8 @@ class PlanInstall(Base):
     install_units: Mapped[int] = mapped_column(default=0)
     # National-pricing margin override for this plan; blank = the default (15%).
     margin_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), default=None)
+    # A sale price Brian typed in instead of the calculated one; blank = calculated.
+    sale_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
 
 
 class PlanTops(Base):

@@ -400,6 +400,15 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             money(sell_from_margin(cogs_no_hw, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
             if cogs_no_hw else Decimal("0.00")
         )
+        hardware_sale = money(sale - sale_no_hw)
+        # A typed-in sale replaces the calculated one. Hardware keeps its
+        # calculated price; the cabinets absorb the difference. The margin
+        # shown is what that price actually earns.
+        sale_override = money(rec.sale_override) if rec and rec.sale_override is not None else None
+        if sale_override is not None:
+            sale = sale_override
+            sale_no_hw = money(sale - hardware_sale)
+            margin = money((sale - cogs) / sale * 100) if sale else Decimal("0.00")
         tp = tops_by_plan.get((div, plan))
         tops = tp["total"] if tp else Decimal("0.00")
         rows.append({
@@ -411,8 +420,9 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             "tax": tax, "assembly": assembly, "install": install,
             "cogs": cogs, "margin_pct": margin, "margin_override": override,
             "sale": sale,
+            "sale_override": sale_override,
             "cogs_no_hardware": cogs_no_hw, "sale_no_hardware": sale_no_hw,
-            "hardware_cogs": money(cogs - cogs_no_hw), "hardware_sale": money(sale - sale_no_hw),
+            "hardware_cogs": money(cogs - cogs_no_hw), "hardware_sale": hardware_sale,
             # Tops are at charge rates already — added AFTER margin (Brian's rule)
             "tops": tops, "total": money(sale + tops),
         })
@@ -502,6 +512,10 @@ def national_plan_detail(db: Session, division: str, plan: str,
         money(sell_from_margin(cogs, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         if cogs else Decimal("0.00")
     )
+    sale_override = money(rec.sale_override) if rec and rec.sale_override is not None else None
+    if sale_override is not None:
+        sale = sale_override
+        margin = money((sale - cogs) / sale * 100) if sale else Decimal("0.00")
     tops_rec = db.query(PlanTops).filter(
         PlanTops.division == division, PlanTops.plan == plan).first()
     tp = tops_total(db, tops_rec) if tops_rec else None
@@ -518,6 +532,7 @@ def national_plan_detail(db: Session, division: str, plan: str,
             "install_units": units, "install_cabinet": install_cabinet,
             "hardware_labor": hw_labor, "install": install,
             "cogs": cogs, "margin_pct": margin, "margin_override": override, "sale": sale,
+            "sale_override": sale_override,
             "tops": tops,
             "tops_kitchen": tp["kitchen"] if tp else Decimal("0.00"),
             "tops_vanity": tp["vanity"] if tp else Decimal("0.00"),

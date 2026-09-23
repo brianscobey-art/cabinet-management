@@ -803,6 +803,12 @@ class NationalMarginUpdate(BaseModel):
     margin_pct: Decimal | None = Field(default=None, ge=0, lt=100)
 
 
+class NationalSaleUpdate(BaseModel):
+    division: str
+    plan: str
+    sale: Decimal | None = Field(default=None, ge=0)   # None = back to the calculated price
+
+
 @router.get("/national-pricing/plan")
 def national_plan(division: str, plan: str, door_style: str | None = None,
                   db: Session = Depends(get_db)):
@@ -844,6 +850,22 @@ def set_national_margin(payload: NationalMarginUpdate, db: Session = Depends(get
         rec = PlanInstall(division=payload.division, plan=payload.plan)
         db.add(rec)
     rec.margin_pct = payload.margin_pct
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/national-pricing/sale")
+def set_national_sale(payload: NationalSaleUpdate, db: Session = Depends(get_db)):
+    """A sale price typed in for one plan; blank puts the calculated price back."""
+    rec = (
+        db.query(PlanInstall)
+        .filter(PlanInstall.division == payload.division, PlanInstall.plan == payload.plan)
+        .first()
+    )
+    if rec is None:
+        rec = PlanInstall(division=payload.division, plan=payload.plan)
+        db.add(rec)
+    rec.sale_override = payload.sale
     db.commit()
     return {"ok": True}
 

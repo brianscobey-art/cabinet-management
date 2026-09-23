@@ -75,7 +75,7 @@ SHEETS = [
         ("Cabinet Install", "cabinet_install"), ("Knob Install", "knob_install"),
         ("Handle Install", "handle_install"),
         ("Assembly Units", "assembly_units"), ("Install Units", "install_units"),
-        ("Margin %", "margin_pct"),
+        ("Margin %", "margin_pct"), ("Sale Override", "sale_override"),
     ]),
     ("PlanTemplates", "PlanTemplates", PlanTemplateItem, [
         ("ID", "id"), ("Division", "division"), ("Plan", "plan"), ("SKU", "sku"),
@@ -322,7 +322,7 @@ def _parse(attr, v):
         "hardware_rate", "assembly_rate", "pia_amount",
         "rate_sqft", "width", "depth", "cogs", "sale", "tops", "total",
         "tax_pct", "sale_cabinets", "sale_countertops", "sale_other",
-        "amount1", "amount2", "total_override",
+        "amount1", "amount2", "total_override", "sale_override",
     ):
         return Decimal(str(v))
     if attr in (
