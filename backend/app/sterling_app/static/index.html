@@ -1691,7 +1691,7 @@ function quoteHtml(j, mode = "detailed") {
 }
 
 // ---------- National builder pricing (live Pricing Sheet) ----------
-let natFilter = { division: "", door_style: "" };
+let natFilter = { division: "", door_style: "", hardware: "included" };
 async function renderNational() {
   const params = new URLSearchParams();
   if (natFilter.division) params.set("division", natFilter.division);
@@ -1720,6 +1720,11 @@ async function renderNational() {
       <label class="f">Sent snapshots
         <select id="natSnap"><option value="">— Live pricing —</option></select></label>
       <div class="spacer"></div>
+      <label class="f" title="How the printed sheets show knob/pull hardware: folded into each plan's cabinet price, or pulled out as its own line. The total is the same either way.">Hardware
+        <select id="natHw">
+          <option value="included" ${natFilter.hardware === "separate" ? "" : "selected"}>Included in cabinet price</option>
+          <option value="separate" ${natFilter.hardware === "separate" ? "selected" : ""}>Shown separately</option>
+        </select></label>
       <span id="natPickBar" style="display:none; align-items:center; gap:8px">
         <span class="muted" style="font-size:12px"><b id="natPickN">0</b> checked</span>
         <button class="gray" id="natPickCost" title="Internal — list, COGS, margin and sale for the checked plans">Cost / Sell Summary</button>
@@ -1727,7 +1732,7 @@ async function renderNational() {
       </span>
       <button class="gray" id="natAdd" title="Price a new floorplan for a division on the Everluxe pricing sheet; saving it puts it on this list">+ Add Layout</button>
       <button class="gray" id="natSnapshot" title="Freeze a copy of this pricing as-sent — never affected by later price changes">Snapshot Sent</button>
-      <button class="gray" id="natPrint">Print Price Sheet</button>
+      <button class="gray" id="natPrint" title="Customer price sheet — the checked plans, or every plan shown when none are checked">Print Price Sheet</button>
       <button class="orange" id="natSave">Save To Plan Bids</button>
     </div>
     <div class="card" style="padding:0; overflow-x:auto">
@@ -1785,7 +1790,12 @@ async function renderNational() {
     const res = await api("/national-pricing/save-bids?" + params, {method:"POST"});
     toast(`${res.saved} plan bids saved`);
   };
-  $("#natPrint").onclick = () => printPriceSheet(data, natFilter);
+  $("#natHw").onchange = e => { natFilter.hardware = e.target.value; };
+  // Print = the checked plans; nothing checked = everything on screen
+  $("#natPrint").onclick = () => {
+    const rows = picked();
+    printPriceSheet({...data, rows: rows.length ? rows : data.rows}, natFilter);
+  };
   // tick plans -> a report of just those, internal or for the customer
   const picked = () => $$(".nat-pick:checked").map(cb => {
     const tr = cb.closest("tr");
@@ -2101,6 +2111,7 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
 
 // Printable per-division price sheet (plan + sale only — customer-safe)
 function printPriceSheet(data, filt) {
+  const hwSep = filt.hardware === "separate";
   const today = new Date();
   const dstr = `${today.getMonth()+1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
   const groups = new Map();
@@ -2134,25 +2145,33 @@ function printPriceSheet(data, filt) {
       <div class="wordmark">CARTER<small>KITCHEN &amp; BATH</small></div>
       <div class="doc-title">
         <b>${esc(filt.division || "All Divisions")} — Cabinet Pricing</b>
-        <div class="meta">Effective ${dstr} · Door style: ${esc(filt.door_style || "Base (Group 1)")}</div>
+        <div class="meta">Effective ${dstr} · Door style: ${esc(filt.door_style || "Base (Group 1)")} · Hardware ${hwSep ? "priced separately" : "included"}</div>
       </div>
     </div>
     ${[...groups.keys()].map(div => {
       const rows = groups.get(div);
       const hasTops = rows.some(r => Number(r.tops) > 0);
+      // hardware pulled out: cabinets without it, the hardware line, then the cabinet+hardware price
+      const hwCols = hwSep ? `<th>Cabinets (no hardware)</th><th>Hardware</th><th>Cabinets + Hardware</th>` : `<th>Cabinets Only</th>`;
+      const hwCells = r => hwSep
+        ? `<td class="num">${money(r.sale_no_hardware)}</td>
+           <td class="num" title="${r.hardware_qty} pieces">${money(r.hardware_sale)}</td>
+           <td class="num${hasTops ? "" : " tot"}">${money(r.sale)}</td>`
+        : `<td class="num${hasTops ? "" : " tot"}">${money(r.sale)}</td>`;
       return `
       <h2>${esc(div)}</h2>
       <table>
         <thead><tr><th>Floorplan</th>${hasTops
-          ? `<th>Cabinets Only</th><th>Kitchen Laminate Tops</th><th>Vanity Laminate Tops</th><th>Total With Laminate Tops</th>`
-          : `<th>Price</th>`}</tr></thead>
+          ? `${hwCols}<th>Kitchen Laminate Tops</th><th>Vanity Laminate Tops</th><th>Total With Laminate Tops</th>`
+          : hwSep ? hwCols : `<th>Price</th>`}</tr></thead>
         <tbody>${rows.map(r => `<tr><td><strong>${esc(r.plan)}</strong></td>${hasTops
-          ? `<td class="num">${money(r.sale)}</td>
+          ? `${hwCells(r)}
              <td class="num">${Number(r.tops_kitchen) ? money(r.tops_kitchen) : "—"}</td>
              <td class="num">${Number(r.tops_vanity) ? money(r.tops_vanity) : "—"}</td>
              <td class="num tot">${money(r.total)}</td>`
-          : `<td class="num tot">${money(r.total ?? r.sale)}</td>`}</tr>`).join("")}</tbody>
+          : hwCells(r)}</tr>`).join("")}</tbody>
       </table>`; }).join("")}
+    ${hwSep ? `<div class="foot" style="margin-top:10px; border:none; padding:0">Hardware = knobs/pulls for every door and drawer on the plan, priced separately. Cabinets + Hardware is the price with hardware supplied and installed.</div>` : ""}
     <div class="foot">Pricing valid (14) calendar days from the effective date; subject to change with tariff, freight, or material cost changes thereafter.
       Prepared by ${esc(currentKsr() || "Carter Kitchen & Bath")} · Carter Lumber — Kitchen &amp; Bath Division · 868 Murray Rd, Dothan, AL 36303</div>
   <script>window.print();<\/script></body></html>`);
@@ -2163,6 +2182,7 @@ function printPriceSheet(data, filt) {
 // the National table, grouped by division, with totals. EYES ONLY.
 function printNationalSummary(rows, filt, defaultMargin) {
   if (!rows.length) return toast("Check some plans first", true);
+  const hwSep = filt.hardware === "separate";
   const today = new Date();
   const dstr = `${today.getMonth()+1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
   const groups = new Map();
@@ -2175,12 +2195,14 @@ function printNationalSummary(rows, filt, defaultMargin) {
   const line = r => `<tr><td><strong>${esc(r.plan)}</strong></td>
     ${cols.slice(0, 8).map(k => `<td class="num">${money(r[k])}</td>`).join("")}
     <td class="num">${pct(r.margin_pct)}</td>
+    ${hwSep ? `<td class="num">${money(r.sale_no_hardware)}</td><td class="num">${money(r.hardware_sale)}</td>` : ""}
     <td class="num tot">${money(r.sale)}</td>
     <td class="num">${Number(r.tops) ? money(r.tops) : "—"}</td>
     <td class="num tot">${money(r.total)}</td></tr>`;
   const totals = (rs, label) => `<tr class="sum"><td>${label}</td>
     ${cols.slice(0, 8).map(k => `<td class="num">${money(sum(rs, k))}</td>`).join("")}
     <td class="num">${sum(rs, "sale") ? pct((sum(rs, "sale") - sum(rs, "cogs")) / sum(rs, "sale") * 100) : "—"}</td>
+    ${hwSep ? `<td class="num">${money(sum(rs, "sale_no_hardware"))}</td><td class="num">${money(sum(rs, "hardware_sale"))}</td>` : ""}
     <td class="num">${money(sum(rs, "sale"))}</td>
     <td class="num">${Number(sum(rs, "tops")) ? money(sum(rs, "tops")) : "—"}</td>
     <td class="num">${money(sum(rs, "total"))}</td></tr>`;
@@ -2206,13 +2228,13 @@ function printNationalSummary(rows, filt, defaultMargin) {
     <div class="head">
       <div class="co">Carter Kitchen &amp; Bath<small>NATIONAL PRICING — COST / SELL SUMMARY</small></div>
       <div class="meta">${esc(filt.division || "All divisions")} · Door style: ${esc(filt.door_style || "Base (Group 1)")}<br>
-        ${rows.length} plan${rows.length === 1 ? "" : "s"} · default margin ${Math.round(Number(defaultMargin))}% · ${dstr}</div>
+        ${rows.length} plan${rows.length === 1 ? "" : "s"} · default margin ${Math.round(Number(defaultMargin))}% · hardware ${hwSep ? "shown separately" : "in the cabinet price"} · ${dstr}</div>
     </div>
     ${[...groups.keys()].map(div => `
       <h2>${esc(div)}</h2>
       <table>
         <thead><tr><th>Floorplan</th><th>List</th><th>Cabinets</th><th>Freight</th><th>Hdw</th><th>Tax</th>
-          <th>Assembly</th><th>Install</th><th>COGS</th><th>Margin</th><th>Sale</th><th>Tops</th><th>Total</th></tr></thead>
+          <th>Assembly</th><th>Install</th><th>COGS</th><th>Margin</th>${hwSep ? `<th>Cab Sale</th><th>Hdw Sale</th>` : ""}<th>Sale</th><th>Tops</th><th>Total</th></tr></thead>
         <tbody>${groups.get(div).map(line).join("")}${groups.size > 1 ? totals(groups.get(div), esc(div) + " total") : ""}</tbody>
       </table>`).join("")}
     <table style="margin-top:10px"><tbody>${totals(rows, "All checked plans")}</tbody></table>

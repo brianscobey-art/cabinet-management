@@ -390,6 +390,16 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             money(sell_from_margin(cogs, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
             if cogs else Decimal("0.00")
         )
+        # The same plan with the hardware pulled out: no knob material, no tax
+        # on it, no knob labor. Priced at the same margin, so the cabinets-only
+        # sale plus the hardware sale always equals the all-in sale — a price
+        # sheet can show hardware separately without the total moving.
+        cogs_no_hw = money(cabinets + freight + money(cabinets * tax_pct) + assembly
+                           + money(Decimal(units) * install_rate))
+        sale_no_hw = (
+            money(sell_from_margin(cogs_no_hw, margin).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if cogs_no_hw else Decimal("0.00")
+        )
         tp = tops_by_plan.get((div, plan))
         tops = tp["total"] if tp else Decimal("0.00")
         rows.append({
@@ -401,6 +411,8 @@ def national_pricing_rows(db: Session, division: str | None, door_style: str | N
             "tax": tax, "assembly": assembly, "install": install,
             "cogs": cogs, "margin_pct": margin, "margin_override": override,
             "sale": sale,
+            "cogs_no_hardware": cogs_no_hw, "sale_no_hardware": sale_no_hw,
+            "hardware_cogs": money(cogs - cogs_no_hw), "hardware_sale": money(sale - sale_no_hw),
             # Tops are at charge rates already — added AFTER margin (Brian's rule)
             "tops": tops, "total": money(sale + tops),
         })
