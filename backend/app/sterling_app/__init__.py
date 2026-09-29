@@ -109,7 +109,31 @@ DATA_FIXES = [
                                         "vendor": "Everything Building Products",
                                         "vendor_code": "70408"})],
     }),
+    # Brian's updated Floorplan SKU list (9/29/26): every plan in the file has its
+    # SKU lines replaced wholesale; plans not in the file (layouts added later
+    # through + Add Layout) are left alone.
+    ("data_fix_2026_09_29_plan_templates", {
+        "plan_templates_replace": "fixes/plan_templates_2026_09_29.psv",
+    }),
 ]
+
+
+def _load_plan_file(rel: str) -> dict[tuple[str, str], list[dict]]:
+    """Read a pipe-separated Floorplan SKU file -> {(division, plan): [lines]}."""
+    from pathlib import Path
+
+    plans: dict[tuple[str, str], list[dict]] = {}
+    text = (Path(__file__).resolve().parent / rel).read_text(encoding="utf-8")
+    for n, raw in enumerate(text.splitlines()):
+        if n == 0 or not raw.strip():
+            continue
+        division, plan, qty, sku, area, doors, drawers = [c.strip() for c in raw.split("|")]
+        area = "All" if area.upper() == "ALL" else area
+        plans.setdefault((division, plan), []).append({
+            "sku": sku.upper(), "qty": int(qty), "area": area or "All",
+            "doors": int(doors or 0), "drawers": int(drawers or 0),
+        })
+    return plans
 
 
 def _apply_data_fixes(db) -> None:
@@ -146,6 +170,13 @@ def _apply_data_fixes(db) -> None:
                 else:
                     db.add(PlanTemplateItem(division=division, plan=plan, sku=sku,
                                             qty=qty, area="All"))
+        if fix.get("plan_templates_replace"):
+            for (division, plan), lines in _load_plan_file(fix["plan_templates_replace"]).items():
+                (db.query(PlanTemplateItem)
+                   .filter(PlanTemplateItem.division == division, PlanTemplateItem.plan == plan)
+                   .delete(synchronize_session=False))
+                for ln in lines:
+                    db.add(PlanTemplateItem(division=division, plan=plan, **ln))
         for po_type, fields in fix.get("cover_vendors", []):
             for v in db.query(CoverVendor).filter(CoverVendor.po_type == po_type).all():
                 for field, value in fields.items():
