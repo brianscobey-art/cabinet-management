@@ -39,3 +39,16 @@ export function fmtLot(value: string | number | null | undefined): string {
   const m = /^(\d+)(?:\.0+)?$/.exec(text);
   return m ? String(Number(m[1])) : text;
 }
+
+// The phase report shows a lot the way the job code spells it: four digits,
+// zero-padded, so lot 66 on DRLARI-0066 reads 0066 and the Lot and Job code
+// columns agree at a glance. Lots are stored however they were keyed (66,
+// 113, 2, 01), so this is display only. Lettered lots (H011, A034) and
+// anything longer than four digits are left exactly as stored.
+export function fmtLot4(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const text = String(value).trim();
+  if (text === "") return "—";
+  const m = /^(\d{1,4})(?:\.0+)?$/.exec(text);
+  return m ? m[1].padStart(4, "0") : text;
+}

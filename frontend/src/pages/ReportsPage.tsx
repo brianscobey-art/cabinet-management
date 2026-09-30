@@ -37,7 +37,7 @@ import {
   type SmartsheetReport,
   type SmartsheetRow,
 } from "../api";
-import { fmtLot, fmtMaybeDate } from "../format";
+import { fmtLot, fmtLot4, fmtMaybeDate } from "../format";
 import { fmtDate } from "../format";
 import ManagerReportView from "./ManagerReport";
 import PoReceiptsView from "./PoReceiptsView";
@@ -1304,7 +1304,7 @@ function PhaseReport() {
               <tbody>
                 {g.rows.map((r) => (
                   <tr key={r.job_id}>
-                    <td>{r.lot_number ?? "—"}</td>
+                    <td>{fmtLot4(r.lot_number)}</td>
                     <td>
                       <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
                     </td>
