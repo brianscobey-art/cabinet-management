@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   Account,
   Community,
@@ -33,6 +33,11 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState("");
   const [noteFor, setNoteFor] = useState<number | null>(null); // job_id with open note editor
   const [noteText, setNoteText] = useState("");
+  // Optional phase picker across the top: every phase as a chip with the count
+  // of houses sitting at it; pick one or more and the list narrows to those.
+  // "none" stands for houses that have never had a phase logged.
+  const [pickPhases, setPickPhases] = useState(false);
+  const [phaseSel, setPhaseSel] = useState<Set<string>>(new Set());
 
   // Phones: let the app header + pickers scroll away so only the phase table's
   // header row stays pinned while someone updates a long list of lots.
@@ -117,6 +122,24 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
     setNoteText("");
   }
 
+  const phaseCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      const k = r.phase ?? "none";
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [rows]);
+  const shownRows = phaseSel.size ? rows.filter((r) => phaseSel.has(r.phase ?? "none")) : rows;
+  function togglePhase(code: string) {
+    setPhaseSel((s) => {
+      const n = new Set(s);
+      if (n.has(code)) n.delete(code);
+      else n.add(code);
+      return n;
+    });
+  }
+
   const allNotes = rows
     .flatMap((r) => r.fm_notes.map((n) => ({ ...n, row: r })))
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -146,12 +169,50 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
               ))}
             </select>
           )}
+          <button
+            type="button"
+            className={pickPhases ? "toggle-btn on" : "toggle-btn"}
+            onClick={() => setPickPhases((v) => !v)}
+            title="Show every phase and pick which ones to list"
+          >
+            Filter by phase{phaseSel.size ? ` · ${phaseSel.size}` : ""}
+          </button>
           {communityId && (
             <span className="muted" style={{ alignSelf: "center" }}>
-              {rows.length} active house{rows.length === 1 ? "" : "s"}
+              {phaseSel.size
+                ? `${shownRows.length} of ${rows.length} active houses`
+                : `${rows.length} active house${rows.length === 1 ? "" : "s"}`}
             </span>
           )}
         </div>
+        {pickPhases && (
+          <div className="phase-chips">
+            {phases.map((p) => (
+              <button
+                key={p.code}
+                type="button"
+                className={phaseSel.has(p.code) ? "toggle-btn on" : "toggle-btn"}
+                onClick={() => togglePhase(p.code)}
+              >
+                {p.label}
+                <span className="chip-count">{phaseCounts.get(p.code) ?? 0}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className={phaseSel.has("none") ? "toggle-btn on" : "toggle-btn"}
+              onClick={() => togglePhase("none")}
+            >
+              Not logged
+              <span className="chip-count">{phaseCounts.get("none") ?? 0}</span>
+            </button>
+            {phaseSel.size > 0 && (
+              <button type="button" className="link-btn" onClick={() => setPhaseSel(new Set())}>
+                clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -179,7 +240,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {shownRows.map((row) => (
                   <Fragment key={row.job_id}>
                     <tr>
                       <td>

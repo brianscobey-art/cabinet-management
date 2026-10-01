@@ -1616,6 +1616,29 @@ td.fm-col input[type="checkbox"] {
   color: #fff;
 }
 
+/* Phase picker on the Phases tab: one chip per phase with its house count. */
+.phase-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.5rem 0 0.25rem;
+}
+.phase-chips .toggle-btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+.chip-count {
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 0.78rem;
+}
+.toggle-btn.on .chip-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* On a phone these seven columns get about 50px each, which turns a lot number
    like "G001" into "G00". Percentage widths cannot fix that -- there is not
    enough room. Below tablet width the table keeps usable columns and scrolls
