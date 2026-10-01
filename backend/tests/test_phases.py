@@ -14,8 +14,9 @@ def test_phase_definitions(client, db):
     headers, _, _ = setup(client, db)
     phases = client.get("/phases", headers=headers).json()
     assert phases[0] == {"code": "0", "label": "0 - Dirt/Staked"}
-    assert phases[-1] == {"code": "12", "label": "12 - IC Cab Installed"}
-    assert len(phases) == 18
+    assert phases[11 + 6] == {"code": "12", "label": "12 - Cabinets Installed"}
+    assert phases[-1] == {"code": "16", "label": "16 - Closed"}
+    assert len(phases) == 22
 
 
 def test_set_phase_and_board(client, db):
@@ -35,7 +36,7 @@ def test_set_phase_and_board(client, db):
     assert body["noted_by"] == "Test User"
 
     # invalid phase rejected
-    assert client.post(f"/jobs/{job5['id']}/phase", headers=headers, json={"phase": "13"}).status_code == 422
+    assert client.post(f"/jobs/{job5['id']}/phase", headers=headers, json={"phase": "17"}).status_code == 422
 
     board = client.get(f"/phase-board?community_id={community_id}", headers=headers).json()
     assert [r["job_code"] for r in board] == ["DR-5", "DR-12"]  # numeric lot order, closed excluded

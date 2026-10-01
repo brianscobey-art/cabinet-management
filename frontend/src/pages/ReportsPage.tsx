@@ -1115,15 +1115,21 @@ function measureOverdue(r: PhaseReportRow): boolean {
   return r.measure_date.split("T")[0] < iso;
 }
 
+// Phases from 12 (Cabinets Installed) through 16 (Closed) — the house is done
+// as far as cabinets go. Mirrors FINISHED_PHASES in backend/app/phases.py.
+const FINISHED_PHASES = new Set(["12", "13", "14", "15", "16"]);
+const isFinishedPhase = (phase: string | null | undefined) => !!phase && FINISHED_PHASES.has(phase);
+
 function PhaseReport() {
   const [rows, setRows] = useState<PhaseReportRow[]>([]);
   const [builders, setBuilders] = useState<string[]>([]);
   const [selectedBuilders, setSelectedBuilders] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set()); // community group keys
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  // Phase 12 = IC Cab Installed. Those houses are finished, so they are out
-  // of the way by default; the toggle brings them back.
-  const [showPhase12, setShowPhase12] = useState(false);
+  // Phases 12-16 (Cabinets Installed through Closed) are the finished tail of
+  // the ladder. Those houses are out of the way by default; the toggle brings
+  // them back.
+  const [showFinished, setShowFinished] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -1137,7 +1143,7 @@ function PhaseReport() {
 
   const groups = useMemo(() => {
     const map = new Map<string, CommunityGroup>();
-    const shown = showPhase12 ? rows : rows.filter((r) => r.phase !== "12");
+    const shown = showFinished ? rows : rows.filter((r) => !isFinishedPhase(r.phase));
     for (const row of shown) {
       const key = groupKey(row);
       if (!map.has(key)) {
@@ -1151,12 +1157,12 @@ function PhaseReport() {
       map.get(key)!.rows.push(row);
     }
     return [...map.values()];
-  }, [rows, showPhase12]);
+  }, [rows, showFinished]);
 
   const visibleGroups = groups.filter((g) => selectedBuilders.has(g.builder));
   // Counted off the raw rows, not the visible ones: the button has to say how
   // many houses it is holding back even while it is showing them.
-  const installedCount = rows.filter((r) => r.phase === "12").length;
+  const finishedCount = rows.filter((r) => isFinishedPhase(r.phase)).length;
 
   function toggleBuilder(name: string) {
     setSelectedBuilders((s) => {
@@ -1207,13 +1213,13 @@ function PhaseReport() {
         </div>
         <div className="filters">
           <button
-            className={showPhase12 ? "toggle-btn on" : "toggle-btn"}
-            onClick={() => setShowPhase12((v) => !v)}
-            title="Phase 12 = IC Cab Installed — finished houses"
+            className={showFinished ? "toggle-btn on" : "toggle-btn"}
+            onClick={() => setShowFinished((v) => !v)}
+            title="Phases 12-16: Cabinets Installed, Post Walk, 1st Punch, Blue Tape, Closed"
           >
-            {showPhase12
-              ? `Hide installed (12)${installedCount ? ` · ${installedCount}` : ""}`
-              : `Show installed (12)${installedCount ? ` · ${installedCount} hidden` : ""}`}
+            {showFinished
+              ? `Hide installed (12+)${finishedCount ? ` · ${finishedCount}` : ""}`
+              : `Show installed (12+)${finishedCount ? ` · ${finishedCount} hidden` : ""}`}
           </button>
           <MultiSelect
             label="Builders"
