@@ -41,7 +41,7 @@ def test_set_phase_and_board(client, db):
     board = client.get(f"/phase-board?community_id={community_id}", headers=headers).json()
     assert [r["job_code"] for r in board] == ["DR-5", "DR-12"]  # numeric lot order, closed excluded
     assert board[0]["phase"] == "4.2"
-    assert board[0]["phase_label"] == "4.2 - Roof Complete"
+    assert board[0]["phase_label"] == "4.2 - Windows Installed"
     assert board[1]["phase"] is None
 
     # updating again: latest wins, history keeps both

@@ -6,10 +6,13 @@ PHASES: list[tuple[str, str]] = [
     ("2", "2 - Slab Poured"),
     ("3", "3 - Framing Start"),
     ("4", "4 - Framing Complete (Measure)"),
-    ("4.1", "4.1 - Windows Installed"),
-    ("4.2", "4.2 - Roof Complete"),
-    ("4.3", "4.3 - Electrical Rough Complete"),
-    ("4.4", "4.4 - Plumbing Rough Complete"),
+    # 10/1/26: Pre Walk added as 4.1 and Electrical + Plumbing merged into
+    # Mechanicals, so the 4.x codes shifted (migration i3j4k5l6m7n8 moved
+    # the logged updates). Whole numbers never moved.
+    ("4.1", "4.1 - Pre Walk Complete"),
+    ("4.2", "4.2 - Windows Installed"),
+    ("4.3", "4.3 - Roof Complete"),
+    ("4.4", "4.4 - Mechanicals Complete"),
     ("4.5", "4.5 - Insulation Complete"),
     ("5", "5 - Drywall Ready"),
     ("6", "6 - Drywall Hung"),

@@ -14,7 +14,7 @@ class PhaseUpdate(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
-    phase: Mapped[str] = mapped_column(String(8))  # code from app.phases (0..12, 4.1..4.5)
+    phase: Mapped[str] = mapped_column(String(8))  # code from app.phases (0..16, 4.1..4.5)
     source: Mapped[str] = mapped_column(String(16), default="manual")  # manual | voice (later)
     noted_by: Mapped[str | None] = mapped_column(String(255), default=None)
     noted_at: Mapped[datetime] = mapped_column(

@@ -572,7 +572,7 @@ def test_stop_detail_and_field_phase_logging(client, db):
     assert resp.status_code == 200, resp.text
     detail = resp.json()
     assert [h["lot_number"] for h in detail["houses"]] == ["5", "12"]  # numeric lot order
-    assert detail["houses"][0]["phase_label"] == "4.2 - Roof Complete"
+    assert detail["houses"][0]["phase_label"] == "4.2 - Windows Installed"
     assert detail["houses"][1]["phase"] is None  # never logged
     assert len(detail["phases"]) == 22
     assert any(t["visit_type"] == "phase_check" for t in detail["tasks"])
