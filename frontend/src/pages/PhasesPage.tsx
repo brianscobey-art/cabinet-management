@@ -182,7 +182,7 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
                 onClick={() => pick("closeout")}
                 title="Phases 12 - Cabinets Installed through 16 - Closed: post walk, punch, blue tape"
               >
-                Close-out
+                Close Out
                 <span className="chip-count">{closeoutCount}</span>
               </button>
               <span className="muted" style={{ alignSelf: "center" }}>

@@ -1215,11 +1215,11 @@ function PhaseReport() {
           <button
             className={showFinished ? "toggle-btn on" : "toggle-btn"}
             onClick={() => setShowFinished((v) => !v)}
-            title="Phases 12-16: Cabinets Installed, Post Walk, 1st Punch, Blue Tape, Closed"
+            title="Close Out = phases 12-16: Cabinets Installed, Post Walk, 1st Punch, Blue Tape, Closed"
           >
             {showFinished
-              ? `Hide installed (12+)${finishedCount ? ` · ${finishedCount}` : ""}`
-              : `Show installed (12+)${finishedCount ? ` · ${finishedCount} hidden` : ""}`}
+              ? `Hide Close Out${finishedCount ? ` · ${finishedCount}` : ""}`
+              : `Show Close Out${finishedCount ? ` · ${finishedCount} hidden` : ""}`}
           </button>
           <MultiSelect
             label="Builders"
