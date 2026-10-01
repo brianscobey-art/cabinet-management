@@ -1616,18 +1616,7 @@ td.fm-col input[type="checkbox"] {
   color: #fff;
 }
 
-/* Phase picker on the Phases tab: one chip per phase with its house count. */
-.phase-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: center;
-  padding: 0.5rem 0 0.25rem;
-}
-.phase-chips .toggle-btn {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.85rem;
-}
+/* Construction / Close-out buttons on the Phases tab carry a house count. */
 .chip-count {
   margin-left: 0.4rem;
   padding: 0 0.4rem;

@@ -23,6 +23,12 @@ export const initials = (name: string | null | undefined) =>
     .map((p) => p[0]?.toUpperCase())
     .join("") || "—";
 
+// Mirrors FINISHED_PHASES in backend/app/phases.py: from 12 - Cabinets
+// Installed on, the house is in close-out.
+const CLOSEOUT_PHASES = new Set(["12", "13", "14", "15", "16"]);
+const isCloseout = (phase: string | null | undefined) => !!phase && CLOSEOUT_PHASES.has(phase);
+type PhaseGroup = "all" | "construction" | "closeout";
+
 export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   const [phases, setPhases] = useState<PhaseDef[]>([]);
   const [builders, setBuilders] = useState<Account[]>([]);
@@ -33,11 +39,10 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState("");
   const [noteFor, setNoteFor] = useState<number | null>(null); // job_id with open note editor
   const [noteText, setNoteText] = useState("");
-  // Optional phase picker across the top: every phase as a chip with the count
-  // of houses sitting at it; pick one or more and the list narrows to those.
-  // "none" stands for houses that have never had a phase logged.
-  const [pickPhases, setPickPhases] = useState(false);
-  const [phaseSel, setPhaseSel] = useState<Set<string>>(new Set());
+  // Two halves of the ladder. Construction is everything before the cabinets
+  // go in (phases 0-11, and houses with no phase logged yet); Close-out is
+  // 12 - Cabinets Installed through 16 - Closed: post walk, punch, blue tape.
+  const [group, setGroup] = useState<PhaseGroup>("all");
 
   // Phones: let the app header + pickers scroll away so only the phase table's
   // header row stays pinned while someone updates a long list of lots.
@@ -122,23 +127,14 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
     setNoteText("");
   }
 
-  const phaseCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of rows) {
-      const k = r.phase ?? "none";
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  }, [rows]);
-  const shownRows = phaseSel.size ? rows.filter((r) => phaseSel.has(r.phase ?? "none")) : rows;
-  function togglePhase(code: string) {
-    setPhaseSel((s) => {
-      const n = new Set(s);
-      if (n.has(code)) n.delete(code);
-      else n.add(code);
-      return n;
-    });
-  }
+  const closeoutCount = useMemo(() => rows.filter((r) => isCloseout(r.phase)).length, [rows]);
+  const constructionCount = rows.length - closeoutCount;
+  const shownRows =
+    group === "construction" ? rows.filter((r) => !isCloseout(r.phase))
+    : group === "closeout" ? rows.filter((r) => isCloseout(r.phase))
+    : rows;
+  // Clicking the active button turns the filter off again.
+  const pick = (g: PhaseGroup) => setGroup((cur) => (cur === g ? "all" : g));
 
   const allNotes = rows
     .flatMap((r) => r.fm_notes.map((n) => ({ ...n, row: r })))
@@ -169,50 +165,34 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
               ))}
             </select>
           )}
-          <button
-            type="button"
-            className={pickPhases ? "toggle-btn on" : "toggle-btn"}
-            onClick={() => setPickPhases((v) => !v)}
-            title="Show every phase and pick which ones to list"
-          >
-            Filter by phase{phaseSel.size ? ` · ${phaseSel.size}` : ""}
-          </button>
           {communityId && (
-            <span className="muted" style={{ alignSelf: "center" }}>
-              {phaseSel.size
-                ? `${shownRows.length} of ${rows.length} active houses`
-                : `${rows.length} active house${rows.length === 1 ? "" : "s"}`}
-            </span>
+            <>
+              <button
+                type="button"
+                className={group === "construction" ? "toggle-btn on" : "toggle-btn"}
+                onClick={() => pick("construction")}
+                title="Phases 0 - Dirt/Staked through 11 - Cab Delivered"
+              >
+                Construction
+                <span className="chip-count">{constructionCount}</span>
+              </button>
+              <button
+                type="button"
+                className={group === "closeout" ? "toggle-btn on" : "toggle-btn"}
+                onClick={() => pick("closeout")}
+                title="Phases 12 - Cabinets Installed through 16 - Closed: post walk, punch, blue tape"
+              >
+                Close-out
+                <span className="chip-count">{closeoutCount}</span>
+              </button>
+              <span className="muted" style={{ alignSelf: "center" }}>
+                {group === "all"
+                  ? `${rows.length} active house${rows.length === 1 ? "" : "s"}`
+                  : `${shownRows.length} of ${rows.length} active houses`}
+              </span>
+            </>
           )}
         </div>
-        {pickPhases && (
-          <div className="phase-chips">
-            {phases.map((p) => (
-              <button
-                key={p.code}
-                type="button"
-                className={phaseSel.has(p.code) ? "toggle-btn on" : "toggle-btn"}
-                onClick={() => togglePhase(p.code)}
-              >
-                {p.label}
-                <span className="chip-count">{phaseCounts.get(p.code) ?? 0}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              className={phaseSel.has("none") ? "toggle-btn on" : "toggle-btn"}
-              onClick={() => togglePhase("none")}
-            >
-              Not logged
-              <span className="chip-count">{phaseCounts.get("none") ?? 0}</span>
-            </button>
-            {phaseSel.size > 0 && (
-              <button type="button" className="link-btn" onClick={() => setPhaseSel(new Set())}>
-                clear
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {error && <p className="error">{error}</p>}
