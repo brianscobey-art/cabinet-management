@@ -21,7 +21,8 @@ function Log($m) { "$(Get-Date -f 'yyyy-MM-dd HH:mm:ss')  $m" | Tee-Object -File
 
 try {
   $cfg = Get-Content (Join-Path $here 'tracker_export.config.json') -Raw | ConvertFrom-Json
-  $trackerDir = 'C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Kitchen and Bath - Master Plans & Pricing\Trackers\3.0 Online Sales Tracker 010726 Backup'
+  # 10/8/26: snapshots of the LIVE tracker now land beside it in Carter Shared File (backup_tracker.ps1).
+  $trackerDir = 'C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File\Trackers\3.0 Online Sales Tracker 010726 Backup'
 
   # 1. newest tracker workbook
   $wbFile = Get-ChildItem $trackerDir -Filter '3.0 Online Sales Tracker *.xlsm' |
