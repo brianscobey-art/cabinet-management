@@ -3,12 +3,13 @@ from pathlib import Path
 
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import finance_access, read_access, write_access
+from app.auth.deps import get_current_user
 from app.config import get_settings
 from app.database import get_db
 from app.manager_report import build as build_manager_report
@@ -159,6 +160,10 @@ REPORTS = [
                description="Count and dollar value of POs grouped by status (open, paid, voided)."),
     ReportInfo(key="phases", name="Phase Report", category="Operations",
                description="Active houses by builder, community, and lot with current construction phase."),
+    ReportInfo(key="field-measures", name="Field Measures", category="Operations",
+               description="Houses coming up for a field measure, the plan layout each one prints "
+                           "from, and what has already gone to the printer. Prints only new or "
+                           "revised layouts, stamped with community, lot, job code and plan."),
     ReportInfo(key="install-week", name="Install Schedule by Week", category="Operations",
                description="Scheduled installs grouped by install week with PO value."),
     ReportInfo(key="unordered", name="Needs Ordering", category="Operations",
@@ -985,3 +990,87 @@ def domo_pl_refresh(db: Session = Depends(get_db)):
     """The report's button: use a dated transaction export if present, else calculate
     period data from the last Domo cost pull (each house dated by its install date)."""
     return refresh_domo_txns(db)
+
+
+# --------------------------------------------------------------------------
+# Field Measures — layouts to print, stamped, printed only once per version
+# --------------------------------------------------------------------------
+class FieldMeasureRow(BaseModel):
+    account_name: str
+    community_name: str | None
+    job_id: int
+    job_code: str | None
+    lot_number: str | None
+    address: str
+    plan_label: str
+    plan_name: str | None
+    phase: str | None
+    phase_label: str | None
+    measure_date: date | None
+    fm_complete_date: date | None
+    fm_correct: bool
+    fm_incorrect: bool
+    source: str | None
+    source_name: str | None
+    source_version: str | None
+    source_status: str
+    source_note: str
+    last_printed_at: datetime | None
+    last_printed_by: str | None
+    last_printed_version: str | None
+    print_state: str
+    needs_print: bool
+
+
+class FieldMeasureRun(BaseModel):
+    at: datetime
+    by: str | None
+    count: int
+
+
+class FieldMeasureReport(BaseModel):
+    rows: list[FieldMeasureRow]
+    templates: int
+    templates_source: str
+    templates_dir: str
+    last_run: FieldMeasureRun | None
+
+
+class FieldMeasurePrintRequest(BaseModel):
+    job_ids: list[int]
+
+
+@router.get("/reports/field-measures", response_model=FieldMeasureReport,
+            dependencies=[Depends(read_access)])
+def field_measures(db: Session = Depends(get_db)):
+    from app.field_measure import build_rows
+
+    data = build_rows(db)
+    return FieldMeasureReport(
+        rows=[FieldMeasureRow(**r.__dict__) for r in data["rows"]],
+        templates=data["templates"], templates_source=data["templates_source"],
+        templates_dir=data["templates_dir"],
+        last_run=FieldMeasureRun(**data["last_run"]) if data["last_run"] else None,
+    )
+
+
+@router.post("/reports/field-measures/print", dependencies=[Depends(write_access)])
+def field_measures_print(payload: FieldMeasurePrintRequest, db: Session = Depends(get_db),
+                         user=Depends(get_current_user)):
+    """One PDF with every selected house's layout, stamped. Each house printed is
+    recorded, so the report can tell new layouts from ones already on paper."""
+    from app.field_measure import print_run
+
+    if not payload.job_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick at least one house")
+    pdf, info = print_run(db, payload.job_ids, getattr(user, "full_name", None))
+    if not pdf:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="; ".join(s["reason"] for s in info["skipped"]) or "Nothing to print")
+    import json
+
+    headers = {
+        "Content-Disposition": f'inline; filename="Field Measure Layouts {date.today().strftime("%m%d%y")}.pdf"',
+        "X-Print-Summary": json.dumps({"printed": len(info["printed"]), "skipped": len(info["skipped"])}),
+    }
+    return Response(content=pdf, media_type="application/pdf", headers=headers)

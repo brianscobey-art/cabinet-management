@@ -39,7 +39,7 @@ def _tracker_rows() -> tuple[list[dict], bool, str | None]:
     folder = Path(get_settings().tracker_dir)
     if not folder.is_dir():
         return [], False, None
-    files = sorted(folder.glob(TRACKER_GLOB), key=lambda p: p.stat().st_mtime,
+    files = sorted(_tracker_candidates(folder), key=lambda p: p.stat().st_mtime,
                    reverse=True)
     for f in files[:5]:
         try:
@@ -154,15 +154,26 @@ def smartsheet_push(db: Session = Depends(get_db)):
     return {"tracker": name, "jobs": len(records), **result}
 
 
+def _tracker_candidates(folder: Path) -> list[Path]:
+    """The live workbook plus the nightly snapshots beside it. On the PC the
+    live file is open in Excel most of the day (PermissionError), and the
+    snapshot folder is what keeps the reports from going dark then."""
+    from app.storage import TRACKER_GLOB
+
+    files = list(folder.glob(TRACKER_GLOB))
+    backup = folder / "3.0 Online Sales Tracker 010726 Backup"
+    if backup.is_dir():
+        files += list(backup.glob(TRACKER_GLOB))
+    return files
+
+
 def _tracker_file():
     """The newest tracker workbook that can be opened. POTracker lives in the
     same workbook as DATA, on a different sheet."""
-    from app.storage import TRACKER_GLOB
-
     folder = Path(get_settings().tracker_dir)
     if not folder.is_dir():
         return None
-    for f in sorted(folder.glob(TRACKER_GLOB), key=lambda p: p.stat().st_mtime,
+    for f in sorted(_tracker_candidates(folder), key=lambda p: p.stat().st_mtime,
                     reverse=True)[:5]:
         try:
             with open(f, "rb"):

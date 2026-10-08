@@ -39,6 +39,7 @@ import {
 } from "../api";
 import { fmtLot, fmtLot4, fmtMaybeDate } from "../format";
 import { fmtDate } from "../format";
+import { getFieldMeasures, printFieldMeasures, type FieldMeasureReport, type FieldMeasureRow } from "../api";
 import ManagerReportView from "./ManagerReport";
 import PoReceiptsView from "./PoReceiptsView";
 
@@ -132,6 +133,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       </div>
 
       {key === "phases" && <PhaseReport />}
+      {key === "field-measures" && <FieldMeasuresView />}
       {key === "smartsheet" && <SmartsheetReportView />}
       {key === "open-po" && <OpenPOReportView />}
       {key === "po-status" && <PoStatusView />}
@@ -1113,6 +1115,234 @@ function measureOverdue(r: PhaseReportRow): boolean {
     today.getDate()
   ).padStart(2, "0")}`;
   return r.measure_date.split("T")[0] < iso;
+}
+
+// ---------------------------------------------------------------------------
+// Field Measures — which houses are coming up for a measure, which plan layout
+// each prints from, and what has already gone to the printer.
+// ---------------------------------------------------------------------------
+function templateLabel(r: FieldMeasureRow): string {
+  if (!r.source_name) return "";
+  const base = r.source_name.split("/").pop() ?? r.source_name;
+  return base.replace(/\.pdf$/i, "").replace(/\s*Layout\s*/i, " ").replace(/\s+/g, " ").trim();
+}
+
+function FieldMeasuresView() {
+  const [data, setData] = useState<FieldMeasureReport | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [selectedBuilders, setSelectedBuilders] = useState<Set<string>>(new Set());
+  const [showMeasured, setShowMeasured] = useState(false);
+  const [showPrinted, setShowPrinted] = useState(false);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+
+  const load = () =>
+    getFieldMeasures()
+      .then((d) => {
+        setData(d);
+        setSelectedBuilders((cur) => (cur.size ? cur : new Set(d.rows.map((r) => r.account_name))));
+        // New and revised layouts are preselected; printed ones are not.
+        setChecked(new Set(d.rows.filter((r) => r.needs_print).map((r) => r.job_id)));
+      })
+      .catch((e) => setError(e.message));
+  useEffect(() => {
+    load();
+  }, []);
+
+  const builders = useMemo(() => [...new Set((data?.rows ?? []).map((r) => r.account_name))].sort(), [data]);
+  const visible = useMemo(
+    () =>
+      (data?.rows ?? []).filter(
+        (r) =>
+          selectedBuilders.has(r.account_name) &&
+          (showMeasured || !r.fm_complete_date) &&
+          (showPrinted || r.print_state !== "printed"),
+      ),
+    [data, selectedBuilders, showMeasured, showPrinted],
+  );
+  const groups = useMemo(() => {
+    const m = new Map<string, FieldMeasureRow[]>();
+    for (const r of visible) {
+      const k = `${r.account_name} · ${r.community_name ?? "No community"}`;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(r);
+    }
+    return [...m.entries()];
+  }, [visible]);
+
+  const newIds = visible.filter((r) => checked.has(r.job_id) && r.needs_print).map((r) => r.job_id);
+  const reprintIds = visible
+    .filter((r) => checked.has(r.job_id) && !!r.source && !r.needs_print)
+    .map((r) => r.job_id);
+  const measuredCount = (data?.rows ?? []).filter((r) => r.fm_complete_date && selectedBuilders.has(r.account_name)).length;
+  const printedCount = (data?.rows ?? []).filter((r) => r.print_state === "printed" && selectedBuilders.has(r.account_name)).length;
+
+  function toggle(id: number) {
+    setChecked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  async function run(ids: number[], what: string) {
+    if (!ids.length) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await printFieldMeasures(ids);
+      setNotice(`${what}: ${r.printed} layout${r.printed === 1 ? "" : "s"} sent to a new tab${r.skipped ? ` · ${r.skipped} skipped` : ""}.`);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error && !data) return <p className="error">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="filters no-print" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+        <MultiSelect
+          label="Builders"
+          options={builders}
+          selected={selectedBuilders}
+          onToggle={(name) =>
+            setSelectedBuilders((s) => {
+              const n = new Set(s);
+              if (n.has(name)) n.delete(name);
+              else n.add(name);
+              return n;
+            })
+          }
+          onAll={() => setSelectedBuilders(new Set(builders))}
+          onNone={() => setSelectedBuilders(new Set())}
+        />
+        <button
+          type="button"
+          className={showMeasured ? "toggle-btn on" : "toggle-btn"}
+          onClick={() => setShowMeasured((v) => !v)}
+          title="Houses whose field measure is already logged"
+        >
+          Show measured{measuredCount ? ` · ${measuredCount}` : ""}
+        </button>
+        <button
+          type="button"
+          className={showPrinted ? "toggle-btn on" : "toggle-btn"}
+          onClick={() => setShowPrinted((v) => !v)}
+          title="Houses whose current layout has already been printed"
+        >
+          Show printed{printedCount ? ` · ${printedCount}` : ""}
+        </button>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="primary" disabled={busy || !newIds.length} onClick={() => run(newIds, "Printed")}>
+          🖨 Print new layouts ({newIds.length})
+        </button>
+        <button type="button" disabled={busy || !reprintIds.length} onClick={() => run(reprintIds, "Reprinted")}>
+          🖨 Reprint selected ({reprintIds.length})
+        </button>
+      </div>
+      <p className="muted" style={{ margin: "0.25rem 0 0.75rem" }}>
+        {data.templates} layout templates ({data.templates_source === "local" ? "Sales\\Builders" : data.templates_source})
+        {data.last_run
+          ? ` · last print run ${fmtDate(data.last_run.at)} by ${data.last_run.by ?? "?"} · ${data.last_run.count} layout${data.last_run.count === 1 ? "" : "s"}`
+          : " · nothing printed yet"}
+        {" · "}checked rows go to the printer; new and revised layouts are checked for you.
+      </p>
+      {notice && <p className="ss-alert" style={{ background: "#eaf3de", color: "#27500a" }}>{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {groups.length === 0 && <p className="muted">Nothing needs a field measure for the selected builders.</p>}
+      {groups.map(([title, rows]) => (
+        <div key={title} className="phase-print" style={{ marginBottom: "1rem" }}>
+          <h3 style={{ margin: "0.75rem 0 0.25rem", fontSize: "1rem" }}>
+            {title}{" "}
+            <span className="muted" style={{ fontWeight: 400 }}>
+              · {rows.filter((r) => r.needs_print).length} to print
+            </span>
+          </h3>
+          <div className="table-wrap">
+            <table className="phase-table">
+              <colgroup>
+                <col style={{ width: "3%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="no-print" />
+                  <th>Lot</th>
+                  <th>Job code</th>
+                  <th>Plan</th>
+                  <th>Phase</th>
+                  <th>Measure</th>
+                  <th>Layout template</th>
+                  <th>Printed</th>
+                  <th>Correct</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.job_id} className={r.source ? "" : "flag-row"}>
+                    <td className="no-print">
+                      {r.source && (
+                        <input
+                          type="checkbox"
+                          checked={checked.has(r.job_id)}
+                          onChange={() => toggle(r.job_id)}
+                          aria-label={`print ${r.job_code ?? r.job_id}`}
+                        />
+                      )}
+                    </td>
+                    <td className="num">{fmtLot4(r.lot_number)}</td>
+                    <td>
+                      <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
+                    </td>
+                    <td title={r.plan_name ?? ""}>{r.plan_label}</td>
+                    <td>{r.phase_label ?? "—"}</td>
+                    <td className="num">{fmtDate(r.measure_date)}</td>
+                    <td title={r.source_name ?? r.source_note}>
+                      {r.source ? (
+                        <>
+                          {templateLabel(r)}
+                          {r.print_state === "new" && <span className="fm-tag fm-tag-new">new</span>}
+                          {r.print_state === "revised" && <span className="fm-tag fm-tag-rev">revised</span>}
+                          {r.source === "job_doc" && <span className="fm-tag">job file</span>}
+                          {r.source_note && <span className="muted"> · {r.source_note}</span>}
+                        </>
+                      ) : (
+                        <span className="fm-missing">{r.source_note || "no layout"}</span>
+                      )}
+                    </td>
+                    <td className="num" title={r.last_printed_by ?? ""}>
+                      {r.last_printed_at ? fmtDate(r.last_printed_at) : "—"}
+                    </td>
+                    <td className="num">
+                      <span
+                        className={`fm-box ${r.fm_correct ? "fm-box-ok" : r.fm_incorrect ? "fm-box-bad" : ""}`}
+                        title={r.fm_correct ? "measured correct" : r.fm_incorrect ? "measured incorrect" : "not measured"}
+                      />
+                      {r.fm_complete_date ? ` ${fmtDate(r.fm_complete_date)}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Phases from 12 (Cabinets Installed) through 16 (Closed) — the house is done

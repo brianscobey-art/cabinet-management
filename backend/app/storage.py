@@ -186,7 +186,40 @@ def upload_feeds(settings: Settings | None = None) -> dict:
     for attr, prefix, pattern, keep in FEED_SOURCES:
         _push(getattr(s, attr), prefix, pattern, keep)
     _push(s.new_orders_file, NEW_ORDERS_PREFIX, None, 1)
+    try:
+        result["layout-templates/"] = upload_layout_templates(s, client)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  layout-templates: {type(exc).__name__}: {str(exc)[:80]} - next run retries")
     return result
+
+
+def upload_layout_templates(s: Settings, client=None) -> int:
+    """Mirror the plan layout templates (Sales\\Builders\\...\\Layouts\\*.pdf) to R2
+    under layout-templates/<relative path>, so the cloud app can print them.
+    Only changed files move; nothing is deleted from R2 (a renamed template
+    simply appears under its new name and the matcher picks the newest)."""
+    from app.field_measure import TEMPLATE_PREFIX, iter_local_templates
+
+    client = client or _client(s)
+    pushed = 0
+    for path, rel in iter_local_templates():
+        key = TEMPLATE_PREFIX + rel
+        src_mtime = str(int(path.stat().st_mtime))
+        try:
+            head = client.head_object(Bucket=s.r2_bucket, Key=key)
+            if (head["ContentLength"] == path.stat().st_size
+                    and head.get("Metadata", {}).get("src-mtime") == src_mtime):
+                continue
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            client.upload_file(str(path), s.r2_bucket, key,
+                               ExtraArgs={"Metadata": {"src-mtime": src_mtime},
+                                          "ContentType": "application/pdf"})
+            pushed += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {key}: upload failed ({type(exc).__name__}: {str(exc)[:80]})")
+    return pushed
 
 
 # --------------------------------------------------------------------------

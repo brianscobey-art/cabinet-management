@@ -13,6 +13,7 @@ from app.models.order import ConfirmationStatus, Order, ShipStatus, Supplier
 from app.models.ordering import OrderingChecklist
 from app.models.pack import RUN_KINDS, RUN_STATUSES, PackRun
 from app.models.phase import PhaseUpdate
+from app.models.layout_print import LayoutPrint
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
 from app.models.receipt import JobPo, PoReceipt
 from app.models.selections import HardwareSelection, RoomSelection
@@ -52,6 +53,7 @@ __all__ = [
     "RUN_KINDS",
     "RUN_STATUSES",
     "PhaseUpdate",
+    "LayoutPrint",
     "JobPo",
     "PoReceipt",
     "Quote",

@@ -1616,6 +1616,45 @@ td.fm-col input[type="checkbox"] {
   color: #fff;
 }
 
+/* Field Measures report: layout-template state tags and the measured box. */
+.fm-tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: #eef0f2;
+  color: #444;
+  vertical-align: 1px;
+}
+.fm-tag-new {
+  background: #faeeda;
+  color: #633806;
+}
+.fm-tag-rev {
+  background: #e6f1fb;
+  color: #0c447c;
+}
+.fm-missing {
+  color: #a32d2d;
+}
+.fm-box {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #666;
+  border-radius: 2px;
+  vertical-align: -2px;
+}
+.fm-box-ok {
+  background: #639922;
+  border-color: #639922;
+}
+.fm-box-bad {
+  background: #e24b4a;
+  border-color: #e24b4a;
+}
+
 /* Construction / Close-out buttons on the Phases tab carry a house count. */
 .chip-count {
   margin-left: 0.4rem;

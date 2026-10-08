@@ -629,6 +629,71 @@ export interface RevenueGroup {
   count: number;
   total_amount: number;
 }
+// ---- Field Measures ---------------------------------------------------------
+export interface FieldMeasureRow {
+  account_name: string;
+  community_name: string | null;
+  job_id: number;
+  job_code: string | null;
+  lot_number: string | null;
+  address: string;
+  plan_label: string;
+  plan_name: string | null;
+  phase: string | null;
+  phase_label: string | null;
+  measure_date: string | null;
+  fm_complete_date: string | null;
+  fm_correct: boolean;
+  fm_incorrect: boolean;
+  source: "template" | "job_doc" | null;
+  source_name: string | null;
+  source_version: string | null;
+  source_status: "ok" | "swing" | "missing" | "no-plan";
+  source_note: string;
+  last_printed_at: string | null;
+  last_printed_by: string | null;
+  last_printed_version: string | null;
+  print_state: "new" | "revised" | "printed";
+  needs_print: boolean;
+}
+
+export interface FieldMeasureReport {
+  rows: FieldMeasureRow[];
+  templates: number;
+  templates_source: string;
+  templates_dir: string;
+  last_run: { at: string; by: string | null; count: number } | null;
+}
+
+export const getFieldMeasures = () => api<FieldMeasureReport>("/reports/field-measures");
+
+/** Stamp + merge the chosen houses' layouts; opens the PDF in a new tab for printing. */
+export async function printFieldMeasures(jobIds: number[]): Promise<{ printed: number; skipped: number }> {
+  const resp = await fetch("/api/reports/field-measures/print", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+    body: JSON.stringify({ job_ids: jobIds }),
+  });
+  if (!resp.ok) {
+    let detail = "Print failed";
+    try {
+      detail = (await resp.json()).detail ?? detail;
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail);
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  try {
+    return JSON.parse(resp.headers.get("X-Print-Summary") ?? "{}");
+  } catch {
+    return { printed: jobIds.length, skipped: 0 };
+  }
+}
+
 export interface InstallWeekRow {
   week_start: string;
   count: number;

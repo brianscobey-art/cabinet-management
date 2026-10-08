@@ -96,6 +96,12 @@ class Settings(BaseSettings):
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
         r"\Townsend Shared File\Sales\Builders\Century Complete"
     )
+    # Plan layout templates for the Field Measures report (Brian, 10/8/26): one
+    # layout PDF per plan + swing under each builder's Floorplans tree. The
+    # uploader mirrors them to R2 (layout-templates/) for the cloud app.
+    layout_templates_dir: str = (
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File\Sales\Builders"
+    )
     feed_sync_hour: int = 7  # legacy single-hour fallback (kept for compatibility)
     # Hours (in feed_sync_tz) to run the feed sync. Comma-separated for multiple
     # runs a day. Default 5 AM + noon Central. Cloud runs on UTC, so the tz matters.
