@@ -77,8 +77,11 @@ class Settings(BaseSettings):
     ship_to_city_st_zip: str = "Dothan, AL 36303"
 
     # Daily feed sync — OneDrive folders the scheduled cloud reports write into.
+    # 10/8/26: the shared library is "Carter Shared File" now. The old
+    # "Townsend Shared File" folder still syncs, but its Vendor Suite output
+    # folder was emptied and its tracker copy no longer matches the live one.
     vendorsuite_dir: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules"
     )
     century_dir: str = (
@@ -117,13 +120,14 @@ class Settings(BaseSettings):
     # Folder holding the LIVE 3.0 Online Sales Tracker .xlsm — the workbook Brian
     # actually types in. The newest readable copy here is the source of truth for
     # job status (CONST LVL) + install dates.
-    # NOTE (8/24/26): this pointed at "...Master Plans & Pricing\Trackers\3.0 Online
-    # Sales Tracker 010726 Backup", a folder of nightly SNAPSHOTS, while the live
-    # workbook had moved to Townsend Shared File\Trackers. The app was therefore
-    # reading yesterday's copy and every status change showed up a day late.
+    # The live workbook has moved twice: from the Master Plans & Pricing
+    # "Backup" snapshot folder to Townsend Shared File\Trackers (8/24/26), and
+    # to Carter Shared File\Trackers (10/8/26 -- Brian: "make sure cabinettron
+    # is pulling from this location"). The Townsend copy still exists and still
+    # gets written to, but it is NOT the one Brian works in.
     tracker_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Shared File\Trackers"
+        r"\Carter Shared File\Trackers"
     )
     domo_export_dir: str = r"C:\Users\Brian SE6\Downloads\domo-kb-tool"  # Domo cost JSON exports land here
     domo_instance: str = "carterlumber.domo.com"
