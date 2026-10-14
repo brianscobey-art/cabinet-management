@@ -1045,7 +1045,15 @@ class FieldMeasurePrintRequest(BaseModel):
 def field_measures(db: Session = Depends(get_db)):
     from app.field_measure import build_rows
 
-    data = build_rows(db)
+    try:
+        data = build_rows(db)
+    except Exception as exc:  # noqa: BLE001 — say what broke instead of a bare 500
+        import logging
+        import traceback
+
+        logging.getLogger("field_measures").error("build_rows failed: %s", traceback.format_exc())
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Field Measures could not be built: {type(exc).__name__}: {exc}")
     return FieldMeasureReport(
         rows=[FieldMeasureRow(**r.__dict__) for r in data["rows"]],
         templates=data["templates"], templates_source=data["templates_source"],

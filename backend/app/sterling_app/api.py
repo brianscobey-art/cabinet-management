@@ -716,7 +716,7 @@ def dashboard(db: Session = Depends(get_db)):
 
 INSTALL_HW_PATH = (
     r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-    r"\Townsend Kitchen and Bath - Master Plans & Pricing\Pricing\AI Pricing Info"
+    r"\Carter Kitchen and Bath - Master Plans & Pricing\Pricing\AI Pricing Info"
     r"\Everluxe Install-Hardware Pricing 073126.xlsx"
 )
 

@@ -36,7 +36,7 @@ become part of Optimus outright.
 ## 2. The real workflow being automated
 
 Source of truth for this section: the four `CLAUDE.md` playbooks under
-`OneDrive - carterlumber.com\Townsend Shared File\Sold Jobs\New Orders\`, plus
+`OneDrive - carterlumber.com\Carter Shared File\Sold Jobs\New Orders\`, plus
 `DRH Ordering Process Flow Notes 041626.txt`.
 
 The four folders in `Sold Jobs\New Orders\`:
@@ -96,7 +96,7 @@ Already the most automated stage. Existing scripts: `Pull_Carter_POs_from_Outloo
   `[JOB ID] [SO#] [CARTER PO#] [MMDDYY].pdf`, delete the staging copy.
 - Read the Sub # from the DR Horton PO inside the folder.
 - Copy the whole job folder to
-  `Townsend Kitchen and Bath - Master Plans & Pricing\Sold Job Files\National Accounts\DR Horton - All\[Region]\[Community] [Sub #]`.
+  `Carter Kitchen and Bath - Master Plans & Pricing\Sold Job Files\National Accounts\DR Horton - All\[Region]\[Community] [Sub #]`.
   The old `Sold Jobs\Builders\DR Horton\...` tree is deprecated, never read or write it.
 - After confirming the copy landed, delete the folder from `4. POs attached`.
 - Record the installer pay sheet (present yes/no) and the install pay amount off that PDF.

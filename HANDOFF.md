@@ -101,5 +101,5 @@ Data model `backend/app/models/service.py`: `ServiceRequest` (title, status, `ma
 
 - Backend venv python: `backend/.venv/Scripts/python.exe`
 - Domo tools: `C:\Users\Brian SE6\Downloads\domo-kb-tool\` (pull scripts + `KB Domo Raw*.json`, `KB Job Costs*.json`, `KB Job Txns*.json`)
-- DRH feed: `...\OneDrive - carterlumber.com\Townsend Shared File\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules\DRH_Cabinets_Combined_*.xlsx`
+- DRH feed: `...\OneDrive - carterlumber.com\Carter Shared File\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules\DRH_Cabinets_Combined_*.xlsx`
 - Logo: `frontend/public/carter-logo.png`; Carter colors: green `#125952`, orange `#df5822`, mint `#2bb99f`.

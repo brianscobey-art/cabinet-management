@@ -78,23 +78,23 @@ class Settings(BaseSettings):
 
     # Daily feed sync — OneDrive folders the scheduled cloud reports write into.
     # 10/8/26: the shared library is "Carter Shared File" now. The old
-    # "Townsend Shared File" folder still syncs, but its Vendor Suite output
+    # "Carter Shared File" folder still syncs, but its Vendor Suite output
     # folder was emptied and its tracker copy no longer matches the live one.
     vendorsuite_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules"
     )
+    # 10/14/26 (Brian): the Master Plans & Pricing library is "Carter Kitchen
+    # and Bath - ..." now. The SupplyPro download still lands in the old
+    # Townsend copy until that task is repointed, so it stays as the fallback
+    # and the report reads whichever of the two is newest.
     century_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
+        r"\Carter Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
     )
-    # Brian keeps SupplyPro exports in two places (9/10/26): the Downloads
-    # folder the feed imports from, and the builder folder he works out of.
-    # Both currently hold the same newest file, but the report reads whichever
-    # is actually newest rather than assuming they stay in step.
     century_alt_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Shared File\Sales\Builders\Century Complete"
+        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
     )
     # Plan layout templates for the Field Measures report (Brian, 10/8/26): one
     # layout PDF per plan + swing under each builder's Floorplans tree. The
@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     # actually types in. The newest readable copy here is the source of truth for
     # job status (CONST LVL) + install dates.
     # The live workbook has moved twice: from the Master Plans & Pricing
-    # "Backup" snapshot folder to Townsend Shared File\Trackers (8/24/26), and
+    # "Backup" snapshot folder to Carter Shared File\Trackers (8/24/26), and
     # to Carter Shared File\Trackers (10/8/26 -- Brian: "make sure cabinettron
     # is pulling from this location"). The Townsend copy still exists and still
     # gets written to, but it is NOT the one Brian works in.
@@ -155,7 +155,7 @@ class Settings(BaseSettings):
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "po-receipts")
     new_orders_file: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"
     )
 
@@ -164,14 +164,14 @@ class Settings(BaseSettings):
     # the chain IS its status, so the on-prem agent scans it and reports.
     # These paths are read by the AGENT on Brian's PC, not by the cloud app.
     new_orders_dir: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders"
     )
     # Where stage 4 files completed jobs. The old "Sold Jobs\Builders\DR Horton"
     # tree is deprecated and must never be read or written.
     sold_files_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
+        r"\Carter Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
         r"\National Accounts\DR Horton - All"
     )
     # Only these logins may load the page or hit its endpoints (comma-separated).
@@ -205,7 +205,7 @@ class Settings(BaseSettings):
     # Manager sales report ----------------------------------------------------
     # Folder holding the monthly K&B P&L workbooks (newest is read for NET SALES).
     pl_reports_dir: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Operations\P&L Reports"
     )
     # The Chipley, FL store — base point for KSR travel-mile calculations.

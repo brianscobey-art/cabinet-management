@@ -7,8 +7,8 @@ re-pointing paths. Target: a Windows desktop that stays on 24/7.
 
 - **Python 3.13+** (python.org installer, check "Add to PATH")
 - **OneDrive** signed into the same account, syncing:
-  - `Townsend Kitchen and Bath - Master Plans & Pricing` (job PDFs — mark "Always keep on this device")
-  - `Townsend Shared File` (Vendor Suite / Century / New Orders feeds)
+  - `Carter Kitchen and Bath - Master Plans & Pricing` (job PDFs — mark "Always keep on this device")
+  - `Carter Shared File` (Vendor Suite / Century / New Orders feeds)
   - `Carter Kitchen and Bath` (generated orders + DB backups)
 - **Tailscale** signed into the same tailnet (this is how the team reaches it)
 - Node is NOT needed — the built frontend (`frontend/dist`) ships with the folder

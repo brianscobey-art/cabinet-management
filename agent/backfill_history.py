@@ -262,11 +262,11 @@ def main() -> None:
 
     tracker_dir = Path(args.tracker_dir) if args.tracker_dir else Path(
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Trackers"
+        r"\Carter Kitchen and Bath - Master Plans & Pricing\Trackers"
         r"\3.0 Online Sales Tracker 010726 Backup")
     sold_dir = Path(args.sold_dir) if args.sold_dir else Path(
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
+        r"\Carter Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
         r"\National Accounts\DR Horton - All")
 
     book = newest_tracker(tracker_dir)

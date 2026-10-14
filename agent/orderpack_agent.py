@@ -56,7 +56,7 @@ DEFAULTS = {
     # posted at the bare domain would report nothing and look like it worked.
     "ORDERPACK_API_BASE": "https://www.cabinettron.com",
     "ORDERPACK_AGENT_KEY": "ckb-pack-9f3a71c4e08b",
-    "NEW_ORDERS_DIR": r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Townsend Shared File"
+    "NEW_ORDERS_DIR": r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
                       r"\Sold Jobs\New Orders",
     "ORDERPACK_SCAN_MINUTES": "15",
     "ORDERPACK_POLL_SECONDS": "20",

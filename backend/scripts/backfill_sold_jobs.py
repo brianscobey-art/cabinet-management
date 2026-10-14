@@ -20,7 +20,7 @@ from app.models import Job, JobDocument, OrderingChecklist
 
 SOLD_ROOT = Path(
     r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-    r"\Townsend Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
+    r"\Carter Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
 )
 SO_RE = re.compile(r"\b(SO\d{3,})\b", re.I)
 CARTER_PO_RE = re.compile(r"\b(7\d{8})\b")          # Carter PO/SO numbers are 75xxxxxxx
