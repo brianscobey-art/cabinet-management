@@ -693,7 +693,7 @@ export async function printFieldMeasures(
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
   const filename =
-    /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "Field Measure Layouts.pdf";
+    /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "Field Measure Pack.pdf";
   if (target && !target.closed) {
     target.location.href = url;
   } else {

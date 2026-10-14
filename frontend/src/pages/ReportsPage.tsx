@@ -1191,7 +1191,7 @@ function FieldMeasuresView() {
     if (!ids.length) return;
     // Open the tab NOW, inside the click, so the browser does not treat it as a popup.
     const target = window.open("", "_blank");
-    if (target) target.document.write("<title>Field Measure Layouts</title><p style='font-family:sans-serif'>Building the stamped layouts…</p>");
+    if (target) target.document.write("<title>Field Measure Pack</title><p style='font-family:sans-serif'>Building the stamped layouts…</p>");
     setBusy(true);
     setError("");
     setNotice("");

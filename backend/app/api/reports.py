@@ -1078,7 +1078,7 @@ def field_measures_print(payload: FieldMeasurePrintRequest, db: Session = Depend
     import json
 
     headers = {
-        "Content-Disposition": f'inline; filename="Field Measure Layouts {date.today().strftime("%m%d%y")}.pdf"',
+        "Content-Disposition": f'inline; filename="Field Measure Pack {date.today().strftime("%m%d%y")}.pdf"',
         "X-Print-Summary": json.dumps({"printed": len(info["printed"]), "skipped": len(info["skipped"])}),
         "Access-Control-Expose-Headers": "X-Print-Summary, Content-Disposition",
     }
