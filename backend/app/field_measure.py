@@ -299,6 +299,18 @@ class Row:
     needs_print: bool
 
 
+def _local_file(file_path: str) -> Path | None:
+    """The stored path when it exists on THIS machine. Job documents keep the
+    Windows OneDrive path; on the Linux server that whole string is one
+    filename component and Path.is_file() raises "File name too long"
+    rather than returning False."""
+    try:
+        p = Path(file_path)
+        return p if p.is_file() else None
+    except (OSError, ValueError):
+        return None
+
+
 def _tracker_by_code() -> dict[str, dict]:
     try:
         from app.smartsheet.api import _tracker_rows
@@ -362,9 +374,9 @@ def build_rows(db: Session) -> dict:
         doc = layouts.get(job.id)
         if doc is not None:
             source, source_name, status, note = "job_doc", doc.filename, "ok", "layout attached to the job"
-            mt = Path(doc.file_path)
+            mt = _local_file(doc.file_path)
             version = (datetime.fromtimestamp(mt.stat().st_mtime).strftime("%Y-%m-%dT%H:%M")
-                       if mt.is_file() else f"doc{doc.id}")
+                       if mt else f"doc{doc.id}")
         else:
             m = match_template(plan, templates)
             source = "template" if m.template else None
@@ -543,8 +555,8 @@ def print_run(db: Session, job_ids: list[int], printed_by: str | None) -> tuple[
             if r.source == "job_doc":
                 doc = (db.query(JobDocument).filter(JobDocument.job_id == jid, JobDocument.doc_type == "layout")
                        .order_by(JobDocument.id.desc()).first())
-                p = Path(doc.file_path)
-                if p.is_file():
+                p = _local_file(doc.file_path)
+                if p is not None:
                     pdf_bytes = p.read_bytes()
                 else:
                     from app import storage
