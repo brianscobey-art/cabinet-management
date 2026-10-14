@@ -648,7 +648,7 @@ export interface FieldMeasureRow {
   source: "template" | "job_doc" | null;
   source_name: string | null;
   source_version: string | null;
-  source_status: "ok" | "swing" | "missing" | "no-plan";
+  source_status: "ok" | "mirror" | "missing" | "no-plan";
   source_note: string;
   last_printed_at: string | null;
   last_printed_by: string | null;

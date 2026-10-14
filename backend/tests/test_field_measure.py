@@ -49,11 +49,11 @@ def test_match_prefers_exact_swing_then_division_and_rejects_other_family():
     assert match_template(ex, tpls).template.series == "EX4"
 
 
-def test_match_reports_swing_gap_instead_of_mirroring():
+def test_match_falls_back_to_the_opposite_hand_and_says_so():
     tpls = [_tpl("DR Horton/DRH Montgomery/Flooprlans/DRH/DRH2 Harper/Layouts/DRH2 Harper STD-L 031226.pdf")]
     plan = HousePlan(abbr="HARP", name="DRH2 Harper STD", swing="R", series="DRH2", tokens=("harper",), division="Montgomery")
     m = match_template(plan, tpls)
-    assert m.template is None and m.status == "swing" and "HARP-L" in m.note
+    assert m.template is tpls[0] and m.status == "mirror" and "HARP-L" in m.note and "mirror" in m.note
 
 
 def test_match_without_swing_takes_a_swingless_template_and_newest_version():

@@ -218,7 +218,7 @@ def house_plan(tracker_row: dict | None, job: Job) -> HousePlan:
 @dataclass
 class Match:
     template: Template | None
-    status: str          # ok | swing | missing | no-plan
+    status: str          # ok | mirror | missing | no-plan
     note: str = ""
 
 
@@ -254,11 +254,19 @@ def match_template(plan: HousePlan, templates: list[Template]) -> Match:
     exact = [c for c in cands if plan.swing and c[1].swing == plan.swing]
     either = [c for c in cands if c[1].swing is None]
     pool = exact or (either if plan.swing else cands) or []
+    mirrored = False
     if not pool:
-        have = sorted({c[1].swing for c in cands if c[1].swing})
-        return Match(None, "swing", f"no {plan.label} template · have {', '.join(f'{plan.abbr or main}-{s}' for s in have)}")
+        # Brian 10/14/26: no drawing for this hand -> use the opposite hand and
+        # say so on the layout. The measurer mirrors it in the field.
+        pool = [c for c in cands if c[1].swing and c[1].swing != plan.swing]
+        mirrored = True
+    if not pool:
+        return Match(None, "missing", f"no template for {plan.label}")
     pool.sort(key=lambda c: (c[0], c[1].version_date or date.min, c[1].version), reverse=True)
     best = pool[0][1]
+    if mirrored:
+        return Match(best, "mirror",
+                     f"no {plan.label} template · printed {plan.abbr or main}-{best.swing}, mirror it")
     note = ""
     if plan.division and best.division and best.division != plan.division:
         # Same plan family, another division's drawing -- usable, but say so.
@@ -428,12 +436,14 @@ STAMP_W, STAMP_H = 276.0, 100.0  # points: ~3.8 x 1.4 in, the empty title-block 
 
 
 def _stamp_rect(page):
-    """The blank bottom-left corner of the title block. The 'Note: this drawing
-    is an artistic interpretation' box is the first drawn rectangle in the
-    bottom band; the stamp sits to its left, bottom-aligned with it."""
+    """Where the stamp goes: the blank bottom-left corner of the title block,
+    left of the 'Note: this drawing is an artistic interpretation' box. A job's
+    own layout may already carry text there (builder / address / BUID), so if
+    that corner has text in it the stamp walks upward until it sits on clear
+    paper; failing that it stays put and is drawn on an opaque white panel."""
     import fitz  # PyMuPDF
 
-    H, W = page.rect.height, page.rect.width
+    H = page.rect.height
     note = None
     for d in page.get_drawings():
         r = d.get("rect")
@@ -448,7 +458,28 @@ def _stamp_rect(page):
         x1, y1 = 16 + STAMP_W, H - 22
     x0 = 16
     w = min(STAMP_W, x1 - x0)
-    return fitz.Rect(x0, y1 - STAMP_H, x0 + w, y1)
+    R = fitz.Rect(x0, y1 - STAMP_H, x0 + w, y1)
+
+    text_boxes = [fitz.Rect(b[:4]) for b in page.get_text("blocks") if b[4].strip()]
+    def busy(rect):
+        return any(rect.intersects(t) for t in text_boxes)
+
+    if not busy(R):
+        return R, False
+    # Walk up the left edge from the corner, then down from the top margin.
+    cand = fitz.Rect(R)
+    while cand.y0 > H * 0.45:
+        cand.y0 -= 8
+        cand.y1 -= 8
+        if not busy(cand):
+            return cand, False
+    cand = fitz.Rect(x0, 14, x0 + w, 14 + STAMP_H)
+    while cand.y1 < H * 0.55:
+        if not busy(cand):
+            return cand, False
+        cand.y0 += 8
+        cand.y1 += 8
+    return R, True  # nowhere clear: cover the corner (opaque panel)
 
 
 def _draw_check(page, box, color=(0.07, 0.07, 0.07)):
@@ -466,11 +497,14 @@ def _draw_check(page, box, color=(0.07, 0.07, 0.07)):
 
 
 def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layout: str,
-               printed: date, reprint: bool, measured: date | None, correct: bool) -> None:
+               printed: date, reprint: bool, measured: date | None, correct: bool,
+               mirror_note: str | None = None, address: str | None = None) -> None:
     import fitz
 
-    R = _stamp_rect(page)
-    page.draw_rect(R, color=(0, 0, 0), width=0.8)
+    R, covered = _stamp_rect(page)
+    # Opaque panel: whatever the template or job layout already printed under
+    # this corner must not bleed through the stamp.
+    page.draw_rect(R, color=(0, 0, 0), fill=(1, 1, 1), width=0.8)
     grey, ink = (0.33, 0.33, 0.33), (0.07, 0.07, 0.07)
     fs = 8.5
     pad = 7
@@ -493,6 +527,19 @@ def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layo
         x += fitz.get_text_length(l2, fontname="helv", fontsize=fs)
         page.insert_text((x, y), _fit(v2, R.x1 - pad - x, fs, "hebo"), fontname="hebo", fontsize=fs, color=ink)
         y += fs + 4.5
+    if covered and address:
+        # The stamp had to sit on top of the layout's own builder / address
+        # block, so carry the address forward rather than lose it.
+        page.insert_text((R.x0 + pad, y + 1), "Address: ", fontname="helv", fontsize=fs, color=grey)
+        ax = R.x0 + pad + fitz.get_text_length("Address: ", fontname="helv", fontsize=fs)
+        page.insert_text((ax, y + 1), _fit(address, R.x1 - pad - ax, fs, "hebo"),
+                         fontname="hebo", fontsize=fs, color=ink)
+        y += fs + 4.5
+    if mirror_note:
+        # Bold row in the gap above the checkbox: the drawing is the other
+        # hand and the measurer has to flip it.
+        page.insert_text((R.x0 + pad, y + 1), _fit(mirror_note, R.width - 2 * pad, fs, "hebo"),
+                         fontname="hebo", fontsize=fs, color=ink)
     # bottom row: checkbox + label on the left, Measured line on the right
     by = R.y1 - pad - 13
     box = fitz.Rect(R.x0 + pad, by, R.x0 + pad + 13, by + 13)
@@ -577,10 +624,17 @@ def print_run(db: Session, job_ids: list[int], printed_by: str | None) -> tuple[
         measured = r.fm_complete_date
         correct = bool(r.fm_correct or r.fm_complete_date)
         reprint = r.last_printed_at is not None
+        mirror_note = None
+        if r.source_status == "mirror":
+            t = tpl_by_rel.get(r.source_name or "")
+            have = t.swing if t else "?"
+            want = r.plan_label.rsplit("-", 1)[-1] if "-" in r.plan_label else "?"
+            mirror_note = f"OPPOSITE HAND: drawing is {have}, house is {want} - mirror it"
         stamp_page(
             src[0], community=r.community_name or r.account_name, lot=_lot4(r.lot_number),
             job_code=r.job_code or f"#{r.job_id}", plan=r.plan_label, layout=layout_label,
             printed=today, reprint=reprint, measured=measured if correct else None, correct=correct,
+            mirror_note=mirror_note, address=r.address,
         )
         out.insert_pdf(src)
         db.add(LayoutPrint(job_id=jid, batch_id=batch, source=r.source, source_name=r.source_name or "",
