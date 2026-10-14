@@ -1080,5 +1080,21 @@ def field_measures_print(payload: FieldMeasurePrintRequest, db: Session = Depend
     headers = {
         "Content-Disposition": f'inline; filename="Field Measure Layouts {date.today().strftime("%m%d%y")}.pdf"',
         "X-Print-Summary": json.dumps({"printed": len(info["printed"]), "skipped": len(info["skipped"])}),
+        "Access-Control-Expose-Headers": "X-Print-Summary, Content-Disposition",
     }
     return Response(content=pdf, media_type="application/pdf", headers=headers)
+
+
+@router.post("/reports/field-measures/undo-last", dependencies=[Depends(write_access)])
+def field_measures_undo_last(db: Session = Depends(get_db)):
+    """Forget the most recent print run. The PDF was built and recorded but never
+    reached paper (blocked tab, printer jam) — those houses should print as new
+    again, not as reprints."""
+    from app.models import LayoutPrint
+
+    last = db.query(LayoutPrint).order_by(LayoutPrint.printed_at.desc(), LayoutPrint.id.desc()).first()
+    if last is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nothing has been printed yet")
+    removed = db.query(LayoutPrint).filter(LayoutPrint.batch_id == last.batch_id).delete(synchronize_session=False)
+    db.commit()
+    return {"batch": last.batch_id, "removed": removed, "at": last.printed_at}

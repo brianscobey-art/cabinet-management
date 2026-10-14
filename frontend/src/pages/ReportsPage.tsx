@@ -39,7 +39,7 @@ import {
 } from "../api";
 import { fmtLot, fmtLot4, fmtMaybeDate } from "../format";
 import { fmtDate } from "../format";
-import { getFieldMeasures, printFieldMeasures, type FieldMeasureReport, type FieldMeasureRow } from "../api";
+import { getFieldMeasures, printFieldMeasures, undoLastPrintRun, type FieldMeasureReport, type FieldMeasureRow } from "../api";
 import ManagerReportView from "./ManagerReport";
 import PoReceiptsView from "./PoReceiptsView";
 
@@ -1186,14 +1186,37 @@ function FieldMeasuresView() {
       return n;
     });
   }
+  const [pdfLink, setPdfLink] = useState<{ url: string; filename: string } | null>(null);
   async function run(ids: number[], what: string) {
     if (!ids.length) return;
+    // Open the tab NOW, inside the click, so the browser does not treat it as a popup.
+    const target = window.open("", "_blank");
+    if (target) target.document.write("<title>Field Measure Layouts</title><p style='font-family:sans-serif'>Building the stamped layouts…</p>");
     setBusy(true);
     setError("");
     setNotice("");
+    setPdfLink(null);
     try {
-      const r = await printFieldMeasures(ids);
-      setNotice(`${what}: ${r.printed} layout${r.printed === 1 ? "" : "s"} sent to a new tab${r.skipped ? ` · ${r.skipped} skipped` : ""}.`);
+      const r = await printFieldMeasures(ids, target);
+      setPdfLink({ url: r.url, filename: r.filename });
+      setNotice(
+        `${what}: ${r.printed} layout${r.printed === 1 ? "" : "s"}${target ? " opened in a new tab" : " downloaded"}${r.skipped ? ` · ${r.skipped} skipped` : ""}.`,
+      );
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function undoLast() {
+    if (!data?.last_run) return;
+    if (!window.confirm(`Forget the last print run (${data.last_run.count} layout${data.last_run.count === 1 ? "" : "s"}, ${fmtDate(data.last_run.at)})? Those houses will show as new again.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await undoLastPrintRun();
+      setNotice(`Forgot the last print run · ${r.removed} house${r.removed === 1 ? "" : "s"} back to new.`);
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -1252,9 +1275,29 @@ function FieldMeasuresView() {
         {data.last_run
           ? ` · last print run ${fmtDate(data.last_run.at)} by ${data.last_run.by ?? "?"} · ${data.last_run.count} layout${data.last_run.count === 1 ? "" : "s"}`
           : " · nothing printed yet"}
+        {data.last_run && (
+          <>
+            {" "}
+            <button type="button" className="link-btn no-print" disabled={busy} onClick={undoLast}>
+              undo last run
+            </button>
+          </>
+        )}
         {" · "}checked rows go to the printer; new and revised layouts are checked for you.
       </p>
-      {notice && <p className="ss-alert" style={{ background: "#eaf3de", color: "#27500a" }}>{notice}</p>}
+      {notice && (
+        <p className="ss-alert" style={{ background: "#eaf3de", color: "#27500a" }}>
+          {notice}
+          {pdfLink && (
+            <>
+              {" "}
+              <a href={pdfLink.url} download={pdfLink.filename}>
+                Download the PDF again
+              </a>
+            </>
+          )}
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
       {groups.length === 0 && <p className="muted">Nothing needs a field measure for the selected builders.</p>}
       {groups.map(([title, rows]) => (

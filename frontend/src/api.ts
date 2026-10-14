@@ -667,14 +667,21 @@ export interface FieldMeasureReport {
 
 export const getFieldMeasures = () => api<FieldMeasureReport>("/reports/field-measures");
 
-/** Stamp + merge the chosen houses' layouts; opens the PDF in a new tab for printing. */
-export async function printFieldMeasures(jobIds: number[]): Promise<{ printed: number; skipped: number }> {
+/** Stamp + merge the chosen houses' layouts. `target` is a tab the CALLER opened
+ *  synchronously inside the click handler — a tab opened after the download
+ *  finishes is a popup to the browser and gets blocked. Returns the object URL
+ *  too, so the page can offer a link if no tab could be opened. */
+export async function printFieldMeasures(
+  jobIds: number[],
+  target: Window | null,
+): Promise<{ printed: number; skipped: number; url: string; filename: string }> {
   const resp = await fetch("/api/reports/field-measures/print", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
     body: JSON.stringify({ job_ids: jobIds }),
   });
   if (!resp.ok) {
+    target?.close();
     let detail = "Print failed";
     try {
       detail = (await resp.json()).detail ?? detail;
@@ -685,14 +692,29 @@ export async function printFieldMeasures(jobIds: number[]): Promise<{ printed: n
   }
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
-  window.open(url, "_blank");
-  setTimeout(() => URL.revokeObjectURL(url), 120_000);
-  try {
-    return JSON.parse(resp.headers.get("X-Print-Summary") ?? "{}");
-  } catch {
-    return { printed: jobIds.length, skipped: 0 };
+  const filename =
+    /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "Field Measure Layouts.pdf";
+  if (target && !target.closed) {
+    target.location.href = url;
+  } else {
+    // No tab (popup blocked, or none opened): hand the file to the browser as a download.
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
   }
+  let summary: { printed?: number; skipped?: number } = {};
+  try {
+    summary = JSON.parse(resp.headers.get("X-Print-Summary") ?? "{}");
+  } catch {
+    /* header not exposed */
+  }
+  return { printed: summary.printed ?? jobIds.length, skipped: summary.skipped ?? 0, url, filename };
 }
+
+/** Forget the most recent print run (printer jam, blocked tab...) so those houses print again as new. */
+export const undoLastPrintRun = () =>
+  api<{ batch: string; removed: number; at: string | null }>("/reports/field-measures/undo-last", { method: "POST" });
 
 export interface InstallWeekRow {
   week_start: string;
