@@ -282,12 +282,13 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
         </div>
         <h1>Carter Kitchen and Bath</h1>
         <label>
-          Email
+          Username
           <input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value.replace(/^mailto:/i, "").trim())}
             autoComplete="username"
+            placeholder="first.last"
             required
           />
         </label>

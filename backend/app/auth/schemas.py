@@ -29,6 +29,7 @@ class UserUpdate(BaseModel):
     """Admin edits to an existing user. Every field optional — send only what changes."""
 
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    username: str | None = Field(default=None, min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
     role: Role | None = None
     is_active: bool | None = None
 
@@ -44,6 +45,7 @@ class UserOut(BaseModel):
     # plain str: responses must never 500 on an address already in the DB
     # (EmailStr rejects things like .local); strictness belongs on input only
     email: str
+    username: str | None = None
     full_name: str
     role: Role
     is_active: bool

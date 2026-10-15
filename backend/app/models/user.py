@@ -23,6 +23,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # "first.last" sign-in name (Brian 10/15/26). Email stays the record key
+    # (JWT subject, invites); either one signs you in.
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, default=None)
     full_name: Mapped[str] = mapped_column(String(255))
     hashed_password: Mapped[str] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role, native_enum=False, length=32))

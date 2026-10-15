@@ -170,6 +170,7 @@ export default function UsersPage({ me }: { me: User }) {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Username</th>
               <th>Email</th>
               <th>Access level</th>
               <th>Status</th>
@@ -184,6 +185,9 @@ export default function UsersPage({ me }: { me: User }) {
                   <td>
                     {u.full_name}
                     {self && <span className="muted"> (you)</span>}
+                  </td>
+                  <td>
+                    <code>{u.username ?? "—"}</code>
                   </td>
                   <td>{u.email}</td>
                   <td>
@@ -248,7 +252,7 @@ export default function UsersPage({ me }: { me: User }) {
           ))}
         </ul>
         <p className="muted">
-          New people sign in with the email and temporary password you set here, then you can reset
+          New people sign in with their username (first.last, or their email) and the temporary password you set here, then you can reset
           it anytime. Disabling a user blocks their sign-in without deleting their history.
         </p>
       </div>

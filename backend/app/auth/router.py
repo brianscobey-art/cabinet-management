@@ -30,6 +30,27 @@ from app.models import Role, User
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def derive_username(full_name: str, email: str) -> str:
+    """'Brian Scobey' -> 'brian.scobey'; a one-word name falls back to the email's local part."""
+    import re
+    import unicodedata
+
+    name = unicodedata.normalize("NFKD", full_name or "").encode("ascii", "ignore").decode()
+    words = [w for w in (re.sub(r"[^a-z0-9]", "", x.lower()) for x in name.split()) if w]
+    if len(words) >= 2:
+        return f"{words[0]}.{words[-1]}"
+    local = re.sub(r"[^a-z0-9.]", "", (email or "").split("@")[0].lower())
+    return local or (words[0] if words else "user")
+
+
+def _unique_username(db: Session, base: str) -> str:
+    name, n = base, 2
+    while db.query(User).filter(User.username == name).first():
+        name = f"{base}{n}"
+        n += 1
+    return name
+
+
 def _send_invite(user: User) -> None:
     """Build the set-password link and email it. Raises on any failure."""
     settings = get_settings()
@@ -43,7 +64,10 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     from app.activity import record
 
     email = form.username.lower().strip()
+    # Sign in with the "first.last" username or the full email address.
     user = db.query(User).filter(User.email == email).first()
+    if user is None and "@" not in email:
+        user = db.query(User).filter(User.username == email).first()
     if user is None or not verify_password(form.password, user.hashed_password):
         record(action="Sign-in failed", method="POST", path="/auth/token",
                status_code=401, email=email, entity="session")
@@ -96,6 +120,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 
     user = User(
         email=email,
+        username=_unique_username(db, derive_username(payload.full_name, email)),
         full_name=payload.full_name,
         hashed_password=hash_password(raw_password),
         role=payload.role,
@@ -175,6 +200,12 @@ def update_user(
 
     if payload.full_name is not None:
         target.full_name = payload.full_name
+    if payload.username is not None:
+        wanted = payload.username.lower().strip()
+        clash = db.query(User).filter(User.username == wanted, User.id != target.id).first()
+        if clash:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That username is taken.")
+        target.username = wanted
     if payload.role is not None:
         target.role = payload.role
     if payload.is_active is not None:

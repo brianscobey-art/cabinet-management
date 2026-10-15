@@ -12,6 +12,7 @@ export function setToken(token: string | null) {
 export interface User {
   id: number;
   email: string;
+  username: string | null;
   full_name: string;
   role: string;
   is_active: boolean;
