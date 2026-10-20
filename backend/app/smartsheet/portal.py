@@ -105,12 +105,19 @@ def read_supplypro(path: Path) -> list[dict]:
     """Century cabinet jobs. Two sheets carry dates and the PO sheet wins:
     "Cabinet POs" is per purchase order and carries the committed dates, while
     "Cabinet Jobs" holds the earlier request dates. Job rows fill the gaps."""
-    wb = _open(path)
-    try:
-        pos = _table(wb["Cabinet POs"], 2) if "Cabinet POs" in wb.sheetnames else []
-        jobs = _table(wb["Cabinet Jobs"], 2) if "Cabinet Jobs" in wb.sheetnames else []
-    finally:
-        wb.close()
+    if path.suffix.lower() == ".xml":
+        # SupplyPro's scheduled export is Excel-2003 XML since 10/2/26.
+        from app.feeds import _spreadsheetml_tabs
+
+        tabs = _spreadsheetml_tabs(path)
+        pos, jobs = tabs.get("Cabinet POs", []), tabs.get("Cabinet Jobs", [])
+    else:
+        wb = _open(path)
+        try:
+            pos = _table(wb["Cabinet POs"], 2) if "Cabinet POs" in wb.sheetnames else []
+            jobs = _table(wb["Cabinet Jobs"], 2) if "Cabinet Jobs" in wb.sheetnames else []
+        finally:
+            wb.close()
 
     merged: dict[tuple, dict] = {}
     for r in jobs:
@@ -166,7 +173,7 @@ def load(vendorsuite_dir, *century_dirs) -> tuple[list[dict], dict]:
     # file today, and that is exactly the kind of thing that quietly stops being
     # true.
     found = [f for d in century_dirs
-             if (f := newest(d, "Century Cabinet Jobs - SupplyPro*.xlsx"))]
+             if (f := newest(d, "Century Cabinet Jobs - SupplyPro*.x*"))]
     cc = max(found, key=_name_stamp) if found else None
     meta["supplypro"] = cc.name if cc else None
     if cc:

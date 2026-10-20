@@ -29,7 +29,9 @@ FEED_SOURCES = [
     # decoys that must never be mistaken for the working tracker.
     ("tracker_dir", "tracker/", TRACKER_GLOB, 5),
     ("vendorsuite_dir", "vendorsuite/", "DRH_Cabinets_Combined_*.xlsx", 5),
-    ("century_dir", "century/", "Century Cabinet Jobs - SupplyPro*.xlsx", 5),
+    # SupplyPro switched the scheduled export from .xlsx to Excel-2003 .xml on
+    # 10/2/26; both spellings travel.
+    ("century_dir", "century/", "Century Cabinet Jobs - SupplyPro*.x*", 5),
     ("pl_reports_dir", "pl-reports/", "*.xlsx", 3),  # monthly K&B P&L (manager report)
     ("po_receipt_folder", "po-receipts/", "PO Receipt List*.csv", 2),  # DOMO receipts pull
     # Smartsheet Tract Builder Management exports. keep=15 because there are

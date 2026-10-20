@@ -49,7 +49,20 @@ def _canon_lot(lot) -> str | None:
 
 
 def _as_date(value) -> date | None:
-    return value.date() if isinstance(value, datetime) else None
+    """Excel gives datetimes; the SupplyPro XML export gives ISO strings
+    ('2026-02-27T00:00:00.000'). Anything else is not a date."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        m = re.match(r"^\s*(\d{4})-(\d{2})-(\d{2})", value)
+        if m:
+            try:
+                return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                return None
+    return None
 
 
 def _fmt(d: date | None) -> str:
@@ -106,17 +119,93 @@ def _get_or_create_account(db: Session, name: str) -> Account:
     return account
 
 
+def _norm_name(s) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+
+
 def _get_or_create_community(db: Session, account: Account, name: str) -> Community:
+    """Exact name first; otherwise a community of the same builder whose name
+    is the same place spelled longer or shorter ("Independence" from
+    VendorSuite is the tracker's "Independence 60's"). Creating a second
+    community for one place is how every house there ended up twice."""
     community = (
         db.query(Community)
         .filter(Community.account_id == account.id, Community.name == name)
         .first()
     )
     if community is None:
+        want = _norm_name(name)
+        if len(want) >= 5:
+            for c in db.query(Community).filter(Community.account_id == account.id).all():
+                have = _norm_name(c.name)
+                if len(have) >= 5 and (have.startswith(want) or want.startswith(have)):
+                    return c
+    if community is None:
         community = Community(account_id=account.id, name=name)
         db.add(community)
         db.flush()
     return community
+
+
+def merge_duplicate_houses(db: Session) -> int:
+    """Fold an uncoded feed-created house into its coded twin: same builder,
+    same lot, same place under two community spellings (VendorSuite's
+    "Independence" vs the tracker's "Independence 60's"). The coded house
+    keeps its identity and status; it gains the PO facts and dates the twin
+    carried; everything attached to the twin moves over; the twin is deleted."""
+    from app.database import Base
+
+    merged = 0
+    uncoded = (
+        db.query(Job).join(Account, Job.account_id == Account.id)
+        .filter(Account.type == AccountType.builder, Job.job_code.is_(None), Job.community_id.isnot(None))
+        .all()
+    )
+    for dup in uncoded:
+        want_lot = _canon_lot(dup.lot_number)
+        if want_lot is None or dup.community is None:
+            continue
+        dup_comm = _norm_name(dup.community.name)
+        keeper = None
+        for cand in (db.query(Job).filter(Job.account_id == dup.account_id, Job.job_code.isnot(None),
+                                           Job.community_id.isnot(None), Job.id != dup.id).all()):
+            if _canon_lot(cand.lot_number) != want_lot or cand.community is None:
+                continue
+            have = _norm_name(cand.community.name)
+            if have == dup_comm or (len(dup_comm) >= 5 and len(have) >= 5
+                                    and (have.startswith(dup_comm) or dup_comm.startswith(have))):
+                keeper = cand
+                break
+        if keeper is None:
+            continue
+        for attr in ("builder_po", "po_amount", "po_status", "po_check_number", "po_paid_date", "plan",
+                     "measure_date", "install_date", "warranty_start_date", "field_contact_phone"):
+            if getattr(keeper, attr, None) in (None, "") and getattr(dup, attr, None) not in (None, ""):
+                setattr(keeper, attr, getattr(dup, attr))
+        for tag in ("VS:", "SP:"):
+            m = re.search(rf"{tag}[^|]*", dup.notes or "")
+            if m and tag not in (keeper.notes or ""):
+                keeper.notes = f"{keeper.notes or ''} | {m.group(0).strip()}".strip(" |")
+        if (dup.notes or "").startswith("Plan:") and "VS BUID" in (dup.notes or "") and "VS BUID" not in (keeper.notes or ""):
+            buid = re.search(r"VS BUID \d+", dup.notes)
+            if buid:
+                keeper.notes = f"{keeper.notes or ''} | {buid.group(0)}".strip(" |")
+        # Children: move them; a one-per-job table keeps the keeper's row.
+        for t in Base.metadata.sorted_tables:
+            if "job_id" not in t.c or t.name == "jobs":
+                continue
+            unique = bool(t.c.job_id.unique) or any(
+                len(u.columns) == 1 and "job_id" in u.columns
+                for u in t.constraints if u.__class__.__name__ == "UniqueConstraint")
+            if unique and db.execute(t.select().where(t.c.job_id == keeper.id)).first() is not None:
+                db.execute(t.delete().where(t.c.job_id == dup.id))
+            else:
+                db.execute(t.update().where(t.c.job_id == dup.id).values(job_id=keeper.id))
+        db.delete(dup)
+        merged += 1
+    if merged:
+        db.commit()
+    return merged
 
 
 def _find_job(db: Session, community: Community, lot) -> Job | None:
@@ -129,8 +218,42 @@ def _find_job(db: Session, community: Community, lot) -> Job | None:
     return None
 
 
+def _tracker_prefix(community_name: str) -> str | None:
+    """The job-code prefix the 3.0 tracker uses for a community, for a community
+    that has no coded house in CabinetTron yet (Independence -> DRID60). Names
+    are matched loosely: the tracker says "Independence 60's", the feed says
+    "Independence"."""
+    try:
+        from app.smartsheet.api import _tracker_rows
+
+        rows, ok, _ = _tracker_rows()
+    except Exception:  # noqa: BLE001
+        return None
+    want = re.sub(r"[^a-z0-9]", "", (community_name or "").lower())
+    if not want:
+        return None
+    counts: dict[str, int] = {}
+    for r in rows:
+        comm = re.sub(r"[^a-z0-9]", "", str(r.get("Community") or "").lower())
+        code = str(r.get("Job Code") or "").strip()
+        if not comm or "-" not in code:
+            continue
+        if comm == want or comm.startswith(want) or want.startswith(comm):
+            prefix = code.rsplit("-", 1)[0]
+            counts[prefix] = counts.get(prefix, 0) + 1
+    return max(counts, key=lambda p: counts[p]) if counts else None
+
+
+def _lot4(lot) -> str:
+    """Job codes carry the lot as four digits (lot 20 -> 0020); lettered or
+    longer lots are kept as they are (A034, 21121)."""
+    s = str(lot or "").strip()
+    return s.zfill(4) if s.isdigit() and len(s) <= 4 else s
+
+
 def _derive_job_code(db: Session, community: Community, lot4: str) -> str | None:
-    """New lots inherit the code prefix their coded siblings use (DRLICR-0135)."""
+    """New lots inherit the code prefix their coded siblings use (DRLICR-0135);
+    a community with no coded house yet borrows the prefix from the tracker."""
     prefixes: dict[str, int] = {}
     for (code,) in (
         db.query(Job.job_code).filter(Job.community_id == community.id, Job.job_code.isnot(None)).all()
@@ -138,13 +261,33 @@ def _derive_job_code(db: Session, community: Community, lot4: str) -> str | None
         if "-" in code:
             prefix = code.rsplit("-", 1)[0]
             prefixes[prefix] = prefixes.get(prefix, 0) + 1
-    if not prefixes:
+    prefix = max(prefixes, key=lambda p: prefixes[p]) if prefixes else _tracker_prefix(community.name)
+    if not prefix or not lot4:
         return None
-    prefix = max(prefixes, key=lambda p: prefixes[p])
     candidate = f"{prefix}-{lot4}"
     if db.query(Job).filter(Job.job_code == candidate).first():
         return None  # collision — leave uncoded rather than mislabel
     return candidate
+
+
+def backfill_job_codes(db: Session) -> int:
+    """Give a code to builder houses the feeds created before their community
+    had one to inherit (Century houses, the first Independence lots). Runs at
+    the end of every sync; the tracker import still overrides a code later."""
+    n = 0
+    jobs = (
+        db.query(Job).join(Account, Job.account_id == Account.id)
+        .filter(Account.type == AccountType.builder, Job.job_code.is_(None), Job.community_id.isnot(None))
+        .all()
+    )
+    for job in jobs:
+        code = _derive_job_code(db, job.community, _lot4(job.lot_number))
+        if code:
+            job.job_code = code
+            n += 1
+    if n:
+        db.commit()
+    return n
 
 
 def _set_feed_note(job: Job, tag: str, text: str) -> None:
@@ -278,11 +421,44 @@ def _century_subdivision(name) -> str:
     return s[6:].strip() if s.upper().startswith("LCA - ") else s
 
 
+_SSML = "{urn:schemas-microsoft-com:office:spreadsheet}"
+
+
+def _spreadsheetml_tabs(path: Path) -> dict[str, list[dict]]:
+    """SupplyPro's scheduled export (since 10/2/26) is Excel 2003 XML, not
+    .xlsx. Each worksheet starts with a title row, so the header is the first
+    row that contains 'Lot'. Returns {tab name: [row dicts]}."""
+    import xml.etree.ElementTree as ET
+
+    out: dict[str, list[dict]] = {}
+    root = ET.parse(path).getroot()
+    for ws in root.iter(_SSML + "Worksheet"):
+        rows: list[list] = []
+        for row in ws.iter(_SSML + "Row"):
+            vals: list = []
+            for cell in row.iter(_SSML + "Cell"):
+                idx = cell.get(_SSML + "Index")
+                if idx:
+                    while len(vals) < int(idx) - 1:
+                        vals.append(None)
+                data = cell.find(_SSML + "Data")
+                vals.append(data.text if data is not None else None)
+            rows.append(vals)
+        head = next((i for i, r in enumerate(rows) if "Lot" in [str(x).strip() for x in r if x]), None)
+        if head is None:
+            out[ws.get(_SSML + "Name")] = []
+            continue
+        headers = [str(x).strip() if x else "" for x in rows[head]]
+        out[ws.get(_SSML + "Name")] = [dict(zip(headers, r)) for r in rows[head + 1:] if any(v for v in r)]
+    return out
+
+
 def century_candidates(directory: Path) -> list[Path]:
     """SupplyPro Century files, newest first by the MMDDYY in the filename
-    (revision R.N breaks ties). Files without a date code are ignored."""
+    (revision R.N breaks ties). Files without a date code are ignored.
+    Both the old .xlsx and the current .xml export count."""
     dated = []
-    for f in directory.glob("Century Cabinet Jobs - SupplyPro*.xlsx"):
+    for f in list(directory.glob("Century Cabinet Jobs - SupplyPro*.xlsx")) + list(directory.glob("Century Cabinet Jobs - SupplyPro*.xml")):
         if f.name.startswith("~"):
             continue
         m = re.search(r"(\d{2})(\d{2})(\d{2})(?:\s+R\.?(\d+))?", f.name)
@@ -302,35 +478,37 @@ def sync_century(db: Session, path: Path) -> dict:
     'Cabinet Jobs' tab: subdivision/lot/address, builder contact, and the
     measure/order/deliver dates. 'Cabinet POs' tab adds plan and PO number.
     """
-    wb, cleanup = _load_wb(path)
-    if "Cabinet Jobs" not in wb.sheetnames:
+    if path.suffix.lower() == ".xml":
+        tabs = _spreadsheetml_tabs(path)
+    else:
+        wb, cleanup = _load_wb(path)
+
+        def read_tab(name: str) -> list[dict]:
+            rows = wb[name].iter_rows(min_row=2, values_only=True)
+            headers = [str(h).strip() if h is not None else "" for h in next(rows)]
+            idx = {h: i for i, h in enumerate(headers)}
+            return [
+                {h: values[i] for h, i in idx.items() if i < len(values)}
+                for values in rows
+            ]
+
+        tabs = {name: read_tab(name) for name in wb.sheetnames}
         wb.close()
         cleanup()
+    if "Cabinet Jobs" not in tabs:
         raise ValueError(f"No 'Cabinet Jobs' tab in {path.name}")
 
-    def read_tab(name: str) -> list[dict]:
-        rows = wb[name].iter_rows(min_row=2, values_only=True)
-        headers = [str(h).strip() if h is not None else "" for h in next(rows)]
-        idx = {h: i for i, h in enumerate(headers)}
-        return [
-            {h: values[i] for h, i in idx.items() if i < len(values)}
-            for values in rows
-        ]
-
     records: dict[tuple[str, str], dict] = {}
-    for row in read_tab("Cabinet Jobs"):
+    for row in tabs["Cabinet Jobs"]:
         sub, lot = row.get("Subdivision"), row.get("Lot")
         if not sub or lot is None:
             continue
         records[(_century_subdivision(sub), _canon_lot(lot))] = {"jobs": row}
-    if "Cabinet POs" in wb.sheetnames:
-        for row in read_tab("Cabinet POs"):
-            sub, lot = row.get("Subdivision"), row.get("Lot")
-            if not sub or lot is None:
-                continue
-            records.setdefault((_century_subdivision(sub), _canon_lot(lot)), {})["pos"] = row
-    wb.close()
-    cleanup()
+    for row in tabs.get("Cabinet POs", []):
+        sub, lot = row.get("Subdivision"), row.get("Lot")
+        if not sub or lot is None:
+            continue
+        records.setdefault((_century_subdivision(sub), _canon_lot(lot)), {})["pos"] = row
 
     account = _get_or_create_account(db, CENTURY_ACCOUNT)
     counts = {"created": 0, "updated": 0, "skipped": 0}
@@ -368,6 +546,7 @@ def sync_century(db: Session, path: Path) -> dict:
             if city:
                 address = f"{address}, {city}, {state or ''}".strip(", ")
             job = Job(
+                job_code=_derive_job_code(db, community, _lot4(lot)),
                 account_id=account.id,
                 community_id=community.id,
                 lot_number=str(lot).strip(),
@@ -657,6 +836,11 @@ def sync_all(db: Session) -> dict:
         db.commit()
     except Exception as exc:  # noqa: BLE001
         result["po_receipts"] = {"error": str(exc)}
+    try:
+        result["job_codes"] = {"merged_duplicates": merge_duplicate_houses(db),
+                               "assigned": backfill_job_codes(db)}
+    except Exception as exc:  # noqa: BLE001
+        result["job_codes"] = {"error": str(exc)}
     return result
 
 

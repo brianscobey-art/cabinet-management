@@ -84,17 +84,16 @@ class Settings(BaseSettings):
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\AI Shared Folder\Vendor Suite\VS Combined PO and Schedules"
     )
-    # 10/14/26 (Brian): the Master Plans & Pricing library is "Carter Kitchen
-    # and Bath - ..." now. The SupplyPro download still lands in the old
-    # Townsend copy until that task is repointed, so it stays as the fallback
-    # and the report reads whichever of the two is newest.
+    # 10/20/26: SupplyPro's scheduled "Century Cabinet Jobs" export arrives
+    # daily (~6:10 AM) as Excel-2003 .xml in the Century Complete folder of the
+    # shared library; a second copy landed in CKB Shared\Downloads\SupplyPro
+    # until 10/15. The feed reads whichever folder holds the newest file.
     century_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Carter Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
+        r"\Townsend Shared File\Sales\Builders\Century Complete"
     )
     century_alt_dir: str = (
-        r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Townsend Kitchen and Bath - Master Plans & Pricing\Downloads\SupplyPro\Century"
+        r"C:\Users\Brian SE6\OneDrive - carterlumber.com\CKB Shared\Downloads\SupplyPro"
     )
     # Plan layout templates for the Field Measures report (Brian, 10/8/26): one
     # layout PDF per plan + swing under each builder's Floorplans tree. The
@@ -171,7 +170,7 @@ class Settings(BaseSettings):
     # tree is deprecated and must never be read or written.
     sold_files_dir: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com"
-        r"\Carter Kitchen and Bath - Master Plans & Pricing\Sold Job Files"
+        r"\CKB Shared\Sold Job Files"
         r"\National Accounts\DR Horton - All"
     )
     # Only these logins may load the page or hit its endpoints (comma-separated).

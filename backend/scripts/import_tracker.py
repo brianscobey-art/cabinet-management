@@ -261,7 +261,10 @@ def import_row(db, row: dict, caches: dict) -> str:
     if community is not None and lot is not None:
         found = _find_job(db, community, lot)
         if found is not None:
-            if found.job_code is None:
+            # The tracker is the source of truth for codes: a feed may have
+            # given this house a provisional one (CCGO-0020) before Brian's
+            # team named it. Take the tracker's unless it is already in use.
+            if found.job_code != job_code and not db.query(Job).filter(Job.job_code == job_code).first():
                 found.job_code = job_code
             update_existing(db, found, row)
             return "linked"
