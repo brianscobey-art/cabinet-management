@@ -140,6 +140,36 @@ def hydrate_feeds(settings: Settings | None = None) -> dict:
     return result
 
 
+def _upload_locked_ok(client, bucket: str, f: Path, key: str, src_mtime: str) -> None:
+    """Upload f even while Excel has it open. Excel (and the OneDrive client)
+    hold the live tracker with a share mode that makes Python's open() fail
+    with PermissionError, so during the working day the 5-minute uploader
+    silently shipped nothing and the cloud app ran on the last closed copy.
+    Windows' own CopyFile still works on such a file (that is how Explorer
+    copies an open workbook), so fall back to a Win32 copy into a temp file
+    and upload that."""
+    extra = {"Metadata": {"src-mtime": src_mtime}}
+    try:
+        client.upload_file(str(f), bucket, key, ExtraArgs=extra)
+        return
+    except PermissionError:
+        pass
+    import ctypes
+    import os
+    import tempfile
+
+    tmp = Path(tempfile.gettempdir()) / f"r2-upload-{os.getpid()}-{f.name}"
+    if not ctypes.windll.kernel32.CopyFileW(str(f), str(tmp), False):
+        raise PermissionError(f"CopyFileW failed (err {ctypes.GetLastError()}) for {f.name}")
+    try:
+        client.upload_file(str(tmp), bucket, key, ExtraArgs=extra)
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 def upload_feeds(settings: Settings | None = None) -> dict:
     """On-prem side: push the newest matching files from the OneDrive feed dirs up
     to R2. Skips objects already present with the same size."""
@@ -176,8 +206,7 @@ def upload_feeds(settings: Settings | None = None) -> dict:
             # tracker is first in FEED_SOURCES and changes constantly; when its
             # upload hiccuped, po-receipts (last) never ran at all.
             try:
-                client.upload_file(str(f), s.r2_bucket, key,
-                                   ExtraArgs={"Metadata": {"src-mtime": src_mtime}})
+                _upload_locked_ok(client, s.r2_bucket, f, key, src_mtime)
                 pushed += 1
             except Exception as exc:  # noqa: BLE001
                 print(f"  {key}: upload failed ({type(exc).__name__}: {str(exc)[:80]}) - next run retries")
