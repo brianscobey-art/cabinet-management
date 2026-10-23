@@ -516,10 +516,12 @@ def build_rows(db: Session) -> dict:
 # --------------------------------------------------------------------------
 # Stamping + print run
 # --------------------------------------------------------------------------
-STAMP_W, STAMP_H = 276.0, 100.0  # points: ~3.8 x 1.4 in, the empty title-block corner
+# points: ~3.8 in wide. Height grew 10/23/26 (Address + Framing Start rows):
+# 118 pt ~ 1.6 in, plus one line when the opposite-hand note prints.
+STAMP_W, STAMP_H, STAMP_LINE = 276.0, 118.0, 12.5
 
 
-def _stamp_rect(page):
+def _stamp_rect(page, height: float = STAMP_H):
     """Where the stamp goes: the blank bottom-left corner of the title block,
     left of the 'Note: this drawing is an artistic interpretation' box. A job's
     own layout may already carry text there (builder / address / BUID), so if
@@ -537,12 +539,18 @@ def _stamp_rect(page):
             note = r
     if note is not None and note.x0 > 200:
         x1 = note.x0 - 8
-        y1 = note.y1 - 2
+        # Brian 10/23/26: bottom-align with the WHOLE title block -- the strip
+        # under the Note box that carries the .kit name -- not the Note box.
+        y1 = note.y1
+        for d in page.get_drawings():
+            r = d.get("rect")
+            if r is not None and r.y1 >= note.y1 - 1 and r.x1 >= note.x0 - 2 and r.y1 <= H - 2:
+                y1 = max(y1, r.y1)
     else:
         x1, y1 = 16 + STAMP_W, H - 22
     x0 = 16
     w = min(STAMP_W, x1 - x0)
-    R = fitz.Rect(x0, y1 - STAMP_H, x0 + w, y1)
+    R = fitz.Rect(x0, y1 - height, x0 + w, y1)
 
     text_boxes = [fitz.Rect(b[:4]) for b in page.get_text("blocks") if b[4].strip()]
     def busy(rect):
@@ -557,7 +565,7 @@ def _stamp_rect(page):
         cand.y1 -= 8
         if not busy(cand):
             return cand, False
-    cand = fitz.Rect(x0, 14, x0 + w, 14 + STAMP_H)
+    cand = fitz.Rect(x0, 14, x0 + w, 14 + height)
     while cand.y1 < H * 0.55:
         if not busy(cand):
             return cand, False
@@ -585,7 +593,7 @@ def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layo
                mirror_note: str | None = None, address: str | None = None) -> None:
     import fitz
 
-    R, covered = _stamp_rect(page)
+    R, covered = _stamp_rect(page, STAMP_H + (STAMP_LINE if mirror_note else 0))
     # Opaque panel: whatever the template or job layout already printed under
     # this corner must not bleed through the stamp.
     page.draw_rect(R, color=(0, 0, 0), fill=(1, 1, 1), width=0.8)
@@ -604,26 +612,48 @@ def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layo
         page.insert_text((x, y), l1, fontname="helv", fontsize=fs, color=grey)
         x += fitz.get_text_length(l1, fontname="helv", fontsize=fs)
         maxw = col2 - 6 - x
-        v1 = _fit(v1, maxw, fs, "hebo")
-        page.insert_text((x, y), v1, fontname="hebo", fontsize=fs, color=ink)
+        # Long layout names step down a little before they are ever cut short.
+        vfs = fs
+        while vfs > 6.5 and fitz.get_text_length(v1 or "", fontname="hebo", fontsize=vfs) > maxw:
+            vfs -= 0.25
+        v1 = _fit(v1, maxw, vfs, "hebo")
+        page.insert_text((x, y), v1, fontname="hebo", fontsize=vfs, color=ink)
         x = col2
         page.insert_text((x, y), l2, fontname="helv", fontsize=fs, color=grey)
         x += fitz.get_text_length(l2, fontname="helv", fontsize=fs)
         page.insert_text((x, y), _fit(v2, R.x1 - pad - x, fs, "hebo"), fontname="hebo", fontsize=fs, color=ink)
-        y += fs + 4.5
-    if covered and address:
-        # The stamp had to sit on top of the layout's own builder / address
-        # block, so carry the address forward rather than lose it.
-        page.insert_text((R.x0 + pad, y + 1), "Address: ", fontname="helv", fontsize=fs, color=grey)
-        ax = R.x0 + pad + fitz.get_text_length("Address: ", fontname="helv", fontsize=fs)
-        page.insert_text((ax, y + 1), _fit(address, R.x1 - pad - ax, fs, "hebo"),
-                         fontname="hebo", fontsize=fs, color=ink)
-        y += fs + 4.5
+        y += STAMP_LINE
+    # Street address under the layout name (Brian 10/23/26): street only, no
+    # city / state / zip -- "5124 Elyse Way, Callaway, FL" -> "5124 Elyse Way".
+    street = street_only(address)
+    page.insert_text((R.x0 + pad, y), "Address: ", fontname="helv", fontsize=fs, color=grey)
+    ax = R.x0 + pad + fitz.get_text_length("Address: ", fontname="helv", fontsize=fs)
+    page.insert_text((ax, y), _fit(street or "—", R.x1 - pad - ax, fs, "hebo"),
+                     fontname="hebo", fontsize=fs, color=ink)
+    y += STAMP_LINE
     if mirror_note:
-        # Bold row in the gap above the checkbox: the drawing is the other
-        # hand and the measurer has to flip it.
-        page.insert_text((R.x0 + pad, y + 1), _fit(mirror_note, R.width - 2 * pad, fs, "hebo"),
+        # The drawing is the other hand and the measurer has to flip it.
+        page.insert_text((R.x0 + pad, y), _fit(mirror_note, R.width - 2 * pad, fs, "hebo"),
                          fontname="hebo", fontsize=fs, color=ink)
+        y += STAMP_LINE
+    # Framing Start / Meas. Incorrect: half-size boxes, each with a date line,
+    # side by side, centred in the band above Complete / Correct (Brian 10/23/26).
+    small = 6.5
+    gap_top = y - STAMP_LINE + 3          # just under the last text line
+    gap_bottom = R.y1 - pad - 13          # top of the Complete / Correct box
+    yb = (gap_top + gap_bottom) / 2 + 3   # baseline, visually centred
+
+    def tick(x, label, line_end):
+        b = fitz.Rect(x, yb - small - 0.5, x + small, yb - 0.5)
+        page.draw_rect(b, color=ink, width=0.8)
+        tx = b.x1 + 3.5
+        page.insert_text((tx, yb), label, fontname="helv", fontsize=fs, color=ink)
+        lx = tx + fitz.get_text_length(label, fontname="helv", fontsize=fs) + 4
+        page.draw_line((lx, yb + 1), (line_end, yb + 1), color=ink, width=0.6)
+
+    half = R.x0 + R.width * 0.50
+    tick(R.x0 + pad, "Framing Start", half - 8)
+    tick(half, "Meas. Incorrect", R.x1 - pad)
     # bottom row: checkbox + label on the left, Measured line on the right
     by = R.y1 - pad - 13
     box = fitz.Rect(R.x0 + pad, by, R.x0 + pad + 13, by + 13)
@@ -641,6 +671,17 @@ def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layo
         txt = _fmt_date(measured)
         tw = fitz.get_text_length(txt, fontname="hebo", fontsize=fs)
         page.insert_text(((lx0 + lx1 - tw) / 2, box.y1 - 2.5), txt, fontname="hebo", fontsize=fs, color=ink)
+
+
+def street_only(address: str | None) -> str:
+    """'5124 Elyse Way, Callaway, FL 32404' -> '5124 Elyse Way'. Addresses
+    without commas lose a trailing ', ST 12345' / ' FL 32404' tail if present."""
+    s = (address or "").strip()
+    if not s:
+        return ""
+    s = s.split(",")[0].strip()
+    s = re.sub(r"\s+[A-Z]{2}\s+\d{5}(-\d{4})?$", "", s)
+    return s
 
 
 def _fit(text: str, maxw: float, fs: float, font: str) -> str:
