@@ -516,9 +516,10 @@ def build_rows(db: Session) -> dict:
 # --------------------------------------------------------------------------
 # Stamping + print run
 # --------------------------------------------------------------------------
-# points: ~3.8 in wide. Height grew 10/23/26 (Address + Framing Start rows):
-# 118 pt ~ 1.6 in, plus one line when the opposite-hand note prints.
-STAMP_W, STAMP_H, STAMP_LINE = 276.0, 118.0, 12.5
+# points: ~3.8 in wide. Height fits the rows exactly (Brian 10/23/26: no dead
+# space): 4 text lines + Framing Start row + Complete / Correct = 93 pt
+# (~1.3 in), plus one line when the opposite-hand note prints.
+STAMP_W, STAMP_H, STAMP_LINE = 276.0, 93.0, 12.5
 
 
 def _stamp_rect(page, height: float = STAMP_H):
@@ -637,11 +638,10 @@ def stamp_page(page, *, community: str, lot: str, job_code: str, plan: str, layo
                          fontname="hebo", fontsize=fs, color=ink)
         y += STAMP_LINE
     # Framing Start / Meas. Incorrect: half-size boxes, each with a date line,
-    # side by side, centred in the band above Complete / Correct (Brian 10/23/26).
+    # side by side, one line under the address (Brian 10/23/26); the
+    # Complete / Correct row sits right below it -- the box height is sized so.
     small = 6.5
-    gap_top = y - STAMP_LINE + 3          # just under the last text line
-    gap_bottom = R.y1 - pad - 13          # top of the Complete / Correct box
-    yb = (gap_top + gap_bottom) / 2 + 3   # baseline, visually centred
+    yb = y + 1.5
 
     def tick(x, label, line_end):
         b = fitz.Rect(x, yb - small - 0.5, x + small, yb - 0.5)
