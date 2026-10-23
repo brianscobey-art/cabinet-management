@@ -749,17 +749,14 @@ def print_run(db: Session, job_ids: list[int], printed_by: str | None) -> tuple[
         measured = r.fm_complete_date
         correct = bool(r.fm_correct or r.fm_complete_date)
         reprint = r.last_printed_at is not None
-        mirror_note = None
-        if r.source_status == "mirror":
-            t = tpl_by_rel.get(r.source_name or "")
-            have = t.swing if t else "?"
-            want = r.plan_label.rsplit("-", 1)[-1] if "-" in r.plan_label else "?"
-            mirror_note = f"OPPOSITE HAND: drawing is {have}, house is {want} - mirror it"
+        # An opposite-hand drawing prints without a note (Brian 10/23/26: "we
+        # humans can tell the difference") -- the Plan line already shows the
+        # house's hand (BEAU-R) and the Layout line the drawing's (Beau-L).
         stamp_page(
             src[0], community=r.community_name or r.account_name, lot=_lot4(r.lot_number),
             job_code=r.job_code or f"#{r.job_id}", plan=r.plan_label, layout=layout_label,
             printed=today, reprint=reprint, measured=measured if correct else None, correct=correct,
-            mirror_note=mirror_note, address=r.address,
+            address=r.address,
         )
         out.insert_pdf(src)
         db.add(LayoutPrint(job_id=jid, batch_id=batch, source=r.source, source_name=r.source_name or "",
