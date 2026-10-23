@@ -41,6 +41,7 @@ import { fmtLot, fmtLot4, fmtMaybeDate } from "../format";
 import { fmtDate } from "../format";
 import { getFieldMeasures, printFieldMeasures, undoLastPrintRun, type FieldMeasureReport, type FieldMeasureRow } from "../api";
 import ManagerReportView from "./ManagerReport";
+import { initials } from "./PhasesPage";
 import PoReceiptsView from "./PoReceiptsView";
 
 const money = (v: number) =>
@@ -1582,7 +1583,8 @@ function PhaseReport() {
               </thead>
               <tbody>
                 {g.rows.map((r) => (
-                  <tr key={r.job_id}>
+                  <Fragment key={r.job_id}>
+                  <tr className={r.fm_notes?.length ? "has-fm-notes" : undefined}>
                     <td>{fmtLot4(r.lot_number)}</td>
                     <td>
                       <a href={`#/jobs/${r.job_id}`}>{r.job_code ?? `#${r.job_id}`}</a>
@@ -1615,6 +1617,21 @@ function PhaseReport() {
                     <td>{r.phase_label ?? "—"}</td>
                     <td>{r.phase_date ? fmtDate(r.phase_date) : "—"}</td>
                   </tr>
+                  {r.fm_notes?.length > 0 && (
+                    <tr className="fm-notes-row">
+                      <td colSpan={8}>
+                        {r.fm_notes.map((n, i) => (
+                          <div className="phase-fm-note" key={i}>
+                            <b>
+                              {fmtDate(n.created_at)} · {initials(n.author)}
+                            </b>
+                            <span>{n.body}</span>
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

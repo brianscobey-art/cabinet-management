@@ -496,6 +496,8 @@ export interface PhaseReportRow {
   fm_correct: boolean;
   fm_incorrect: boolean;
   layout_doc_id: number | null;
+  /** Newest first; only present while the field measure is Incorrect. */
+  fm_notes: { body: string; author: string | null; created_at: string }[];
 }
 
 export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");

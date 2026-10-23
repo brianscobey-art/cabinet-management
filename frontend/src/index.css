@@ -1544,6 +1544,57 @@ td.fm-col input[type="checkbox"] {
   align-items: center;
 }
 
+/* Phases tab: field measure notes grouped by lot. */
+.fm-note-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.fm-note-group {
+  border-left: 3px solid var(--kb);
+  padding: 0.2rem 0 0.2rem 0.7rem;
+}
+.fm-note-lot {
+  font-size: 0.85rem;
+  margin-bottom: 0.15rem;
+}
+.fm-note-line {
+  display: grid;
+  grid-template-columns: 6.2rem 1fr;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  border-top: 1px solid #eef0f2;
+}
+.fm-note-line:first-of-type {
+  border-top: none;
+}
+.fm-note-line .fm-note-meta {
+  padding-top: 0.1rem;
+}
+
+/* Phase report: notes under a house whose field measure is Incorrect. */
+.phase-table tr.has-fm-notes td {
+  border-bottom: none;
+}
+.phase-table tr.fm-notes-row td {
+  padding-top: 0;
+}
+.phase-fm-note {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  color: #444;
+  padding: 0.1rem 0 0.1rem 0.6rem;
+  border-left: 2px solid #c0392b;
+  white-space: normal;
+}
+.phase-fm-note b {
+  color: #a32d2d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .fm-notes-list {
   list-style: none;
   padding: 0;

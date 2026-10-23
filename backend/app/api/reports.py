@@ -45,6 +45,12 @@ def _parse_signed_money(s: str) -> float:
         return 0.0
 
 
+class PhaseReportNote(BaseModel):
+    body: str
+    author: str | None
+    created_at: datetime
+
+
 class PhaseReportRow(BaseModel):
     account_name: str
     community_name: str | None
@@ -61,6 +67,10 @@ class PhaseReportRow(BaseModel):
     fm_correct: bool = False
     fm_incorrect: bool = False
     layout_doc_id: int | None
+    # Field measure notes, newest first -- only while the measure is Incorrect.
+    # Marked Correct = archived (the problems were fixed); flipped back to
+    # Incorrect = they show again (Brian 10/23/26).
+    fm_notes: list[PhaseReportNote] = []
 
 
 @router.get("/reports/phases", response_model=list[PhaseReportRow], dependencies=[Depends(read_access)])
@@ -91,6 +101,16 @@ def phase_report(db: Session = Depends(get_db)):
 
         for fm in db.query(FieldMeasure).filter(FieldMeasure.job_id.in_([j.id for j in jobs])).all():
             measures[fm.job_id] = (fm.correct, fm.incorrect)
+
+    notes: dict[int, list[PhaseReportNote]] = {}
+    open_incorrect = [jid for jid, (ok, bad) in measures.items() if bad and not ok]
+    if open_incorrect:
+        from app.models import FieldMeasureNote
+
+        for n in (db.query(FieldMeasureNote).filter(FieldMeasureNote.job_id.in_(open_incorrect))
+                  .order_by(FieldMeasureNote.created_at.desc()).all()):
+            notes.setdefault(n.job_id, []).append(
+                PhaseReportNote(body=n.body, author=n.author, created_at=n.created_at))
 
     layouts: dict[int, int] = {}
     if jobs:
@@ -130,6 +150,7 @@ def phase_report(db: Session = Depends(get_db)):
                 fm_correct=measures.get(job.id, (False, False))[0],
                 fm_incorrect=measures.get(job.id, (False, False))[1],
                 layout_doc_id=layouts.get(job.id),
+                fm_notes=notes.get(job.id, []),
             )
         )
     return rows

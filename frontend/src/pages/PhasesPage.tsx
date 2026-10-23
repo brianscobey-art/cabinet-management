@@ -13,7 +13,7 @@ import {
   setJobPhase,
   updateFieldMeasure,
 } from "../api";
-import { fmtDate } from "../format";
+import { fmtDate, fmtLot4 } from "../format";
 
 // "Brian Scobey" -> "BS"
 export const initials = (name: string | null | undefined) =>
@@ -136,9 +136,18 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
   // Clicking the active button turns the filter off again.
   const pick = (g: PhaseGroup) => setGroup((cur) => (cur === g ? "all" : g));
 
-  const allNotes = rows
-    .flatMap((r) => r.fm_notes.map((n) => ({ ...n, row: r })))
-    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  // Field measure notes, one block per lot (Brian 10/23/26). Newest note first
+  // inside each lot; lots ordered by their newest note. A house marked Correct
+  // has its notes archived -- they are hidden here (still on the job page) and
+  // come back by themselves if the house is flipped back to Incorrect.
+  const noteGroups = rows
+    .filter((r) => !r.fm_correct && r.fm_notes.length > 0)
+    .map((r) => ({
+      row: r,
+      notes: [...r.fm_notes].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+    }))
+    .sort((a, b) => (a.notes[0].created_at < b.notes[0].created_at ? 1 : -1));
+  const archivedCount = rows.filter((r) => r.fm_correct && r.fm_notes.length > 0).length;
 
   return (
     <div>
@@ -344,22 +353,37 @@ export default function PhasesPage({ canWrite }: { canWrite: boolean }) {
           </div>
 
           <h3 className="kb-head">Field Measure Notes</h3>
-          {allNotes.length === 0 ? (
-            <p className="muted">No field measure notes yet.</p>
+          {noteGroups.length === 0 ? (
+            <p className="muted">No open field measure notes.</p>
           ) : (
-            <ul className="fm-notes-list">
-              {allNotes.map((n, i) => (
-                <li key={i}>
-                  <span className="fm-note-meta">
-                    <a href={`#/jobs/${n.row.job_id}`}>
-                      Lot {n.row.lot_number ?? n.row.job_code ?? `#${n.row.job_id}`}
+            <div className="fm-note-groups">
+              {noteGroups.map(({ row, notes }) => (
+                <div className="fm-note-group" key={row.job_id}>
+                  <div className="fm-note-lot">
+                    <a href={`#/jobs/${row.job_id}`}>
+                      Lot {row.lot_number ? fmtLot4(row.lot_number) : row.job_code ?? `#${row.job_id}`}
                     </a>{" "}
-                    · {fmtDate(n.created_at)} · {initials(n.author)}
-                  </span>
-                  <span className="fm-note-body">{n.body}</span>
-                </li>
+                    <span className="muted">
+                      · {notes.length} note{notes.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  {notes.map((n, i) => (
+                    <div className="fm-note-line" key={i}>
+                      <span className="fm-note-meta">
+                        {fmtDate(n.created_at)} · {initials(n.author)}
+                      </span>
+                      <span className="fm-note-body">{n.body}</span>
+                    </div>
+                  ))}
+                </div>
               ))}
-            </ul>
+            </div>
+          )}
+          {archivedCount > 0 && (
+            <p className="muted" style={{ marginTop: "0.4rem" }}>
+              Notes for {archivedCount} house{archivedCount === 1 ? "" : "s"} marked Correct are archived (still on each
+              job page).
+            </p>
           )}
         </>
       )}
