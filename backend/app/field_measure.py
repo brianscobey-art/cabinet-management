@@ -38,10 +38,11 @@ _EXCLUDE_DIR = re.compile(r"archive|(^|\s)old(\s|$)|_to_delete|\btops?\b", re.I)
 _EXCLUDE_NAME = re.compile(r"\bCAB\b|\bTops?\b|Sales Center", re.I)
 _SERIES = re.compile(r"^(DRH|EX|CC)(\d)?$", re.I)  # Horton, Express, Century Complete
 _DATE6 = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+# Whole division names only. Short fragments ("mont", "pc") matched inside
+# plan names -- "CC Beaumont" was filed as a Montgomery drawing.
 _DIVISIONS = (
-    ("panama", "Panama City"), ("montgomery", "Montgomery"),
-    ("pensacola", "Pensacola"), ("tallahassee", "Tallahassee"),
-    ("pens", "Pensacola"), ("mont", "Montgomery"), ("tall", "Tallahassee"), ("pc", "Panama City"),
+    ("panama city", "Panama City"), ("montgomery", "Montgomery"),
+    ("pensacola", "Pensacola"), ("pensecola", "Pensacola"), ("tallahassee", "Tallahassee"),
 )
 
 
@@ -63,9 +64,14 @@ class Template:
     r2_key: str | None = None
 
 
+_JOB_FILE = re.compile(r"^[A-Z]{2,8}\d{0,3}-\d{3,5}\b")
+
+
 def _is_template(rel_parts: tuple[str, ...], name: str) -> bool:
     if not name.lower().endswith(".pdf"):
         return False
+    if _JOB_FILE.match(name):
+        return False  # "DROPE-3021 ... Layout.pdf" is one house's drawing, not a plan template
     if any(_EXCLUDE_DIR.search(p) for p in rel_parts[:-1]) or _EXCLUDE_NAME.search(name):
         return False
     parent = rel_parts[-2].lower() if len(rel_parts) >= 2 else ""
@@ -84,6 +90,12 @@ def _parse_name(rel: str, name: str, mtime: float | None) -> dict:
     version = version_date.strftime("%m%d%y") if version_date else (
         datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M") if mtime else "0")
     tokens = [t for t in re.split(r"[^A-Za-z0-9]+", _DATE6.sub(" ", stem)) if t]
+    # A job's own layout saved among the templates starts with its job code
+    # ("DROPE-3021 EX2 4EBF Cali ..."); read past it to the series.
+    for i, t in enumerate(tokens[:4]):
+        if _SERIES.match(t):
+            tokens = tokens[i:]
+            break
     series = None
     swing = None
     plan: list[str] = []
@@ -181,19 +193,27 @@ class HousePlan:
         return f"{base}-{self.swing}" if self.swing else base
 
 
+_BLANKS = {"", "na", "n/a", "#n/a", "none", "tbd", "-", "0"}
+
+
 def house_plan(tracker_row: dict | None, job: Job) -> HousePlan:
     abbr = name = swing = None
     if tracker_row:
-        abbr = (str(tracker_row.get("House Plan Abbr") or "").strip() or None)
-        name = (str(tracker_row.get("House Plan") or "").strip() or None)
+        def val(key):
+            v = str(tracker_row.get(key) or "").strip()
+            return None if v.lower() in _BLANKS else v
+
+        abbr = val("House Plan Abbr")
+        name = val("House Plan")  # "NA" is a blank, not a plan named NA
         sw = str(tracker_row.get("Swing") or "").strip().upper()
         swing = sw if sw in ("L", "R") else None
     if not name and job.plan:
-        # VS-created jobs carry "DRH1 Madison STD/B15/L"
+        # VS-created jobs carry "DRH1 Madison STD/B15/L"; SupplyPro ones
+        # "Beaumont A1 Right Garage" (the garage side is not the cabinet hand).
         parts = [p for p in re.split(r"[/\s]+", job.plan) if p]
         if parts and parts[-1].upper() in ("L", "R"):
             swing = swing or parts.pop().upper()
-        name = " ".join(parts) or None
+        name = " ".join(p for p in parts if p.lower() not in ("right", "left", "garage")) or None
     tokens: list[str] = []
     series = None
     for t in re.split(r"[^A-Za-z0-9]+", name or ""):
@@ -211,8 +231,22 @@ def house_plan(tracker_row: dict | None, job: Job) -> HousePlan:
         if frag in acct:
             division = label
             break
+    if series is None and acct.startswith("century"):
+        series = "CC"  # Century plans are the CC set, never a DR Horton drawing
     return HousePlan(abbr=abbr, name=name, swing=swing, series=series, tokens=tuple(tokens),
                      division=division)
+
+
+def _same_name(a: str, b: str) -> bool:
+    """Plan names typed by hand drift by a letter ("Roanoake" vs "Roanoke").
+    Same first three letters and ~85% alike counts as the same plan."""
+    if a == b:
+        return True
+    if len(a) < 4 or len(b) < 4 or a[:3] != b[:3]:
+        return False
+    from difflib import SequenceMatcher
+
+    return SequenceMatcher(None, a, b).ratio() >= 0.85
 
 
 @dataclass
@@ -222,10 +256,21 @@ class Match:
     note: str = ""
 
 
+def _name_word(tokens: tuple[str, ...]) -> str | None:
+    """The plan's NAME: the first all-letter word ("Beau" in "Beau, B1DRWS",
+    "Lismore" in "4ELF Lismore", "Cabot" in "Cabot 36in"). Option codes like
+    B1DRWS / 36in / 4EBF are shared by many plans and must never stand in for
+    the name -- keying on the LAST word made every B1DRWS template a "Beau"."""
+    for tok in tokens:
+        if tok.isalpha() and len(tok) >= 3 and tok not in ("std", "layout"):
+            return tok
+    return None
+
+
 def match_template(plan: HousePlan, templates: list[Template]) -> Match:
     if not plan.tokens and not plan.abbr:
         return Match(None, "no-plan", "no plan on the tracker or the job")
-    main = plan.tokens[-1] if plan.tokens else None
+    main = _name_word(plan.tokens) or (plan.tokens[0] if plan.tokens else None)
     cands = []
     for t in templates:
         if not t.plan_tokens:
@@ -236,14 +281,18 @@ def match_template(plan: HousePlan, templates: list[Template]) -> Match:
         if plan.series and t.series and plan.series[:2].upper() != t.series[:2].upper():
             continue
         words = set(t.plan_tokens)
-        if main and main in words and all(tok in words for tok in plan.tokens):
+        named = bool(main) and any(_same_name(main, w) for w in words)
+        if named and all(tok == main or tok in words for tok in plan.tokens):
             score = 10
-        elif plan.abbr and plan.abbr.lower() in words:
-            score = 8
-        elif main and main in words:
+        elif named:
             score = 6
+        elif not main and plan.abbr and any(w.startswith(plan.abbr.lower()) for w in words):
+            score = 4
         else:
             continue
+        # Fewer unexplained extra words = closer match ("Camden MRNKIT" over
+        # "Camden MRNKIT 2CLR" for a plain Camden).
+        score -= 0.1 * len(words - set(plan.tokens))
         if plan.series and t.series and plan.series.upper() == t.series.upper():
             score += 2
         if plan.division and t.division == plan.division:
@@ -251,27 +300,56 @@ def match_template(plan: HousePlan, templates: list[Template]) -> Match:
         cands.append((score, t))
     if not cands:
         return Match(None, "missing", f"no template for {plan.label}")
-    exact = [c for c in cands if plan.swing and c[1].swing == plan.swing]
-    either = [c for c in cands if c[1].swing is None]
-    pool = exact or (either if plan.swing else cands) or []
+
+    # 10/23/26 (DRLB50-0063): the house's OWN plan set comes first, in either
+    # hand. The digit in EX1 / EX4 / DRH2 is the division's plan set -- EX1
+    # Beau (Panama City) and EX4 Beau (Pensacola) are different drawings.
+    # Ranking "right hand from any division" above "own plan, opposite hand"
+    # printed Pensacola's Beau-R for a Panama City house whose own drawing
+    # exists as Beau-L. Order now:
+    #   own set: exact hand -> no hand stated -> opposite hand (mirror note)
+    #   another set, same order, always labelled with where it came from.
+    def own(t: Template) -> bool:
+        ps, ts = plan.series or "", t.series or ""
+        pd, td = any(ch.isdigit() for ch in ps), any(ch.isdigit() for ch in ts)
+        if pd and td:
+            return ps.upper() == ts.upper()
+        if plan.division and t.division:
+            return plan.division == t.division
+        return True  # nothing says otherwise (Century: CC plans, no divisions)
+
+    def tiers(pool):
+        if plan.swing:
+            yield [c for c in pool if c[1].swing == plan.swing], False
+            yield [c for c in pool if c[1].swing is None], False
+            yield [c for c in pool if c[1].swing and c[1].swing != plan.swing], True
+        else:
+            yield [c for c in pool if c[1].swing is None], False
+            yield list(pool), False
+
+    best = None
     mirrored = False
-    if not pool:
-        # Brian 10/14/26: no drawing for this hand -> use the opposite hand and
-        # say so on the layout. The measurer mirrors it in the field.
-        pool = [c for c in cands if c[1].swing and c[1].swing != plan.swing]
-        mirrored = True
-    if not pool:
+    for pool in ([c for c in cands if own(c[1])], [c for c in cands if not own(c[1])]):
+        for tier, mir in tiers(pool):
+            if tier:
+                tier.sort(key=lambda c: (c[0], c[1].version_date or date.min, c[1].version), reverse=True)
+                best, mirrored = tier[0][1], mir
+                break
+        if best is not None:
+            break
+    if best is None:
         return Match(None, "missing", f"no template for {plan.label}")
-    pool.sort(key=lambda c: (c[0], c[1].version_date or date.min, c[1].version), reverse=True)
-    best = pool[0][1]
+
+    elsewhere = ""
+    if not own(best):
+        where = best.division or (best.series or "another")
+        elsewhere = f"from the {where} plan set"
     if mirrored:
-        return Match(best, "mirror",
-                     f"no {plan.label} template · printed {plan.abbr or main}-{best.swing}, mirror it")
-    note = ""
-    if plan.division and best.division and best.division != plan.division:
-        # Same plan family, another division's drawing -- usable, but say so.
-        note = f"from the {best.division} plan set"
-    elif plan.swing and best.swing is None:
+        note = f"no {plan.label} template · printed {plan.abbr or main}-{best.swing}"
+        note += f" {elsewhere}, mirror it" if elsewhere else ", mirror it"
+        return Match(best, "mirror", note)
+    note = elsewhere
+    if not note and plan.swing and best.swing is None:
         note = "template has no swing"
     return Match(best, "ok", note)
 
@@ -393,7 +471,9 @@ def build_rows(db: Session) -> dict:
             status, note = m.status, m.note
         if lp is None:
             state = "new"
-        elif version and lp.source_version != version:
+        elif (version and lp.source_version != version) or (source_name and lp.source_name != source_name):
+            # A newer template, OR a different drawing altogether (the matcher
+            # was corrected, or a better template was added): print it again.
             state = "revised"
         else:
             state = "printed"

@@ -49,6 +49,61 @@ def test_match_prefers_exact_swing_then_division_and_rejects_other_family():
     assert match_template(ex, tpls).template.series == "EX4"
 
 
+def test_own_division_opposite_hand_beats_another_divisions_exact_hand():
+    """DRLB50-0063: Panama City EX1 Beau-R. Its own drawing exists only as L;
+    Pensacola's EX4 Beau-R must NOT win just because the hand matches."""
+    tpls = [
+        _tpl("DR Horton/DRH Panama City/Floorplans/Express/EX1 Beau STD/Layouts/EX1 Beau, B1DRWS-L 060426.pdf"),
+        _tpl("DR Horton/DRH Pensacola/Floorplans/EX/EX4 Beau/Layout/EX4 Beau STD-R 043026.pdf"),
+        _tpl("DR Horton/DRH Montgomery/Flooprlans/Express/EX2 Beau STD 041626/Layouts/EX2 Beau, B1DRWS STD Layout 041626.pdf"),
+    ]
+    plan = HousePlan(abbr="BEAU", name="EX1 Beau, B1DRWS STD", swing="R", series="EX1",
+                     tokens=("beau", "b1drws"), division="Panama City")
+    m = match_template(plan, tpls)
+    assert m.template.rel.startswith("DR Horton/DRH Panama City")
+    assert m.status == "mirror" and "BEAU-L" in m.note and "Pensacola" not in m.note
+
+
+def test_a_shared_option_code_never_matches_a_different_plan():
+    """EX1 Walker, B1DRWS shares B1DRWS with EX1 Beau, B1DRWS -- not a Beau."""
+    tpls = [
+        _tpl("DR Horton/DRH Panama City/Floorplans/Express/EX1 Walker STD/Layouts/EX1 Walker ,B1DRWS STD 060426.pdf"),
+        _tpl("DR Horton/DRH Panama City/Floorplans/Express/EX1 Beau STD/Layouts/EX1 Beau, B1DRWS-L 060426.pdf"),
+    ]
+    plan = HousePlan(abbr="BEAU", name="EX1 Beau, B1DRWS STD", swing="R", series="EX1",
+                     tokens=("beau", "b1drws"), division="Panama City")
+    m = match_template(plan, tpls)
+    assert "Beau" in m.template.rel and m.status == "mirror"
+
+
+def test_another_division_only_when_the_own_set_has_nothing_and_it_says_so():
+    tpls = [_tpl("DR Horton/DRH Pensacola/Floorplans/EX/EX4 Beau/Layout/EX4 Beau STD-R 043026.pdf")]
+    plan = HousePlan(abbr="BEAU", name="EX1 Beau STD", swing="R", series="EX1",
+                     tokens=("beau",), division="Panama City")
+    m = match_template(plan, tpls)
+    assert m.status == "ok" and "Pensacola plan set" in m.note
+
+
+def test_a_one_letter_typo_in_the_tracker_still_finds_the_plan():
+    tpls = [_tpl("Century Complete/Plans/CC Roanoake 082626/Layouts/CC Roanoke 36in STD 071026.pdf"),
+            _tpl("Century Complete/Plans/CC Beaumont 082625/Layouts/CC Beaumont 36in STD 071026.pdf")]
+    plan = HousePlan(abbr="ROAN", name="CC Roanoake 36in STD", swing="L", series="CC",
+                     tokens=("roanoake", "36in"), division=None)
+    assert "Roanoke" in match_template(plan, tpls).template.rel
+
+
+def test_a_job_file_among_the_templates_keeps_its_series():
+    info = _parse_name("DR Horton/DROPE-3021 EX2 4EBF Cali, B1DRWS STD Layout 030926.pdf",
+                       "DROPE-3021 EX2 4EBF Cali, B1DRWS STD Layout 030926.pdf", None)
+    assert info["series"] == "EX2" and info["plan_tokens"][:2] == ("4ebf", "cali")
+
+
+def test_plan_names_are_not_mistaken_for_divisions():
+    info = _parse_name("Century Complete/Plans/CC Beaumont 082625/Layouts/CC Beaumont 36in STD 071026.pdf",
+                       "CC Beaumont 36in STD 071026.pdf", None)
+    assert info["division"] is None
+
+
 def test_match_falls_back_to_the_opposite_hand_and_says_so():
     tpls = [_tpl("DR Horton/DRH Montgomery/Flooprlans/DRH/DRH2 Harper/Layouts/DRH2 Harper STD-L 031226.pdf")]
     plan = HousePlan(abbr="HARP", name="DRH2 Harper STD", swing="R", series="DRH2", tokens=("harper",), division="Montgomery")
