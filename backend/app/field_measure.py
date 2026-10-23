@@ -309,13 +309,17 @@ def match_template(plan: HousePlan, templates: list[Template]) -> Match:
     # exists as Beau-L. Order now:
     #   own set: exact hand -> no hand stated -> opposite hand (mirror note)
     #   another set, same order, always labelled with where it came from.
+    # Brian 10/23/26: "the division takes precedence over the handing." The
+    # division is the folder the drawing is filed under (DRH Panama City,
+    # DRH Pensacola ...); the plan-code digit is only a stand-in when a side
+    # has no division, because it is not unique -- Tallahassee files DRH4/EX4
+    # drawings just like Pensacola.
     def own(t: Template) -> bool:
-        ps, ts = plan.series or "", t.series or ""
-        pd, td = any(ch.isdigit() for ch in ps), any(ch.isdigit() for ch in ts)
-        if pd and td:
-            return ps.upper() == ts.upper()
         if plan.division and t.division:
             return plan.division == t.division
+        ps, ts = plan.series or "", t.series or ""
+        if any(ch.isdigit() for ch in ps) and any(ch.isdigit() for ch in ts):
+            return ps.upper() == ts.upper()
         return True  # nothing says otherwise (Century: CC plans, no divisions)
 
     def tiers(pool):
