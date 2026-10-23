@@ -349,9 +349,9 @@ def match_template(plan: HousePlan, templates: list[Template]) -> Match:
         where = best.division or (best.series or "another")
         elsewhere = f"from the {where} plan set"
     if mirrored:
-        note = f"no {plan.label} template · printed {plan.abbr or main}-{best.swing}"
-        note += f" {elsewhere}, mirror it" if elsewhere else ", mirror it"
-        return Match(best, "mirror", note)
+        # No "opposite hand" wording anywhere (Brian 10/23/26: "we humans can
+        # tell the difference"); only say so if it is another division's drawing.
+        return Match(best, "mirror", elsewhere)
     note = elsewhere
     if not note and plan.swing and best.swing is None:
         note = "template has no swing"

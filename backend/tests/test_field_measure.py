@@ -61,7 +61,7 @@ def test_own_division_opposite_hand_beats_another_divisions_exact_hand():
                      tokens=("beau", "b1drws"), division="Panama City")
     m = match_template(plan, tpls)
     assert m.template.rel.startswith("DR Horton/DRH Panama City")
-    assert m.status == "mirror" and "BEAU-L" in m.note and "Pensacola" not in m.note
+    assert m.status == "mirror" and m.note == ""  # no opposite-hand wording, own division
 
 
 def test_a_shared_option_code_never_matches_a_different_plan():
@@ -108,7 +108,7 @@ def test_match_falls_back_to_the_opposite_hand_and_says_so():
     tpls = [_tpl("DR Horton/DRH Montgomery/Flooprlans/DRH/DRH2 Harper/Layouts/DRH2 Harper STD-L 031226.pdf")]
     plan = HousePlan(abbr="HARP", name="DRH2 Harper STD", swing="R", series="DRH2", tokens=("harper",), division="Montgomery")
     m = match_template(plan, tpls)
-    assert m.template is tpls[0] and m.status == "mirror" and "HARP-L" in m.note and "mirror" in m.note
+    assert m.template is tpls[0] and m.status == "mirror" and m.note == ""
 
 
 def test_match_without_swing_takes_a_swingless_template_and_newest_version():

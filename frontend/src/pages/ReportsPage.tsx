@@ -1361,7 +1361,6 @@ function FieldMeasuresView() {
                           {r.print_state === "new" && <span className="fm-tag fm-tag-new">new</span>}
                           {r.print_state === "revised" && <span className="fm-tag fm-tag-rev">revised</span>}
                           {r.source === "job_doc" && <span className="fm-tag">job file</span>}
-                          {r.source_status === "mirror" && <span className="fm-tag fm-tag-new">opposite hand</span>}
                           {r.source_note && <span className="muted"> · {r.source_note}</span>}
                         </>
                       ) : (
