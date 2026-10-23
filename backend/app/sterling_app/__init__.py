@@ -115,6 +115,11 @@ DATA_FIXES = [
     ("data_fix_2026_09_29_plan_templates", {
         "plan_templates_replace": "fixes/plan_templates_2026_09_29.psv",
     }),
+    # VSD48 carries 4 doors + 2 drawers (Brian, 10/23/26) — the catalog had 2 + 0,
+    # which under-counted hardware on every plan with one (DRH1 Oakdale: 56 vs 64).
+    ("data_fix_2026_10_23_vsd48_hardware", {
+        "catalog": {"VSD48": {"doors": 4, "drawers": 2}},
+    }),
 ]
 
 
