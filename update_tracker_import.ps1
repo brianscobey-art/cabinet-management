@@ -1,3 +1,7 @@
+# RETIRED 10/26/26: the tracker's Import Data table is now a live Excel query on
+# https://www.cabinettron.com/api/reports/phases/live.csv (see setup_tracker_live_link.ps1).
+# This script wrote into the nightly BACKUP copy, not the live workbook. Its scheduled
+# tasks (CarterKB Tracker Import AM / Noon) are disabled. Kept for reference only.
 # Pushes CabinetTron phase data into the 3.0 Online Sales Tracker's
 # "Import Data" sheet (table ImportData: Job Code | Date Checked | Phase |
 # Date Measured | Full Phase).
