@@ -1497,7 +1497,7 @@ function PhaseReport() {
                 setExportNote((e as Error).message);
               }
             }}
-            title="DR Horton + Century, CONST LVL 1-4: Job Code, Date Checked, Phase, Date Measured — paste over the tracker's Import Data table"
+            title="DR Horton + Century, CONST LVL 1-4: Job Code, Date Checked, Phase, Date Measured, CONST LVL — paste over the tracker's Import Data table"
           >
             ⬇ Export to Excel
           </button>

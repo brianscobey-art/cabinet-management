@@ -108,7 +108,9 @@ def phase_report_xlsx(db) -> tuple[bytes, int, int]:
     wb = Workbook()
     ws = wb.active
     ws.title = "Import Data"
-    ws.append(COLUMNS)
+    # Column E carries the house's CONST LVL (Brian 10/26/26: "2.1-Inst"); it
+    # is pasted over the tracker's Full Phase column on purpose.
+    ws.append(COLUMNS + ["CONST LVL"])
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="125952")
@@ -119,13 +121,14 @@ def phase_report_xlsx(db) -> tuple[bytes, int, int]:
             pu.noted_at.date() if pu.noted_at else None,
             _excel_phase(pu.phase),
             j.measure_date,
+            j.status.value if hasattr(j.status, "value") else str(j.status or ""),
         ])
     for row in ws.iter_rows(min_row=2):
         for c in row[1:]:
             c.alignment = Alignment(horizontal="center")
         row[1].number_format = "m/d/yy"
         row[3].number_format = "m/d/yy"
-    for col, width in zip("ABCD", (16, 14, 10, 15)):
+    for col, width in zip("ABCDE", (16, 14, 10, 15, 14)):
         ws.column_dimensions[col].width = width
     buf = io.BytesIO()
     wb.save(buf)
