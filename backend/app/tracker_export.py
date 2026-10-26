@@ -62,6 +62,47 @@ def _excel_phase(code: str):
     return int(f) if f.is_integer() else f
 
 
+LIVE_COLUMNS = ["Job Code", "Date Checked", "Phase", "Date Measured", "CONST LVL"]
+
+
+def live_rows(db) -> list[list]:
+    """Every house in CabinetTron with a job code, for the tracker's live
+    Import Data link (Brian 10/26/26: "all houses ... if there is no data
+    then it will return nothing"). A house with no phase logged still gets a
+    row, with blank Date Checked / Phase, so lookups against the table come
+    back empty rather than missing."""
+    latest = (
+        db.query(PhaseUpdate.job_id, func.max(PhaseUpdate.id).label("max_id"))
+        .group_by(PhaseUpdate.job_id)
+        .subquery()
+    )
+    updates = {
+        pu.job_id: pu
+        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
+    }
+    out = []
+    for j in sorted(db.query(Job).filter(Job.job_code.isnot(None)).all(), key=lambda x: x.job_code or ""):
+        pu = updates.get(j.id)
+        out.append([
+            j.job_code,
+            pu.noted_at.date() if pu and pu.noted_at else None,
+            _excel_phase(pu.phase) if pu and pu.phase else None,
+            j.measure_date,
+            j.status.value if hasattr(j.status, "value") else (str(j.status) if j.status else ""),
+        ])
+    return out
+
+
+def live_csv(db) -> str:
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\r\n")
+    w.writerow(LIVE_COLUMNS)
+    for code, checked, phase, measured, lvl in live_rows(db):
+        w.writerow([code, checked.isoformat() if checked else "", "" if phase is None else phase,
+                    measured.isoformat() if measured else "", lvl])
+    return buf.getvalue()
+
+
 def phase_report_xlsx(db) -> tuple[bytes, int, int]:
     """The Phase Report for pasting into the tracker's Import Data table
     (Brian 10/26/26): DR Horton + Century houses at CONST LVL 1.x-4.x, one row

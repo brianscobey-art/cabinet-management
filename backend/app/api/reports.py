@@ -279,6 +279,22 @@ def tracker_export_public(token: str = Query(...), db: Session = Depends(get_db)
     return _tracker_csv(db)
 
 
+@router.get("/reports/phases/live.csv")
+def phase_live_csv(token: str = Query(...), db: Session = Depends(get_db)):
+    """The tracker's live Import Data link (an Excel web query refreshes from
+    it): every house with a job code -- Job Code | Date Checked | Phase |
+    Date Measured | CONST LVL. Gated by the same token as the PC updater."""
+    from fastapi.responses import Response as _R
+    from app.models import get_setting
+    from app.tracker_export import live_csv
+
+    configured = get_setting(db, TRACKER_EXPORT_KEY)
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _R(content=live_csv(db), media_type="text/csv; charset=utf-8",
+              headers={"Cache-Control": "no-store"})
+
+
 @router.get("/reports/tracker-export/token", dependencies=[Depends(finance_access)])
 def tracker_export_token(db: Session = Depends(get_db)):
     from app.models import get_setting
