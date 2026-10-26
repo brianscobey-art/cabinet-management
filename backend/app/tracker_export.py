@@ -52,6 +52,86 @@ def rows(db) -> list[dict]:
     return out
 
 
+def _excel_phase(code: str):
+    """'12' -> 12, '4.1' -> 4.1: the workbook's PhasesTable keys are numbers,
+    so a text "12" pasted in would make Full Phase's XLOOKUP miss."""
+    try:
+        f = float(code)
+    except (TypeError, ValueError):
+        return code
+    return int(f) if f.is_integer() else f
+
+
+def phase_report_xlsx(db) -> tuple[bytes, int, int]:
+    """The Phase Report for pasting into the tracker's Import Data table
+    (Brian 10/26/26): DR Horton + Century houses at CONST LVL 1.x-4.x, one row
+    per house with its current phase and the date it was last updated, in the
+    table's own column order (Job Code | Date Checked | Phase | Date Measured)
+    so the block pastes straight over A4:D. Houses never checked are left out
+    -- a blank Phase would make Full Phase show #N/A.
+    Returns (xlsx bytes, rows written, houses skipped for no phase)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    from app.models import Account
+
+    latest = (
+        db.query(PhaseUpdate.job_id, func.max(PhaseUpdate.id).label("max_id"))
+        .group_by(PhaseUpdate.job_id)
+        .subquery()
+    )
+    updates = {
+        pu.job_id: pu
+        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
+    }
+    jobs = (
+        db.query(Job).join(Account, Job.account_id == Account.id)
+        .filter(Job.job_code.isnot(None))
+        .all()
+    )
+    keep = []
+    skipped = 0
+    for j in jobs:
+        acct = (j.account.name if j.account else "").lower()
+        if not (acct.startswith("dr horton") or acct.startswith("century")):
+            continue
+        level = (j.status.value if hasattr(j.status, "value") else str(j.status or ""))[:1]
+        if level not in ("1", "2", "3", "4"):
+            continue
+        pu = updates.get(j.id)
+        if pu is None or not pu.phase:
+            skipped += 1
+            continue
+        keep.append((j, pu))
+    keep.sort(key=lambda t: t[0].job_code or "")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Import Data"
+    ws.append(COLUMNS)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="125952")
+        c.alignment = Alignment(horizontal="center")
+    for j, pu in keep:
+        ws.append([
+            j.job_code,
+            pu.noted_at.date() if pu.noted_at else None,
+            _excel_phase(pu.phase),
+            j.measure_date,
+        ])
+    for row in ws.iter_rows(min_row=2):
+        for c in row[1:]:
+            c.alignment = Alignment(horizontal="center")
+        row[1].number_format = "m/d/yy"
+        row[3].number_format = "m/d/yy"
+    for col, width in zip("ABCD", (16, 14, 10, 15)):
+        ws.column_dimensions[col].width = width
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue(), len(keep), skipped
+
+
 def to_csv(db) -> str:
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=COLUMNS, lineterminator="\n")

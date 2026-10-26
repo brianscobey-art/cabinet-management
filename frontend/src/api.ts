@@ -502,6 +502,24 @@ export interface PhaseReportRow {
 
 export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");
 
+/** DR Horton + Century, CONST LVL 1-4, in the tracker's Import Data column order. */
+export async function exportPhaseReport(): Promise<{ rows: number; skipped: number }> {
+  const resp = await fetch("/api/reports/phases/export", {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new Error("Export failed");
+  const blob = await resp.blob();
+  const name =
+    /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "Phase Report.xlsx";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return { rows: Number(resp.headers.get("X-Rows") ?? 0), skipped: Number(resp.headers.get("X-Skipped") ?? 0) };
+}
+
 // ---- Smartsheet vs CabinetTron ---------------------------------------------
 export interface SmartsheetField {
   label: string;

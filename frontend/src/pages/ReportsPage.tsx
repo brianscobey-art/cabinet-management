@@ -20,6 +20,7 @@ import {
   getOpenService,
   getOtherLabor,
   getPhaseReport,
+  exportPhaseReport,
   getPoStatus,
   getReportsList,
   getRevenueBuilder,
@@ -1395,6 +1396,7 @@ const FINISHED_PHASES = new Set(["12", "13", "14", "15", "16"]);
 const isFinishedPhase = (phase: string | null | undefined) => !!phase && FINISHED_PHASES.has(phase);
 
 function PhaseReport() {
+  const [exportNote, setExportNote] = useState("");
   const [rows, setRows] = useState<PhaseReportRow[]>([]);
   const [builders, setBuilders] = useState<string[]>([]);
   const [selectedBuilders, setSelectedBuilders] = useState<Set<string>>(new Set());
@@ -1480,7 +1482,25 @@ function PhaseReport() {
   return (
     <div className="phase-print">
       <div className="no-print">
-        <div className="page-head" style={{ justifyContent: "flex-end" }}>
+        <div className="page-head" style={{ justifyContent: "flex-end", gap: "0.5rem" }}>
+          {exportNote && <span className="muted" style={{ alignSelf: "center" }}>{exportNote}</span>}
+          <button
+            onClick={async () => {
+              setExportNote("Exporting…");
+              try {
+                const r = await exportPhaseReport();
+                setExportNote(
+                  `${r.rows} houses exported` +
+                    (r.skipped ? ` · ${r.skipped} with no phase logged left out` : ""),
+                );
+              } catch (e) {
+                setExportNote((e as Error).message);
+              }
+            }}
+            title="DR Horton + Century, CONST LVL 1-4: Job Code, Date Checked, Phase, Date Measured — paste over the tracker's Import Data table"
+          >
+            ⬇ Export to Excel
+          </button>
           <button onClick={() => window.print()} disabled={selectedCount === 0}>
             🖨 Print {selectedCount} communit{selectedCount === 1 ? "y" : "ies"}
           </button>

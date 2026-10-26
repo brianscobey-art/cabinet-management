@@ -242,6 +242,26 @@ def _tracker_csv(db: Session):
     )
 
 
+@router.get("/reports/phases/export", dependencies=[Depends(read_access)])
+def phase_report_export(db: Session = Depends(get_db)):
+    """DR Horton + Century houses at CONST LVL 1-4: Job Code | Date Checked |
+    Phase | Date Measured, ready to paste over the tracker's Import Data table."""
+    from app.tracker_export import phase_report_xlsx
+
+    data, n, skipped = phase_report_xlsx(db)
+    stamp = date.today().strftime("%m%d%y")
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="Phase Report {stamp}.xlsx"',
+            "X-Rows": str(n),
+            "X-Skipped": str(skipped),
+            "Access-Control-Expose-Headers": "X-Rows, X-Skipped, Content-Disposition",
+        },
+    )
+
+
 @router.get("/reports/tracker-export", dependencies=[Depends(read_access)])
 def tracker_export(db: Session = Depends(get_db)):
     """Phase data for the tracker's Import Data sheet (signed-in download)."""
