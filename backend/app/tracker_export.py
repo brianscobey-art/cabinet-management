@@ -52,6 +52,19 @@ def rows(db) -> list[dict]:
     return out
 
 
+def full_phase(code: str | None) -> str:
+    """'12' -> '12-Cabinets Installed', '4.1' -> '4.1-Pre Walk Complete': the
+    tracker's "Full Phase" style (code-name, no spaces round the dash), from
+    CabinetTron's own phase list -- the tracker's PhasesTable stops at the old
+    '12-TKB Cab Installed' and predates the 4.x renumber (Brian 10/26/26)."""
+    from app.phases import PHASE_LABELS
+
+    if not code:
+        return ""
+    label = PHASE_LABELS.get(str(code))
+    return label.replace(" - ", "-", 1) if label else str(code)
+
+
 def _excel_phase(code: str):
     """'12' -> 12, '4.1' -> 4.1: the workbook's PhasesTable keys are numbers,
     so a text "12" pasted in would make Full Phase's XLOOKUP miss."""
@@ -62,7 +75,7 @@ def _excel_phase(code: str):
     return int(f) if f.is_integer() else f
 
 
-LIVE_COLUMNS = ["Job Code", "Date Checked", "Phase", "Date Measured", "CONST LVL"]
+LIVE_COLUMNS = ["Job Code", "Date Checked", "Phase", "Date Measured", "Full Phase"]
 
 
 def live_rows(db) -> list[list]:
@@ -88,7 +101,7 @@ def live_rows(db) -> list[list]:
             pu.noted_at.date() if pu and pu.noted_at else None,
             _excel_phase(pu.phase) if pu and pu.phase else None,
             j.measure_date,
-            j.status.value if hasattr(j.status, "value") else (str(j.status) if j.status else ""),
+            full_phase(pu.phase) if pu else "",
         ])
     return out
 
@@ -149,9 +162,9 @@ def phase_report_xlsx(db) -> tuple[bytes, int, int]:
     wb = Workbook()
     ws = wb.active
     ws.title = "Import Data"
-    # Column E carries the house's CONST LVL (Brian 10/26/26: "2.1-Inst"); it
-    # is pasted over the tracker's Full Phase column on purpose.
-    ws.append(COLUMNS + ["CONST LVL"])
+    # Column E is the phase written out ("12-Cabinets Installed") -- Brian
+    # 10/26/26 swapped it from CONST LVL to the tracker's Full Phase style.
+    ws.append(COLUMNS + ["Full Phase"])
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="125952")
@@ -162,14 +175,14 @@ def phase_report_xlsx(db) -> tuple[bytes, int, int]:
             pu.noted_at.date() if pu.noted_at else None,
             _excel_phase(pu.phase),
             j.measure_date,
-            j.status.value if hasattr(j.status, "value") else str(j.status or ""),
+            full_phase(pu.phase),
         ])
     for row in ws.iter_rows(min_row=2):
         for c in row[1:]:
             c.alignment = Alignment(horizontal="center")
         row[1].number_format = "m/d/yy"
         row[3].number_format = "m/d/yy"
-    for col, width in zip("ABCDE", (16, 14, 10, 15, 14)):
+    for col, width in zip("ABCDE", (16, 14, 10, 15, 30)):
         ws.column_dimensions[col].width = width
     buf = io.BytesIO()
     wb.save(buf)
