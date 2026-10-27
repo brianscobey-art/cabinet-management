@@ -115,14 +115,32 @@ def derive_status(row: dict) -> JobStatus:
     return JobStatus.track
 
 
+def _table_ref(path: Path, name: str) -> str:
+    """The DATA table's range ("A3:CQ502") straight from xl/tables/*.xml.
+    Cells below the table are dashboard UI artifacts, not jobs, so the range
+    matters -- but getting it through a full load_workbook parsed every sheet
+    of the tracker: ~60 s and enough memory to get the Render process killed
+    mid-request (502 on Field Measures, 10/27/26)."""
+    import zipfile
+
+    with zipfile.ZipFile(path) as z:
+        for n in z.namelist():
+            if n.startswith("xl/tables/") and n.endswith(".xml"):
+                head = z.read(n)[:2000].decode("utf-8", "replace")
+                if re.search(rf'\b(?:name|displayName)="{re.escape(name)}"', head):
+                    m = re.search(r'\bref="([A-Z]+\d+:[A-Z]+\d+)"', head)
+                    if m:
+                        return m.group(1)
+    raise KeyError(f"table {name} not found in {path}")
+
+
 def load_rows(path: Path) -> list[dict]:
-    # Not read_only: we need ws.tables to honor the DATA table's exact range —
-    # cells below the table are dashboard UI artifacts, not jobs.
-    wb = load_workbook(path, data_only=True)
-    ws = wb[SHEET]
-    ref = ws.tables[TABLE_NAME].ref  # e.g. "A3:CQ502"
+    ref = _table_ref(path, TABLE_NAME)  # e.g. "A3:CQ502"
     m = re.match(r"[A-Z]+(\d+):([A-Z]+)(\d+)", ref)
     header_row, max_row = int(m.group(1)), int(m.group(3))
+    # read_only streams just this sheet instead of building every sheet in memory.
+    wb = load_workbook(path, data_only=True, read_only=True)
+    ws = wb[SHEET]
 
     rows = ws.iter_rows(min_row=header_row, max_row=max_row, max_col=95, values_only=True)
     headers = [
