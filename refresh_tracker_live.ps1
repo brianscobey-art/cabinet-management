@@ -1,7 +1,9 @@
 # Morning refresh of the 3.0 tracker's live Import Data table (Brian 10/26/26).
 # Excel pauses automatic refresh while more than one person has the workbook
-# open, so this runs at 5:30 AM -- before anyone is in it -- and does an
-# explicit refresh + save. Scheduled as "CarterKB Tracker Morning Refresh".
+# open, so this does an explicit refresh + save every hour, starting 4:00 AM
+# (wakes the PC; Brian 10/27/26). Scheduled as "CarterKB Tracker Morning
+# Refresh" (name kept -- ai_health watches it). During the day anyone can also click Refresh All in Excel for the
+# web (first time: Connect, Anonymous) -- that refreshes it for everyone.
 #
 # Rules learned the hard way (see memory "tracker-live-link"):
 #  - If the tracker is already open in Brian's own Excel, refresh THAT copy
