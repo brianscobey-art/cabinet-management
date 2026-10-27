@@ -31,8 +31,10 @@ from app.models import (
 from app.phases import PHASE_HIDDEN_STATUSES, PHASE_LABELS
 
 TEMPLATE_PREFIX = "layout-templates/"
-# Houses at these phases are the ones a measurer is about to visit.
-MEASURE_PHASES = {"3", "4", "4.1", "4.2"}
+# Houses at these phases are the ones a measurer is about to visit. Starts at
+# 1 Slab Formed (Brian 10/27/26 -- was 3 Framing Start, which left DRCESF-0024
+# and -0027 off with measures already scheduled).
+MEASURE_PHASES = {"1", "2", "3", "4", "4.1", "4.2"}
 
 _EXCLUDE_DIR = re.compile(r"archive|(^|\s)old(\s|$)|_to_delete|\btops?\b", re.I)
 _EXCLUDE_NAME = re.compile(r"\bCAB\b|\bTops?\b|Sales Center", re.I)
