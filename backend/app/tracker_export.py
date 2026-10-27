@@ -75,7 +75,17 @@ def _excel_phase(code: str):
     return int(f) if f.is_integer() else f
 
 
-LIVE_COLUMNS = ["Job Code", "Date Checked", "Phase", "Date Measured", "Full Phase"]
+LIVE_COLUMNS = ["Job Code", "Date Checked", "Phase", "Date Measured", "Full Phase", "Pulled"]
+
+
+def pulled_at():
+    """When the tracker pulled this feed, in Dothan (Central) time to the
+    minute -- Render runs in UTC. The tracker's Import Data A1 shows it as
+    "Last update: 10/27/26, 4:36am" (Brian 10/27/26)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/Chicago")).replace(tzinfo=None, second=0, microsecond=0)
 
 
 def live_rows(db) -> list[list]:
@@ -110,9 +120,10 @@ def live_csv(db) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\r\n")
     w.writerow(LIVE_COLUMNS)
+    pulled = pulled_at().isoformat(timespec="minutes")
     for code, checked, phase, measured, lvl in live_rows(db):
         w.writerow([code, checked.isoformat() if checked else "", "" if phase is None else phase,
-                    measured.isoformat() if measured else "", lvl])
+                    measured.isoformat() if measured else "", lvl, pulled])
     return buf.getvalue()
 
 

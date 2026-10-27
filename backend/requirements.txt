@@ -20,3 +20,4 @@ python-pptx>=1.0        # Sterling report -> PowerPoint export
 anthropic>=0.116        # the in-app assistant
 playwright>=1.47        # scheduled DOMO receipt pull through Brian's signed-in profile
 pymupdf>=1.24  # Field Measures: stamp + merge layout PDFs
+tzdata>=2024.1  # zoneinfo on Render: tracker feed "Pulled" time in Central
