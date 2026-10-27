@@ -1226,6 +1226,47 @@ def everluxe_price(payload: EvxPriceIn, db: Session = Depends(get_db)):
     }
 
 
+class EvxExportIn(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    lines: list[EvxLine]
+
+
+@router.post("/everluxe/list.xlsx")
+def everluxe_list_xlsx(payload: EvxExportIn):
+    """The Everluxe item list as a plain Excel sheet: Qty, SKU, Area — in the
+    order it shows on screen."""
+    from io import BytesIO
+
+    from fastapi.responses import StreamingResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cabinet List"
+    ws.append(["Qty", "SKU", "Area"])
+    for c in ws[1]:
+        c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="125952")
+        c.alignment = Alignment(horizontal="center")
+    for ln in payload.lines:
+        ws.append([ln.qty, _sku(ln.sku), (ln.area or "").strip()])
+    ws.column_dimensions["A"].width = 8
+    ws.column_dimensions["B"].width = 22
+    ws.column_dimensions["C"].width = 18
+    for row in ws.iter_rows(min_row=2, max_col=1):
+        row[0].alignment = Alignment(horizontal="center")
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    stem = (payload.name or "Everluxe Cabinet List").strip().replace("/", "-").replace('"', "")
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{stem}.xlsx"'},
+    )
+
+
 # --- Layout -> quote (drop in the 2020 Design layout, get the SKU list) ---
 
 @router.post("/everluxe/parse-layout")

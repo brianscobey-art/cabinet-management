@@ -263,7 +263,17 @@ const routes = {
   projections: renderProjections,
   settings: renderSettings,
 };
+// A page can leave a hook to run on its way out (Everluxe autosaves an unsaved
+// list) — it runs here, before the next page replaces the DOM.
+let _leaveHook = null;
+function runLeaveHook(unloading = false) {
+  const h = _leaveHook; _leaveHook = null;
+  if (h) try { h(unloading); } catch (e) { console.error(e); }
+}
+window.addEventListener("pagehide", () => runLeaveHook(true));
+
 async function route() {
+  runLeaveHook();
   const hash = location.hash || "#/dashboard";
   const [, page, arg] = hash.split("/");
   $$("#nav a").forEach(a => a.classList.toggle("active",
@@ -1754,7 +1764,8 @@ async function renderNational() {
             ${groups.get(div).map(r => `
             <tr data-div="${esc(r.division)}" data-plan="${esc(r.plan)}">
               <td><input type="checkbox" class="nat-pick" title="Include in a report of checked plans"></td>
-              <td style="padding-left:6px"><a href="#" class="nat-plan" title="Open this plan — pricing summary, the SKUs and the math"><strong>${esc(r.plan)}</strong></a></td>
+              <td style="padding-left:6px"><a href="#" class="nat-plan" title="Open this plan on the Everluxe pricing sheet to change it"><strong>${esc(r.plan)}</strong></a>
+                <button class="ghost small nat-info" title="Price breakdown — the SKUs and the math (print or delete the layout here)" style="padding:0 5px; margin-left:4px">ⓘ</button></td>
               <td class="num">${money(r.list_total)}</td>
               <td class="num">${money(r.cabinets)}</td>
               <td class="num">${money(r.freight)}</td>
@@ -1831,6 +1842,11 @@ async function renderNational() {
   $$(".nat-plan").forEach(a => a.onclick = e => {
     e.preventDefault();
     const tr = e.target.closest("tr");
+    const row = data.rows.find(r => r.division === tr.dataset.div && r.plan === tr.dataset.plan);
+    openPlanOnEverluxe(tr.dataset.div, tr.dataset.plan, natFilter.door_style, row && row.margin_pct);
+  });
+  $$(".nat-info").forEach(b => b.onclick = e => {
+    const tr = e.target.closest("tr");
     natPlanDialog(tr.dataset.div, tr.dataset.plan, natFilter.door_style);
   });
   // A new floorplan is priced on the Everluxe sheet under its division; the
@@ -1881,6 +1897,14 @@ async function renderNational() {
         </tbody>
       </table>`;
   };
+}
+
+// A national plan opened on the Everluxe sheet — its SKU list loaded and editable;
+// Save Changes writes it back to the plan.
+function openPlanOnEverluxe(division, plan, doorStyle, marginPct) {
+  window._evxContext = {division, plan, open: true, door_style: doorStyle || "",
+    margin: marginPct === null || marginPct === undefined ? null : Math.round(Number(marginPct))};
+  location.hash = "#/everluxe";
 }
 
 // One plan off the national sheet: the summary band, every step of the price
@@ -1951,6 +1975,11 @@ async function natPlanDialog(division, plan, doorStyle) {
   const pb = $("#dsave", dlg);
   pb.textContent = "Print";
   pb.onclick = () => printHtml(`${plan} — ${division}`, html);
+  const ed = document.createElement("button");
+  ed.className = "orange";
+  ed.textContent = "Edit on Everluxe Sheet";
+  pb.before(ed);
+  ed.onclick = () => { $("#dcancel", dlg).click(); openPlanOnEverluxe(division, plan, doorStyle, t.margin_pct); };
   // take the layout off the list — bottom left, away from Close and Print
   const del = document.createElement("button");
   del.className = "danger";
@@ -2329,9 +2358,11 @@ async function renderEverluxe() {
           <select id="evxSaved" style="width:190px"><option value="">— open a saved list —</option></select></label>
         <div class="spacer"></div>
         <button class="ghost" id="evxClear">Clear</button>
-        <button class="gray" id="evxLayout" title="Drop in a 2020 Design layout PDF (or paste its text) and it builds the SKU list">Import Layout</button>
+        <button class="orange" id="evxNew" title="Start a clean sheet for a new job or plan, built from its layout">+ New Job</button>
+        <button class="gray" id="evxLayout" title="Drop in a 2020 Design layout PDF (or paste its text) and it builds the SKU list">+ Add Layout</button>
         <button class="orange" id="evxUpdate" style="display:none" title="Write your edits back to the list you opened">Save Changes</button>
         <button class="gray" id="evxSave" title="Save this SKU list under the plan / job name (a new name saves a new list)">Save List</button>
+        <button class="gray" id="evxXlsx" title="The cabinet list as an Excel sheet — Qty, SKU, Area">Export Excel</button>
         <button class="gray" id="evxPrint">Print Pricing Sheet</button>
         <button class="orange" id="evxJob">Create Job From List</button>
       </div>
@@ -2343,13 +2374,13 @@ async function renderEverluxe() {
       </div>
       <div class="totals-card" id="evxTotals" style="margin:4px 0 12px"></div>
       <div style="overflow-x:auto"><table>
-        <thead><tr><th class="num">Qty</th><th>SKU</th><th>Description</th><th>Fin End</th><th>Area</th>
+        <thead><tr><th style="width:34px"></th><th class="num">Qty</th><th>SKU</th><th>Description</th><th>Fin End</th><th>Area</th>
           <th class="num">List Ea</th><th class="num">Ext List</th><th class="num">Dealer Ext</th>
           <th class="num" title="Install group on the SKU (Everluxe Install-Hardware file)">Grp</th>
           <th class="num" title="Assembly boxes for the line = per-cabinet value × qty">Asm Bx</th>
           <th class="num" title="Install boxes for the line = per-cabinet value × qty">Inst Bx</th>
           <th class="num" title="Install boxes × the install rate">Install $</th>
-          <th>Notes</th><th></th></tr></thead>
+          <th>Notes</th></tr></thead>
         <tbody id="evxRows"></tbody>
       </table></div>
       <div id="evxLayoutInfo"></div>
@@ -2369,13 +2400,20 @@ async function renderEverluxe() {
     if (![...sel.options].some(o => o.value === d)) sel.add(new Option(d, d));
     sel.value = d;
   };
-  // arriving from National › Add Layout: a clean sheet for that division and plan
-  if (window._evxContext) {
-    const c = window._evxContext; window._evxContext = null;
+  // arriving from National: Add Layout = a clean sheet for that division and plan;
+  // clicking a plan (open) = that plan's list, loaded further down
+  const ctx = window._evxContext; window._evxContext = null;
+  if (ctx) {
     _evxLines = []; _evxLoaded = null; window._evxLayout = null;
-    $("#evxPlan").value = c.plan || "";
-    setDivision(c.division || "Saved");
-    if (/horton|drh|century/i.test(c.division || "")) $("#evxMult").value = "0.21";
+    $("#evxPlan").value = ctx.plan || "";
+    setDivision(ctx.division || "Saved");
+    if (/horton|drh|century/i.test(ctx.division || "")) $("#evxMult").value = "0.21";
+    if (ctx.door_style !== undefined) $("#evxStyle").value = ctx.door_style;
+    if (ctx.margin !== null && ctx.margin !== undefined) $("#evxMargin").value = ctx.margin;
+  } else if (_evxLoaded) {
+    // back on the tab: the list on screen keeps its name and division
+    $("#evxPlan").value = _evxLoaded.plan;
+    setDivision(_evxLoaded.division);
   }
   const showLayoutInfo = d => {
     if (!d) { $("#evxLayoutInfo").innerHTML = ""; return; }
@@ -2427,6 +2465,7 @@ async function renderEverluxe() {
       ${areaList.map(a => `<option ${((l.area || "All") === a) ? "selected" : ""}>${esc(a)}</option>`).join("")}
       <option value="__new">+ New area…</option></select>`;
     $("#evxRows").innerHTML = res.lines.map((l, i) => `<tr>
+      <td><button class="danger small evx-del" data-i="${i}" title="Delete this line (${esc(l.qty + " × " + l.sku)})">✕</button></td>
       <td class="num"><input type="number" min="1" class="inline-edit evx-qty" data-i="${i}" style="width:60px" value="${l.qty}"></td>
       <td><input class="inline-edit evx-sku" data-i="${i}" value="${esc(l.sku)}" spellcheck="false"
           style="width:118px; font-weight:700${l.found ? "" : "; color:var(--red); border-color:var(--red)"}"
@@ -2444,8 +2483,7 @@ async function renderEverluxe() {
       <td class="num muted" title="${l.assem_each} per cabinet">${l.assem_units || ""}</td>
       <td class="num muted" title="${l.install_each} per cabinet">${l.install_units || ""}</td>
       <td class="num">${l.install_units ? money(l.install) : ""}</td>
-      <td><input class="evx-notes" data-i="${i}" style="width:150px" value="${esc(l.notes ?? "")}"></td>
-      <td><button class="danger small evx-del" data-i="${i}">✕</button></td></tr>`).join("");
+      <td><input class="evx-notes" data-i="${i}" style="width:150px" value="${esc(l.notes ?? "")}"></td></tr>`).join("");
     const byArea = $("#evxMode").value === "by_area" && res.areas.length > 1;
     const band = (t, label) => `
       ${label ? `<div class="t" style="min-width:90px; text-align:left"><div class="label">Area</div><div class="value" style="font-size:16px">${esc(label)}</div></div>` : ""}
@@ -2510,7 +2548,13 @@ async function renderEverluxe() {
       reprice();
     }));
     $$(".evx-del").forEach(btn => btn.onclick = e => {
-      _evxLines.splice(Number(e.target.dataset.i), 1); reprice();
+      const i = Number(e.currentTarget.dataset.i);
+      const gone = _evxLines.filter(l => l.sku.trim())[i];
+      const k = _evxLines.indexOf(gone);
+      if (k < 0) return;
+      _evxLines.splice(k, 1);
+      toast(`Removed ${gone.qty} × ${gone.sku}`);
+      reprice();
     });
   };
   const reprice = () => (_evxRepriceP = repriceNow());
@@ -2547,10 +2591,74 @@ async function renderEverluxe() {
   syncHwMode();
   loadHardwareList();
   $("#evxClear").onclick = () => { _evxLines = []; _evxLoaded = null; window._evxLayout = null; showLayoutInfo(null); reprice(); };
+  $("#evxXlsx").onclick = async () => {
+    const lines = _evxLines.filter(l => l.sku.trim())
+      .map(l => ({sku: l.sku.trim(), qty: Number(l.qty) || 1, area: l.area || null}));
+    if (!lines.length) return toast("Add some cabinets first", true);
+    const name = _evxLoaded ? `${_evxLoaded.plan} Cabinet List` : "Everluxe Cabinet List";
+    try {
+      const resp = await fetch(API_BASE + "/everluxe/list.xlsx", {
+        method: "POST", headers: {"Content-Type": "application/json", ...authHeaders()},
+        body: JSON.stringify({name, lines}),
+      });
+      if (!resp.ok) throw new Error(`Export failed (${resp.status})`);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await resp.blob());
+      a.download = name.replace(/[\/"]/g, "-") + ".xlsx";
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch (e) { toast(e.message, true); }
+  };
 
   // Layout -> quote. Everything it finds lands in the editable list, so the
   // quantities and any missing SKU can be fixed before the sheet prints.
-  $("#evxLayout").onclick = () => openDialog("Import Layout", `
+  const applyLayout = async (d, replace) => {
+    const add = d.lines.map(l => ({sku: l.sku, qty: l.qty, notes: null}));
+    if (replace) _evxLines = add;
+    else for (const l of add) {
+      const hit = _evxLines.find(x => x.sku.toUpperCase() === l.sku);
+      if (hit) hit.qty += l.qty; else _evxLines.unshift(l);
+    }
+    if (d.plan && !$("#evxPlan").value.trim()) $("#evxPlan").value = d.plan;
+    if (d.door_style) {
+      const opt = [...$("#evxStyle").options].find(o => o.text.toLowerCase().includes(d.door_style.toLowerCase()));
+      if (opt) $("#evxStyle").value = opt.value;
+    }
+    window._evxLayout = d;
+    await reprice();
+    showLayoutInfo(d);
+    toast(`${add.length} SKUs from the layout` + (d.unknown.length ? ` · ${d.unknown.length} not in the catalog` : ""));
+  };
+
+  // New job: clean sheet under a division + name, built straight from its layout
+  $("#evxNew").onclick = () => openDialog("New Job", `
+    <label class="f">Division<input id="nj_div" list="njDivList" value="Saved">
+      <datalist id="njDivList">${[...$("#evxDiv").options].map(o => `<option value="${esc(o.value)}">`).join("")}</datalist></label>
+    <label class="f">Plan / job name *<input id="nj_plan"></label>
+    <label class="f">Layout PDF <span class="muted">(optional — add it later with + Add Layout)</span>
+      <input type="file" id="nj_file" accept=".pdf,application/pdf"></label>
+    <p class="muted" style="font-size:12px; margin:0">Clears the current list and starts fresh. "Saved" keeps it as
+      your own list; a builder division puts it on National Pricing once you Save List.</p>`, async () => {
+    const division = $("#nj_div").value.trim() || "Saved", plan = $("#nj_plan").value.trim();
+    if (!plan) throw new Error("Give the job or plan a name");
+    const f = $("#nj_file").files[0];
+    let d = null;
+    if (f) {
+      const fd = new FormData();
+      fd.append("file", f);
+      d = await api("/everluxe/parse-layout", {method: "POST", body: fd});
+    }
+    _evxLines = []; _evxLoaded = null; window._evxLayout = null;
+    $("#evxSaved").value = "";
+    $("#evxPlan").value = plan;
+    setDivision(division);
+    if (/horton|drh|century/i.test(division)) $("#evxMult").value = "0.21";
+    showLayoutInfo(null);
+    if (d) await applyLayout(d, true);
+    else { await reprice(); toast(`New job “${plan}” — add SKUs or + Add Layout`); }
+  });
+
+  $("#evxLayout").onclick = () => openDialog("Add Layout", `
     <label class="f">Layout PDF<input type="file" id="lyFile" accept=".pdf,application/pdf"></label>
     <label class="f">…or paste the layout text
       <textarea id="lyText" rows="6" placeholder="Paste the layout text here"
@@ -2567,21 +2675,7 @@ async function renderEverluxe() {
     if (txt) fd.append("text", txt);
     const replace = $("#lyReplace").checked;
     const d = await api("/everluxe/parse-layout", {method: "POST", body: fd});
-    const add = d.lines.map(l => ({sku: l.sku, qty: l.qty, notes: null}));
-    if (replace) _evxLines = add;
-    else for (const l of add) {
-      const hit = _evxLines.find(x => x.sku.toUpperCase() === l.sku);
-      if (hit) hit.qty += l.qty; else _evxLines.unshift(l);
-    }
-    if (d.plan && !$("#evxPlan").value.trim()) $("#evxPlan").value = d.plan;
-    if (d.door_style) {
-      const opt = [...$("#evxStyle").options].find(o => o.text.toLowerCase().includes(d.door_style.toLowerCase()));
-      if (opt) $("#evxStyle").value = opt.value;
-    }
-    window._evxLayout = d;
-    await reprice();
-    showLayoutInfo(d);
-    toast(`${add.length} SKUs from the layout` + (d.unknown.length ? ` · ${d.unknown.length} not in the catalog` : ""));
+    await applyLayout(d, replace);
   });
 
   // Saved SKU lists — stored with the builder plan lists, so a saved list also
@@ -2607,6 +2701,31 @@ async function renderEverluxe() {
     toast(division === "Saved"
       ? `Saved "${plan}" — ${lines.length} line${lines.length === 1 ? "" : "s"}`
       : `Saved "${plan}" to National Pricing · ${division}`);
+  };
+  // Leaving with unsaved changes saves the list anyway — under its name and
+  // division like Save List, or "Autosave m/d/yy h:mm" when it was never named.
+  _leaveHook = unloading => {
+    const lines = _evxLines.filter(l => l.sku.trim());
+    if (!lines.length) return;
+    const division = $("#evxDiv").value || "Saved";
+    let plan = $("#evxPlan").value.trim();
+    if (_evxLoaded && _evxLoaded.plan === plan && _evxLoaded.division === division
+        && listSnap() === _evxLoaded.snapshot) return;          // nothing new
+    if (!plan) {
+      const n = new Date();
+      plan = `Autosave ${n.getMonth() + 1}/${n.getDate()}/${String(n.getFullYear()).slice(2)} `
+        + n.toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"});
+    }
+    const body = JSON.stringify({plan, division, lines: lines.map(l => ({
+      sku: l.sku.trim(), qty: Number(l.qty) || 1, area: l.area || null,
+      fin_end: l.fin_end || null, notes: l.notes || null}))});
+    _evxLoaded = {division, plan, snapshot: listSnap()};
+    $("#evxPlan").value = plan;
+    // keepalive lets the save finish even while the browser is closing the page
+    fetch(API_BASE + "/everluxe/lists", {method: "POST", keepalive: true,
+      headers: {"Content-Type": "application/json", ...authHeaders()}, body})
+      .then(r => { if (!unloading) r.ok ? toast(`Autosaved "${plan}"`) : toast(`Autosave of "${plan}" failed (${r.status})`, true); })
+      .catch(() => { if (!unloading) toast(`Autosave of "${plan}" failed`, true); });
   };
   $("#evxUpdate").onclick = async () => {
     const lines = _evxLines.filter(l => l.sku.trim());
@@ -2676,6 +2795,15 @@ async function renderEverluxe() {
     toast("Job created from SKU list");
     location.hash = "#/job/" + job.id;
   };
+  if (ctx && ctx.open) {
+    try {
+      const d = await api("/everluxe/lists/items?division=" + encodeURIComponent(ctx.division)
+                          + "&plan=" + encodeURIComponent(ctx.plan));
+      _evxLines = d.lines.map(l => ({sku: l.sku, qty: l.qty, area: l.area || null}));
+      _evxLoaded = {division: ctx.division, plan: ctx.plan, snapshot: listSnap()};
+      loadSaved(ctx.division + "|" + ctx.plan);
+    } catch (e) { toast(e.message, true); }
+  }
   reprice();
 }
 
