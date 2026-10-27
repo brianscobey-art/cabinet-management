@@ -1143,9 +1143,10 @@ function FieldMeasuresView() {
     getFieldMeasures()
       .then((d) => {
         setData(d);
-        setSelectedBuilders((cur) => (cur.size ? cur : new Set(d.rows.map((r) => r.account_name))));
-        // New and revised layouts are preselected; printed ones are not.
-        setChecked(new Set(d.rows.filter((r) => r.needs_print).map((r) => r.job_id)));
+        // Nothing preselected -- no builders, no houses (Brian 10/27/26: "let
+        // me decide what i want displayed"). Selections survive a reload, but
+        // houses that just printed drop out of the checked set.
+        setChecked((cur) => new Set([...cur].filter((id) => d.rows.some((r) => r.job_id === id && r.needs_print))));
       })
       .catch((e) => setError(e.message));
   useEffect(() => {
@@ -1285,7 +1286,7 @@ function FieldMeasuresView() {
             </button>
           </>
         )}
-        {" · "}checked rows go to the printer; new and revised layouts are checked for you.
+        {" · "}check the houses you want printed.
       </p>
       {notice && (
         <p className="ss-alert" style={{ background: "#eaf3de", color: "#27500a" }}>
@@ -1301,7 +1302,10 @@ function FieldMeasuresView() {
         </p>
       )}
       {error && <p className="error">{error}</p>}
-      {groups.length === 0 && <p className="muted">Nothing needs a field measure for the selected builders.</p>}
+      {selectedBuilders.size === 0 && <p className="muted">Pick one or more builders to see their houses.</p>}
+      {selectedBuilders.size > 0 && groups.length === 0 && (
+        <p className="muted">Nothing needs a field measure for the selected builders.</p>
+      )}
       {groups.map(([title, rows]) => (
         <div key={title} className="phase-print" style={{ marginBottom: "1rem" }}>
           <h3 style={{ margin: "0.75rem 0 0.25rem", fontSize: "1rem" }}>
@@ -1325,7 +1329,28 @@ function FieldMeasuresView() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="no-print" />
+                  <th className="no-print">
+                    {(() => {
+                      const ids = rows.filter((r) => r.source).map((r) => r.job_id);
+                      if (!ids.length) return null;
+                      const all = ids.every((id) => checked.has(id));
+                      return (
+                        <input
+                          type="checkbox"
+                          checked={all}
+                          onChange={() =>
+                            setChecked((s) => {
+                              const n = new Set(s);
+                              ids.forEach((id) => (all ? n.delete(id) : n.add(id)));
+                              return n;
+                            })
+                          }
+                          aria-label={`print all in ${title}`}
+                          title="Check / uncheck every house in this community"
+                        />
+                      );
+                    })()}
+                  </th>
                   <th>Lot</th>
                   <th>Job code</th>
                   <th>Plan</th>
