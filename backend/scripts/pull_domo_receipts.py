@@ -93,14 +93,15 @@ _FETCH_JS = """async ({ds, sql}) => {
 }"""
 
 
-def query(context, dataset_id: str, page=None):
-    """The same SQL po_receipts uses, through the profile's session.
+def query(context, dataset_id: str, page=None, sql: str = _RECEIPT_SQL):
+    """The same SQL po_receipts uses (or another, e.g. the job accounts),
+    through the profile's session.
     Returns (rows, http_status, route). Tries Playwright's request context
     first; if that is refused and a page on the DOMO origin is available,
     retries from inside the page the way the bookmarklet does."""
     r = context.request.post(
         f"{DOMO}/api/query/v1/execute/{dataset_id}",
-        data=json.dumps({"sql": _RECEIPT_SQL}),
+        data=json.dumps({"sql": sql}),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         timeout=120_000,
     )
@@ -109,7 +110,7 @@ def query(context, dataset_id: str, page=None):
     first = r.status
     if page is not None and page.url.startswith(DOMO):
         try:
-            res = page.evaluate(_FETCH_JS, {"ds": dataset_id, "sql": _RECEIPT_SQL})
+            res = page.evaluate(_FETCH_JS, {"ds": dataset_id, "sql": sql})
             if res.get("status") == 200:
                 return res.get("rows", []), 200, "page-fetch"
             return None, res.get("status", first), f"page-fetch (request gave {first})"
@@ -127,6 +128,26 @@ def save_csv(rows, folder: Path) -> Path:
         w.writerow(COLS)
         w.writerows(rows)
     return out
+
+
+def pull_accounts(ctx, page, folder: Path) -> str:
+    """DOMO's CAB job accounts (G/I codes) -> "DOMO CAB Accounts MMDDYY.csv"
+    beside the receipts (Brian 10/28/26). Its own try: a failure here must
+    never cost the receipts pull, which has already been written."""
+    from app.job_accounts import ACCOUNTS_SQL, COLS as ACCT_COLS
+
+    try:
+        rows, status, route = query(ctx, get_settings().domo_accounts_dataset_id.strip(), page, ACCOUNTS_SQL)
+        if status != 200 or not rows:
+            return f"accounts: DOMO {status}, {len(rows or [])} rows - skipped"
+        out = folder / f"DOMO CAB Accounts {dt.date.today():%m%d%y}.csv"
+        with out.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(ACCT_COLS)
+            w.writerows(rows)
+        return f"accounts: {len(rows)} via {route} -> {out.name}"
+    except Exception as exc:  # noqa: BLE001
+        return f"accounts: error {type(exc).__name__}: {str(exc)[:120]}"
 
 
 def max_receipt_date(rows) -> str | None:
@@ -209,7 +230,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
             out = save_csv(rows, folder)
             as_of = max_receipt_date(rows)
             print(f"{len(rows)} receipts via {route} -> {out.name}  (latest receipt {as_of})")
-            write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out), route=route)
+            accounts = pull_accounts(ctx, page, folder)
+            print(accounts)
+            write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out), route=route,
+                         accounts=accounts)
             return 0
         finally:
             try:

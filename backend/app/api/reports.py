@@ -185,6 +185,10 @@ REPORTS = [
                description="Houses coming up for a field measure, the plan layout each one prints "
                            "from, and what has already gone to the printer. Prints only new or "
                            "revised layouts, stamped with community, lot, job code and plan."),
+    ReportInfo(key="job-accounts", name="Job Accounts (DOMO)", category="Operations",
+               description="G and I job accounts from DOMO matched to houses by Ashley's Code. "
+                           "Blank codes are filled automatically; codes that disagree and accounts "
+                           "with no house in the tracker are listed here for review."),
     ReportInfo(key="install-week", name="Install Schedule by Week", category="Operations",
                description="Scheduled installs grouped by install week with PO value."),
     ReportInfo(key="unordered", name="Needs Ordering", category="Operations",
@@ -369,6 +373,22 @@ def new_orders_export_public(token: str = Query(...), db: Session = Depends(get_
 @router.get("/reports/po-receipts", dependencies=[Depends(read_access)])
 def po_receipts_report(db: Session = Depends(get_db)):
     return build_po_receipts(db)
+
+
+@router.get("/reports/job-accounts", dependencies=[Depends(read_access)])
+def job_accounts_report(db: Session = Depends(get_db)):
+    """The last DOMO job-account match run (app.job_accounts)."""
+    from app.job_accounts import last_report
+
+    return last_report(db) or {"at": None, "lists": {}}
+
+
+@router.post("/reports/job-accounts/run", dependencies=[Depends(write_access)])
+def job_accounts_run(db: Session = Depends(get_db)):
+    from app.job_accounts import apply, last_report
+
+    res = apply(db)
+    return last_report(db) or res
 
 
 @router.post("/reports/po-receipts/refresh", dependencies=[Depends(write_access)])

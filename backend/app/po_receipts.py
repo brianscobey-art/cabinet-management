@@ -269,6 +269,47 @@ def _f(v):
     return float(v) if v is not None else None
 
 
+def job_purchase_orders(db, job: Job, today: date | None = None) -> dict:
+    """Every PO on one job for its Orders section (Brian 10/28/26): our POs
+    from the tracker's PO Tracking sheet, each with its DOMO receipt(s) --
+    received date, receipt #, supplier and landed cost -- or how late it is."""
+    today = today or date.today()
+    lines = (db.query(JobPo).filter(JobPo.job_code == job.job_code).order_by(JobPo.order_date, JobPo.our_po).all()
+             if job.job_code else [])
+    pos = sorted({jp.our_po for jp in lines if jp.our_po})
+    receipts: dict[str, list[PoReceipt]] = {}
+    if pos:
+        for r in db.query(PoReceipt).filter(PoReceipt.order_number.in_(pos)).all():
+            receipts.setdefault(r.order_number, []).append(r)
+    out, seen = [], set()
+    for jp in lines:
+        if not jp.our_po or jp.our_po in seen:
+            continue
+        seen.add(jp.our_po)
+        recs = sorted(receipts.get(jp.our_po, []), key=lambda r: r.receipt_date or date.min)
+        due = jp.tent_due_date
+        out.append({
+            "our_po": jp.our_po, "vendor": jp.vendor, "product": jp.product,
+            "order_date": jp.order_date.isoformat() if jp.order_date else None,
+            "due_date": due.isoformat() if due else None,
+            "cost": _f(jp.cost),
+            "received": bool(recs),
+            "days_overdue": (today - due).days if not recs and due and due < today else None,
+            "receipts": [{
+                "receipt_number": r.receipt_number,
+                "receipt_date": r.receipt_date.isoformat() if r.receipt_date else None,
+                "pos": r.pos, "supplier": r.supplier,
+                "supplier_cost": _f(r.supplier_cost), "landed_cost": _f(r.landed_cost),
+            } for r in recs],
+        })
+    return {
+        "builder_po": job.builder_po, "po_amount": _f(job.po_amount), "cabinet_po": job.cabinet_po,
+        "g_code": job.g_code, "i_code": job.i_code,
+        "purchase_orders": out,
+        "received_cost": round(sum(rc["landed_cost"] or 0 for p in out for rc in p["receipts"]), 2),
+    }
+
+
 def build_report(db, today: date | None = None) -> dict:
     """Receipts joined to jobs (via POTracker Our PO #), plus a 'still awaiting
     delivery' list of ordered POs with no receipt yet."""

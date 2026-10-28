@@ -17,6 +17,7 @@ import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
 import JobNotes from "./JobNotes";
 import OrderingCard from "./OrderingCard";
+import PurchaseOrdersSection from "./PurchaseOrdersSection";
 import QuotesSection from "./QuotesSection";
 import ServiceRequestsSection from "./ServiceRequestsSection";
 import WalksSection from "./WalksSection";
@@ -149,6 +150,11 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dd>{fmtPhone(job.sales_contact_phone)}</dd>
             <dt>Email</dt>
             <dd>{job.sales_contact_email ?? "—"}</dd>
+            {/* Carter POS job accounts, filled nightly from DOMO (Brian 10/28/26). */}
+            <dt>G-Code</dt>
+            <dd>{job.g_code || "—"}</dd>
+            <dt>I-Code</dt>
+            <dd>{job.i_code || "—"}</dd>
           </dl>
         </div>
         <div className="card">
@@ -168,6 +174,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
       <JobNotes jobId={job.id} />
 
       {job.job_type === "tract" && <OrderingCard jobId={job.id} canWrite={canWrite} />}
+
+      <PurchaseOrdersSection jobId={job.id} />
 
       <h3 className="kb-head">Room selections</h3>
       <div className="table-wrap">

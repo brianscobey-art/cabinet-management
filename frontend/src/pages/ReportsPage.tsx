@@ -43,6 +43,7 @@ import { fmtDate } from "../format";
 import { getFieldMeasures, printFieldMeasures, undoLastPrintRun, type FieldMeasureReport, type FieldMeasureRow } from "../api";
 import ManagerReportView from "./ManagerReport";
 import { initials } from "./PhasesPage";
+import JobAccountsView from "./JobAccountsView";
 import PoReceiptsView from "./PoReceiptsView";
 
 const money = (v: number) =>
@@ -149,6 +150,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "domo-pl" && <DomoPLView />}
       {key === "manager" && <ManagerReportView />}
       {key === "po-receipts" && <PoReceiptsView />}
+      {key === "job-accounts" && <JobAccountsView />}
     </div>
   );
 }

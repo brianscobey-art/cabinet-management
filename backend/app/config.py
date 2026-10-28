@@ -153,6 +153,21 @@ class Settings(BaseSettings):
 
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "po-receipts")
+
+    # DOMO "O00010 - Sales - Customer Detail" -- every G/I job account the day
+    # it is set up (Brian 10/28/26: the cleaner source than the setup emails).
+    # Pulled nightly beside the receipts by scripts/pull_domo_receipts.py.
+    domo_accounts_dataset_id: str = "c65e8265-08a0-4bcc-8d21-cbb04944c6a5"
+
+    @property
+    def domo_accounts_folder(self) -> str:
+        """Same Downloads folder as the receipts on the PC; its own feed-disk
+        folder in the cloud (the R2 prefix is separate, so the receipts'
+        keep-newest-2 never mixes the two files)."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-accounts")
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

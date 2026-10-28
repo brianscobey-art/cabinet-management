@@ -174,6 +174,8 @@ class JobUpdate(BaseModel):
     notes: str | None = None
     ksr: str | None = None
     sale_date: date | None = None
+    g_code: str | None = Field(default=None, max_length=40)
+    i_code: str | None = Field(default=None, max_length=40)
 
 
 class JobOut(BaseModel):
@@ -200,6 +202,12 @@ class JobOut(BaseModel):
     notes: str | None
     ksr: str | None
     sale_date: date | None
+    # Carter POS job accounts (filled from DOMO, app.job_accounts) + builder PO.
+    g_code: str | None = None
+    i_code: str | None = None
+    builder_po: str | None = None
+    po_amount: float | None = None
+    cabinet_po: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -150,6 +150,15 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{job_id}/purchase-orders", dependencies=[Depends(read_access)])
+def job_purchase_orders(job_id: int, db: Session = Depends(get_db)):
+    """The job page's Orders section: builder PO, G/I codes, and every one of
+    our POs with its DOMO receipt (or how late it is)."""
+    from app.po_receipts import job_purchase_orders as build
+
+    return build(db, get_job_or_404(job_id, db))
+
+
 @router.patch("/{job_id}", response_model=JobOut, dependencies=[Depends(write_access)])
 def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)):
     job = get_job_or_404(job_id, db)

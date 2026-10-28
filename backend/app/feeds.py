@@ -837,6 +837,12 @@ def sync_all(db: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         result["po_receipts"] = {"error": str(exc)}
     try:
+        from app import job_accounts
+
+        result["job_accounts"] = job_accounts.apply(db)
+    except Exception as exc:  # noqa: BLE001
+        result["job_accounts"] = {"error": str(exc)}
+    try:
         result["job_codes"] = {"merged_duplicates": merge_duplicate_houses(db),
                                "assigned": backfill_job_codes(db)}
     except Exception as exc:  # noqa: BLE001
@@ -893,10 +899,12 @@ def poll_tracker(db: Session) -> dict:
             result["pulled"] = _pull(settings, "tracker/", Path(settings.tracker_dir))
             _pull(settings, "new-orders/", Path(settings.new_orders_file).parent, keep=1)
             _pull(settings, "po-receipts/", Path(settings.po_receipt_folder), keep=2)
+            _pull(settings, "domo-accounts/", Path(settings.domo_accounts_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
 
     result["tracker"] = sync_tracker(db)
+    tracker_changed = not result["tracker"].get("unchanged")
 
     new_orders = Path(settings.new_orders_file)
     if new_orders.is_file():
@@ -922,6 +930,18 @@ def poll_tracker(db: Session) -> dict:
                 _stamp(db, "fp_po_receipts", f)
     except Exception as exc:  # noqa: BLE001
         result["po_receipts"] = {"error": str(exc)}
+
+    # G/I codes from DOMO's job accounts: re-match when a new DOMO file lands
+    # or the tracker changed (a house that just got its Ashley's Code).
+    try:
+        from app import job_accounts
+
+        f = job_accounts.newest_file(Path(settings.domo_accounts_folder))
+        if f is not None and (tracker_changed or not _unchanged(db, "fp_domo_accounts", f)):
+            result["job_accounts"] = job_accounts.apply(db, f)
+            _stamp(db, "fp_domo_accounts", f)
+    except Exception as exc:  # noqa: BLE001
+        result["job_accounts"] = {"error": str(exc)}
 
     db.commit()
     return result

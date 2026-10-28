@@ -119,7 +119,72 @@ export interface Job {
   notes: string | null;
   ksr: string | null;
   sale_date: string | null;
+  g_code?: string | null;
+  i_code?: string | null;
+  builder_po?: string | null;
+  po_amount?: number | null;
+  cabinet_po?: string | null;
 }
+
+export interface JobPurchaseOrders {
+  builder_po: string | null;
+  po_amount: number | null;
+  cabinet_po: string | null;
+  g_code: string | null;
+  i_code: string | null;
+  received_cost: number;
+  purchase_orders: {
+    our_po: string;
+    vendor: string | null;
+    product: string | null;
+    order_date: string | null;
+    due_date: string | null;
+    cost: number | null;
+    received: boolean;
+    days_overdue: number | null;
+    receipts: {
+      receipt_number: string;
+      receipt_date: string | null;
+      pos: string | null;
+      supplier: string | null;
+      supplier_cost: number | null;
+      landed_cost: number | null;
+    }[];
+  }[];
+}
+
+export const getJobPurchaseOrders = (jobId: number) =>
+  api<JobPurchaseOrders>(`/jobs/${jobId}/purchase-orders`);
+
+export interface JobAccountRow {
+  name: string;
+  customer: string;
+  g: string | null;
+  i: string | null;
+  created: string;
+  job_code?: string;
+  job_codes?: string[];
+  field?: string;
+  fields?: string[];
+  cabinettron?: string;
+  tracker?: string;
+  domo?: string;
+  matched_by?: string;
+}
+export interface JobAccountsReport {
+  at: string | null;
+  file?: string;
+  accounts?: number;
+  filled?: number;
+  already_set?: number;
+  lists: Partial<Record<
+    "filled" | "conflicts" | "unmatched" | "ambiguous" | "not_in_cabinettron" | "tracker_differs",
+    JobAccountRow[]
+  >>;
+  error?: string;
+}
+export const getJobAccounts = () => api<JobAccountsReport>("/reports/job-accounts");
+export const runJobAccounts = () => api<JobAccountsReport>("/reports/job-accounts/run", { method: "POST" });
 
 export interface JobDetail extends Job {
   account_name: string;
