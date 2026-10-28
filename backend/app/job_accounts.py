@@ -55,7 +55,8 @@ def code_key(code: str | None) -> str:
     """'G7500042-0120' and 'G7500042-120' are one account -- the tracker pads
     some suffixes, DOMO never does. Alphanumeric suffixes (A47) are untouched
     apart from the leading zeros."""
-    s = str(code or "").strip().upper()
+    # Hand-typed codes use a space for the dash ("G7510100 012", JCMA0002).
+    s = re.sub(r"[\s_-]+", "-", str(code or "").strip().upper())
     if "-" not in s:
         return s
     head, tail = s.split("-", 1)
