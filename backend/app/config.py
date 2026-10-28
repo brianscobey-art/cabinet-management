@@ -140,8 +140,10 @@ class Settings(BaseSettings):
     domo_access_token: str = ""  # DOMO_ACCESS_TOKEN in .env enables live server-side pulls
     # DOMO "PO Receipt List" dataset (warehouse receipts). Set PO_RECEIPT_DATASET_ID
     # + a token to let the server pull it live; else the newest export file is read.
-    # O00021.V0 Purchase Receipt Details (PDP: None — a token reads it fully).
-    po_receipt_dataset_id: str = "1f5601ba-d9a1-4ebb-aa76-ad9c5b226ea6"
+    # O00021.V1 Purchase Receipt Details (PDP: Transaction-Standard). V0
+    # (1f5601ba-...) went 403 "Access Denied" for Brian ~9/18/26 -- that was the
+    # "signed-out" receipts pull, not an expired sign-in. Same columns, same SQL.
+    po_receipt_dataset_id: str = "73283245-0c0c-4c24-bb16-3d0886302a76"
     po_receipt_dir: str = r"C:\Users\Brian SE6\Downloads"  # where a "PO Receipt List*" export lands
 
     @property
