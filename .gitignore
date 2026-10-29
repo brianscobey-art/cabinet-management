@@ -41,3 +41,4 @@ agent/orderpack_agent.stop
 
 # local token for the tracker Import Data updater
 /tracker_export.config.json
+backend/dev-test-login.txt

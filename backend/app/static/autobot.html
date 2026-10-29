@@ -301,6 +301,7 @@
         <small>Carter Kitchen and Bath</small>
       </div>
     </div>
+    <span id="envbadge" hidden style="background:#DE2020;color:#fff;font-weight:700;font-size:12px;letter-spacing:1px;padding:3px 10px;border-radius:999px;margin-left:10px;align-self:center">TEST</span>
     <div class="who">
       <span id="who"></span>
       <button onclick="signOut()">Sign out</button>
@@ -1552,5 +1553,12 @@ if (localStorage.getItem(TOKEN_KEY)) boot();
 else document.getElementById("login").hidden = false;
 </script>
   <script src="/assistant.js" defer></script>
+<script>
+/* Local dev instance = test environment: show the red TEST badge so nobody mistakes it for live. */
+if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+  document.getElementById("envbadge").hidden = false;
+  document.title = "Autobot (TEST)";
+}
+</script>
 </body>
 </html>

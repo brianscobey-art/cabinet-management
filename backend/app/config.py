@@ -213,7 +213,7 @@ class Settings(BaseSettings):
     autobot_depot_lon: float = -85.4034831
     autobot_day_start_min: int = 7 * 60      # leave the shop at 7:00 AM
     autobot_day_end_min: int = 17 * 60       # back at the shop by 5:00 PM
-    autobot_sync_minutes: int = 10           # auto-spawn visits from job statuses; 0 = off
+    autobot_sync_minutes: int = 15           # auto-spawn visits from job statuses; 0 = off
     # Google Maps Platform key (Geocoding API). Set it and every address lookup
     # uses Google; empty = OpenStreetMap/Nominatim fallback. Free tier ~10k/mo.
     google_maps_api_key: str = ""
