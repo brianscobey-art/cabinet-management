@@ -202,3 +202,29 @@ def test_picking_ksr_makes_them_sales_contact(client, db):
 
     out = client.patch(f"/jobs/{job['id']}", headers=headers, json={"ksr": "Brian Scobey"}).json()
     assert (out["sales_contact_name"], out["sales_contact_phone"]) == ("Brian Scobey", "850-890-0482")
+
+
+def test_job_notes_save_with_topic(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    job = make_job(client, headers, account_id, community_id)
+
+    resp = client.post(f"/jobs/{job['id']}/notes", headers=headers, json={"body": "Gate is locked", "topic": "Delivery"})
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["topic"] == "Delivery"
+    assert client.post(f"/jobs/{job['id']}/notes", headers=headers, json={"body": "x", "topic": "Nope"}).status_code == 422
+    notes = client.get(f"/jobs/{job['id']}/notes", headers=headers).json()
+    assert [(n["topic"], n["body"]) for n in notes] == [("Delivery", "Gate is locked")]
+
+
+def test_delivery_instructions_and_site(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    job = make_job(client, headers, account_id, community_id)
+
+    out = client.patch(f"/jobs/{job['id']}", headers=headers, json={"delivery_instructions": "Call Daniel first"}).json()
+    assert out["delivery_instructions"] == "Call Daniel first"
+    site = client.get(f"/jobs/{job['id']}/site", headers=headers)
+    assert site.status_code == 200 and "in_tracker" in site.json()

@@ -176,6 +176,7 @@ class JobUpdate(BaseModel):
     sale_date: date | None = None
     g_code: str | None = Field(default=None, max_length=40)
     i_code: str | None = Field(default=None, max_length=40)
+    delivery_instructions: str | None = None
 
 
 class JobOut(BaseModel):
@@ -208,6 +209,7 @@ class JobOut(BaseModel):
     builder_po: str | None = None
     po_amount: float | None = None
     cabinet_po: str | None = None
+    delivery_instructions: str | None = None
     created_at: datetime
     updated_at: datetime
 

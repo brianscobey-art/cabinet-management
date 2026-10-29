@@ -159,6 +159,43 @@ def job_purchase_orders(job_id: int, db: Session = Depends(get_db)):
     return build(db, get_job_or_404(job_id, db))
 
 
+def _clean(v):
+    """Tracker cells: '#N/A', 'NA', 0 and floats like 297770024.0 -> tidy text or None."""
+    if v is None or (isinstance(v, (int, float)) and not isinstance(v, bool) and v == 0):
+        return None
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    s = str(v).strip()
+    return None if s.upper() in ("", "NA", "N/A", "#N/A", "NONE") else s
+
+
+@router.get("/{job_id}/site", dependencies=[Depends(read_access)])
+def job_site(job_id: int, db: Session = Depends(get_db)):
+    """The job page's Jobsite card: what CabinetTron doesn't store (city/state,
+    builder job code, swing, installer) from the job's tracker row (Brian 10/29/26)."""
+    from app.smartsheet.api import _tracker_rows
+
+    job = get_job_or_404(job_id, db)
+    try:
+        rows, _, _ = _tracker_rows()
+    except Exception:  # noqa: BLE001 -- the card still shows what the job has
+        rows = []
+    code = (job.job_code or "").strip().upper()
+    r = next((x for x in rows if str(x.get("Job Code") or "").strip().upper() == code), None) if code else None
+    if r is None:
+        return {"in_tracker": False}
+    return {
+        "in_tracker": True,
+        "city": _clean(r.get("City")),
+        "state": _clean(r.get("State")),
+        "builder_job_code": _clean(r.get("Builder Job Code")),
+        "swing": _clean(r.get("Swing")),
+        "zone": _clean(r.get("Zone")),
+        "installer": _clean(r.get("Installer")),
+        "builder_po": _clean(r.get("PO#  Order #") or r.get("PO# Order #")),
+    }
+
+
 @router.patch("/{job_id}", response_model=JobOut, dependencies=[Depends(write_access)])
 def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)):
     job = get_job_or_404(job_id, db)

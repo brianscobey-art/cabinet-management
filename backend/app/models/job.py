@@ -96,6 +96,8 @@ class Job(Base):
     po_paid_date: Mapped[date | None] = mapped_column(Date, default=None)  # PO Status Date when paid
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
+    # Gate codes, where to stage the boxes, call-ahead -- the Jobsite card (Brian 10/29/26).
+    delivery_instructions: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

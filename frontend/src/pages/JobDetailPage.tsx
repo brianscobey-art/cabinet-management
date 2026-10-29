@@ -3,11 +3,13 @@ import {
   JOB_STATUSES,
   statusSlug,
   JobDetail,
+  JobSite,
   addHardware,
   addRoom,
   deleteHardware,
   deleteRoom,
   getJob,
+  getJobSite,
   listKsrs,
   updateJob,
 } from "../api";
@@ -78,10 +80,6 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             <dd>{job.job_code ?? "—"}</dd>
             <dt>Account</dt>
             <dd>{job.account_name}</dd>
-            <dt>Community / Lot</dt>
-            <dd>
-              {job.community_name ?? "—"} {job.lot_number ? `/ Lot ${job.lot_number}` : ""}
-            </dd>
             <dt>Type</dt>
             <dd>{job.job_type}</dd>
             <dt>Plan</dt>
@@ -141,32 +139,31 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
             </dd>
           </dl>
         </div>
-        <div className="card">
-          <h3>Sales contact</h3>
-          <dl>
-            <dt>Name</dt>
-            <dd>{job.sales_contact_name}</dd>
-            <dt>Phone</dt>
-            <dd>{fmtPhone(job.sales_contact_phone)}</dd>
-            <dt>Email</dt>
-            <dd>{job.sales_contact_email ?? "—"}</dd>
-            {/* Carter POS job accounts, filled nightly from DOMO (Brian 10/28/26). */}
-            <dt>G-Code</dt>
-            <dd>{job.g_code || "—"}</dd>
-            <dt>I-Code</dt>
-            <dd>{job.i_code || "—"}</dd>
-          </dl>
-        </div>
-        <div className="card">
-          <h3>Field contact</h3>
-          <dl>
-            <dt>Name</dt>
-            <dd>{job.field_contact_name}</dd>
-            <dt>Phone</dt>
-            <dd>{fmtPhone(job.field_contact_phone)}</dd>
-            <dt>Email</dt>
-            <dd>{job.field_contact_email ?? "—"}</dd>
-          </dl>
+        <JobsiteCard job={job} canWrite={canWrite} onSaved={refresh} />
+        {/* Sales contact sits over the field contact (Brian 10/29/26). */}
+        <div className="card-stack">
+          <div className="card">
+            <h3>Sales contact</h3>
+            <dl>
+              <dt>Name</dt>
+              <dd>{job.sales_contact_name}</dd>
+              <dt>Phone</dt>
+              <dd>{fmtPhone(job.sales_contact_phone)}</dd>
+              <dt>Email</dt>
+              <dd>{job.sales_contact_email ?? "—"}</dd>
+            </dl>
+          </div>
+          <div className="card">
+            <h3>Field contact</h3>
+            <dl>
+              <dt>Name</dt>
+              <dd>{job.field_contact_name}</dd>
+              <dt>Phone</dt>
+              <dd>{fmtPhone(job.field_contact_phone)}</dd>
+              <dt>Email</dt>
+              <dd>{job.field_contact_email ?? "—"}</dd>
+            </dl>
+          </div>
         </div>
         <FieldMeasureSection jobId={job.id} redMeasureDate={job.measure_date} />
       </div>
@@ -290,6 +287,82 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
       <WalksSection jobId={job.id} canWrite={canWrite} />
 
       <ServiceRequestsSection jobId={job.id} canWrite={canWrite} />
+    </div>
+  );
+}
+
+/** Where the job is and how to get product onto it: site address + map,
+ *  community/lot, builder job #, swing, installer, the Carter POS G/I codes, and
+ *  delivery instructions (Brian 10/29/26). City/state etc. come from the tracker. */
+function JobsiteCard({ job, canWrite, onSaved }: { job: JobDetail; canWrite: boolean; onSaved: () => void }) {
+  const [site, setSite] = useState<JobSite | null>(null);
+  const [delivery, setDelivery] = useState(job.delivery_instructions ?? "");
+
+  useEffect(() => {
+    getJobSite(job.id).then(setSite).catch(() => setSite({ in_tracker: false }));
+  }, [job.id]);
+  useEffect(() => setDelivery(job.delivery_instructions ?? ""), [job.delivery_instructions]);
+
+  const cityLine = [site?.city, site?.state].filter(Boolean).join(", ");
+  const mapUrl =
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent([job.address, cityLine].filter(Boolean).join(", "));
+
+  async function saveDelivery() {
+    const v = delivery.trim();
+    if (v === (job.delivery_instructions ?? "")) return;
+    await updateJob(job.id, { delivery_instructions: v || null });
+    onSaved();
+  }
+
+  return (
+    <div className="card">
+      <h3>Jobsite</h3>
+      <dl>
+        <dt>Site address</dt>
+        <dd>
+          {job.address}
+          {cityLine && <div>{cityLine}</div>}
+          <a href={mapUrl} target="_blank" rel="noreferrer">Map ↗</a>
+        </dd>
+        <dt>Community / Lot</dt>
+        <dd>
+          {job.community_name ?? "—"} {job.lot_number ? `/ Lot ${job.lot_number}` : ""}
+        </dd>
+        {site?.builder_job_code && (
+          <>
+            <dt>Builder job #</dt>
+            <dd>{site.builder_job_code}</dd>
+          </>
+        )}
+        {site?.swing && (
+          <>
+            <dt>Swing</dt>
+            <dd>{site.swing}</dd>
+          </>
+        )}
+        <dt>Installer</dt>
+        <dd>{site?.installer ?? "—"}</dd>
+        {/* Carter POS job accounts, filled nightly from DOMO (Brian 10/28/26). */}
+        <dt>G-Code</dt>
+        <dd>{job.g_code || "—"}</dd>
+        <dt>I-Code</dt>
+        <dd>{job.i_code || "—"}</dd>
+        <dt>Delivery</dt>
+        <dd>
+          {canWrite ? (
+            <textarea
+              className="site-note"
+              placeholder="Gate code, where to stage, call ahead…"
+              value={delivery}
+              onChange={(e) => setDelivery(e.target.value)}
+              onBlur={saveDelivery}
+            />
+          ) : (
+            job.delivery_instructions || "—"
+          )}
+        </dd>
+      </dl>
     </div>
   );
 }

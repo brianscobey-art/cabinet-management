@@ -124,7 +124,22 @@ export interface Job {
   builder_po?: string | null;
   po_amount?: number | null;
   cabinet_po?: string | null;
+  delivery_instructions?: string | null;
 }
+
+/** Tracker fields for the job page's Jobsite card (GET /jobs/{id}/site). */
+export interface JobSite {
+  in_tracker: boolean;
+  city?: string | null;
+  state?: string | null;
+  builder_job_code?: string | null;
+  swing?: string | null;
+  zone?: string | null;
+  installer?: string | null;
+  builder_po?: string | null;
+}
+
+export const getJobSite = (jobId: number) => api<JobSite>(`/jobs/${jobId}/site`);
 
 export interface JobPurchaseOrders {
   builder_po: string | null;
@@ -326,13 +341,17 @@ export interface JobNote {
   id: number;
   job_id: number;
   body: string;
+  topic: string | null;
   author: string | null;
   created_at: string;
 }
 
+/** What a job note is about (Brian 10/29/26) -- mirrors JOB_NOTE_TOPICS. */
+export const JOB_NOTE_TOPICS = ["Sales", "Delivery", "Installation", "Service", "Warranty", "Misc"];
+
 export const listJobNotes = (jobId: number) => api<JobNote[]>(`/jobs/${jobId}/notes`);
-export const addJobNote = (jobId: number, body: string) =>
-  api<JobNote>(`/jobs/${jobId}/notes`, { method: "POST", body: JSON.stringify({ body }) });
+export const addJobNote = (jobId: number, body: string, topic: string) =>
+  api<JobNote>(`/jobs/${jobId}/notes`, { method: "POST", body: JSON.stringify({ body, topic }) });
 
 export const listAccounts = (activeOnly = false) =>
   api<Account[]>(`/accounts${activeOnly ? "?active_only=true" : ""}`);

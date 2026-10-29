@@ -430,6 +430,23 @@ td a {
   margin-bottom: 1rem;
 }
 
+/* Sales contact stacked over field contact in one grid cell of the job page. */
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.card-stack > .card {
+  margin-bottom: 0;
+}
+.site-note {
+  width: 100%;
+  min-height: 3.2rem;
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
 dl {
   margin: 0;
   display: grid;
