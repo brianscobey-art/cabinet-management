@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import math
 import urllib.request
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -688,6 +688,48 @@ def plan_day(
     day_start = settings.autobot_day_start_min
     day_end = settings.autobot_day_end_min
 
+    # Waterfall: a plan for TODAY starts from where the day actually stands — the
+    # logged time and place of the last stop marked Done — not from the morning
+    # leave time. Every remaining stop re-flows from there.
+    origin = depot
+    start_clock = float(day_start)
+    completed_today: list[dict] = []
+    if day == date.today():
+        done_rows = (
+            db.query(Visit)
+            .options(joinedload(Visit.job).joinedload(Job.community), joinedload(Visit.community))
+            .filter(Visit.status == "done", Visit.completed_at.isnot(None))
+            .all()
+        )
+        for v in done_rows:
+            if worker is not None and v.assigned_to != worker.id and not (
+                v.assigned_to is None and tech_pool
+            ):
+                continue
+            ca = v.completed_at
+            if ca.tzinfo is None:
+                ca = ca.replace(tzinfo=timezone.utc)
+            local = ca.astimezone()
+            if local.date() != day:
+                continue
+            completed_today.append({
+                "visit_id": v.id,
+                "visit_type": v.visit_type,
+                "label": visit_label(v),
+                "done_min": local.hour * 60 + local.minute,
+                "done_at": _fmt(local.hour * 60 + local.minute),
+                "coords": effective_coords(v),
+            })
+        completed_today.sort(key=lambda c: c["done_min"])
+        if completed_today:
+            last = completed_today[-1]
+            start_clock = max(start_clock, float(last["done_min"]))
+            if last["coords"] is not None:
+                origin = last["coords"]
+        for c in completed_today:
+            c.pop("done_min", None)
+            c.pop("coords", None)
+
     off_today = off_worker_ids(db, day)
     if worker is not None and worker.id in off_today:
         return {
@@ -789,13 +831,15 @@ def plan_day(
     anchors = [c for c in candidates if is_anchor(c)]
     flexible = [c for c in candidates if not is_anchor(c)]
 
-    # One matrix over the shop + every candidate — a single OSRM call covers the day.
-    all_pts = [depot] + [c["coords"] for c in candidates]
+    # One matrix over the shop + the waterfall origin + every candidate — a single
+    # OSRM call covers the day. Index 0 = depot (where the day ends), 1 = origin
+    # (where it starts: the depot, or today the last Done stop's location).
+    all_pts = [depot, origin] + [c["coords"] for c in candidates]
     matrix, source = drive_matrix(all_pts, real_drive)
-    gi = {id(c): i + 1 for i, c in enumerate(candidates)}  # matrix index (0 = depot)
+    gi = {id(c): i + 2 for i, c in enumerate(candidates)}
 
     def leg_min(a: dict | None, b: dict | None) -> float:
-        return matrix[gi[id(a)] if a else 0][gi[id(b)] if b else 0]
+        return matrix[gi[id(a)] if a else 1][gi[id(b)] if b else 0]
 
     def route_minutes(stops: list[dict]) -> float:
         total, prev = 0.0, None
@@ -849,7 +893,7 @@ def plan_day(
         best_total = route_minutes(best)
         added_drive = best_total - base_total - cand["duration"]
         v = cand["visit"]
-        if day_start + best_total > day_end:
+        if start_clock + best_total > day_end:
             skipped.append({"visit_id": v.id, "label": cand["label"], "visit_type": v.visit_type,
                             "reason": "day is full — didn't fit inside the workday"})
             continue
@@ -864,7 +908,7 @@ def plan_day(
         route = best
 
     # Final timeline.
-    stops, clock, prev, drive_total, onsite_total = [], float(day_start), None, 0.0, 0.0
+    stops, clock, prev, drive_total, onsite_total = [], float(start_clock), None, 0.0, 0.0
     for n, c in enumerate(route, start=1):
         v = c["visit"]
         leg = leg_min(prev, c)
@@ -906,13 +950,16 @@ def plan_day(
         "worker": worker.name if worker else "Service Tech",
         "worker_id": worker.id if worker else None,
         "depot": {"lat": depot[0], "lon": depot[1]},
-        "leave": _fmt(day_start),
+        "leave": _fmt(start_clock) if completed_today else _fmt(day_start),
         "back": _fmt(clock),
         "workday_end": _fmt(day_end),
+        "completed": completed_today,
+        "resumed": bool(completed_today),
+        "resumed_from": completed_today[-1]["label"] if completed_today else None,
         "stops": stops,
         "drive_min": round(drive_total),
         "onsite_min": round(onsite_total),
-        "total_min": round(clock - day_start),
+        "total_min": round(clock - start_clock),
         "overflow": overflow,
         "drive_source": source,
         "skipped": skipped,

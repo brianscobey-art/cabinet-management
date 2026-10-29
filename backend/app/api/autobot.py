@@ -431,9 +431,12 @@ def complete_visit(
     if payload.photos_url:
         visit.photos_url = payload.photos_url
     visit.return_date = payload.return_date
+    # Log the real date AND time when it happened today; a back-dated finish
+    # keeps the picked day (midnight) since the actual clock time is unknown.
     visit.completed_at = (
         datetime.combine(payload.completed_on, datetime.min.time(), tzinfo=timezone.utc)
-        if payload.completed_on else datetime.now(timezone.utc)
+        if payload.completed_on and payload.completed_on != date.today()
+        else datetime.now(timezone.utc)
     )
     visit.completed_by = user.full_name
     out_ids = [visit.id]

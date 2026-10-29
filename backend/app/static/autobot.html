@@ -175,6 +175,9 @@
   .skipped { margin-top: 1.1rem; }
   .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #e2e9e8; list-style: none; }
   .skipped ul { padding: 0; margin: 0.4rem 0 0; }
+  .done-today { padding: 0.5rem 0.9rem; margin: 0.6rem 0 0; background: #eef5f3; border: 1px solid #d5e4e0; border-radius: 10px; }
+  .done-today li { list-style: none; padding: 0.22rem 0; color: #3c544e; }
+  .done-today li b { color: #125952; }
 
   /* forecast */
   .fc-day {
@@ -571,12 +574,16 @@ function routeHtml(plan, note) {
     ${note ? `<p class="muted">${esc(note)}</p>` : ""}
     ${plan.overflow ? `<div class="overflow">⚠ This day doesn't fit — it runs past ${plan.workday_end} (back at ${plan.back}). Move something, or it's a two-truck day.</div>` : ""}
     <div class="summary">
-      <span><b>${plan.stops.length}</b> stops</span>
+      <span><b>${plan.stops.length}</b> stops${(plan.completed || []).length ? ` <span class="muted">+ ${plan.completed.length} done</span>` : ""}</span>
       <span>drive <b>${hrs(plan.drive_min)}</b></span>
       <span>on-site <b>${hrs(plan.onsite_min)}</b></span>
-      <span>leave <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
+      <span>${plan.resumed ? "resume" : "leave"} <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
       <span class="muted">drive times: ${plan.drive_source === "osrm" ? "real" : "estimated"}</span>
     </div>
+    ${(plan.completed || []).length ? `<ul class="done-today">${plan.completed.map((c) =>
+      `<li>✓ <span class="chip t-${slug(c.visit_type)}">${TYPE_LABELS[c.visit_type] || c.visit_type}</span>
+       ${esc(c.label)} <b>— done ${c.done_at}</b></li>`).join("")}
+      <li class="muted">Schedule below re-flowed from ${plan.leave}, leaving ${esc(plan.resumed_from || "")}.</li></ul>` : ""}
     <div class="layout">
       <ol class="stops">${stops || '<p class="muted">Nothing schedulable for ' + fmtDate(plan.day) + ".</p>"}</ol>
       ${mapSvg(plan)}
