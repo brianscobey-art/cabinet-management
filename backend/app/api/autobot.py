@@ -729,6 +729,15 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
         .filter(Job.community_id == community_id, Job.status.in_(PHASE_TRACKED_STATUSES))
         .all()
     )
+    # Measured complete & correct = off the phase-check list too.
+    from app.models import FieldMeasure
+
+    measured_ok_ids = {
+        r[0] for r in db.query(FieldMeasure.job_id).filter(
+            FieldMeasure.job_id.in_([j.id for j in jobs] or [0]),
+            FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
+        ).all()
+    }
     latest: dict[int, PhaseUpdate] = {}
     if jobs:
         sub = (
@@ -749,6 +758,8 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
         cur = latest.get(j.id)
         if cur and cur.phase in FINISHED_PHASES:
             continue  # cabinets are in (12+) — nothing left to phase-check here
+        if j.id in measured_ok_ids:
+            continue  # measured complete & correct — done with phase checks
         houses.append(HouseOut(
             job_id=j.id, job_code=j.job_code, lot_number=j.lot_number, address=j.address,
             plan=j.plan,

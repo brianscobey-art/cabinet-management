@@ -33,12 +33,12 @@ from app.models import (
 
 # ---------------------------------------------------------------- durations
 
-BASE_DURATION_MIN: dict[str, int] = {
-    "field_measure": 20,
+BASE_DURATION_MIN: dict[str, float] = {
+    "field_measure": 10,   # Brian's standard, 10/29/26
     "post_walk": 30,
     "punch_out": 60,
     "blue_tape": 30,
-    "phase_check": 2,  # per active house — scaled below
+    "phase_check": 0.5,  # 30 seconds per active house — scaled below
     "service_t1": 60,
     "service_t2": 120,
     "service_t3": 180,
@@ -48,11 +48,12 @@ BASE_DURATION_MIN: dict[str, int] = {
 }
 
 # Cabinet-work visits scale off the PO amount (a $4k kitchen runs ~2x a $2k one).
-PO_SCALED_TYPES = {"field_measure", "post_walk", "punch_out", "blue_tape"}
+# Field measures are a flat 10-minute standard (Brian 10/29/26), not PO-scaled.
+PO_SCALED_TYPES = {"post_walk", "punch_out", "blue_tape"}
 REFERENCE_PO = 2500.0  # PO amount that equals the standard time
 PO_SCALE_MIN, PO_SCALE_MAX = 0.5, 3.0
 
-PHASE_CHECK_MIN_PER_HOUSE = 2
+PHASE_CHECK_MIN_PER_HOUSE = 0.5  # 30 seconds a house (Brian's standard, 10/29/26)
 PHASE_CHECK_INTERVAL_DAYS = 10
 PHASE_CHECK_PULL_FORWARD_DAYS = 2   # within N days of stale → pull forward if nearby
 PHASE_CHECK_MAX_DETOUR_MIN = 30     # "nearby" = adds at most this much drive
@@ -131,12 +132,12 @@ def visit_duration_min(visit: Visit, po_amount: float | None, active_houses: int
     if visit.duration_min:
         return visit.duration_min
     if visit.visit_type == "phase_check":
-        return max(PHASE_CHECK_MIN_PER_HOUSE * max(active_houses, 1), 5)
+        return max(round(PHASE_CHECK_MIN_PER_HOUSE * max(active_houses, 1)), 1)
     base = BASE_DURATION_MIN.get(visit.visit_type, 30)
     if visit.visit_type in PO_SCALED_TYPES and po_amount:
         scale = min(max(float(po_amount) / REFERENCE_PO, PO_SCALE_MIN), PO_SCALE_MAX)
         return round(base * scale)
-    return base
+    return round(base)
 
 
 # ---------------------------------------------------------------- geometry
@@ -414,7 +415,17 @@ def _checkable_houses(db: Session, community_id: int) -> list[Job]:
         for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
         if pu.phase in FINISHED_PHASES
     }
-    return [j for j in houses if j.id not in finished_ids]
+    # Measured complete & correct = done with phase checks too (Brian 10/29/26):
+    # the walker just stood in it and logged 4.1 on the way out.
+    from app.models import FieldMeasure
+
+    measured_ids = {
+        r[0] for r in db.query(FieldMeasure.job_id).filter(
+            FieldMeasure.job_id.in_(ids),
+            FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
+        ).all()
+    }
+    return [j for j in houses if j.id not in finished_ids and j.id not in measured_ids]
 
 
 def _active_house_count(db: Session, community_id: int) -> int:
@@ -444,7 +455,7 @@ def phase_check_metrics(db: Session, community_id: int) -> tuple[int, int, tuple
             sorted(p[1] for p in pinned)[len(pinned) // 2],
         )
         pinned = [p for p in pinned if haversine_miles(p, med) <= 15.0]
-    base = max(PHASE_CHECK_MIN_PER_HOUSE * max(count, 1), 5)
+    base = max(round(PHASE_CHECK_MIN_PER_HOUSE * max(count, 1)), 1)
     intra = 0.0
     if len(pinned) >= 2:
         remaining = pinned[1:]
@@ -492,10 +503,11 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
     a job/community with a live (or done) visit of that type is left alone.
     """
     cancel_visits_for_dead_jobs(db)
+    created: dict[str, int] = {}
 
     # A measure marked complete AND correct in CabinetTron is finished work —
     # close its pending visit so it never rides a route (Brian 10/29/26).
-    from app.models import FieldMeasure
+    from app.models import FieldMeasure, PhaseUpdate
 
     measured_ok_rows = (
         db.query(Visit, FieldMeasure.complete_date)
@@ -513,6 +525,28 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         # so bulk closures never crowd the route's done-today log.
         v.completed_at = datetime.combine(complete_date, datetime.min.time(), tzinfo=timezone.utc)
         v.completed_by = "CabinetTron — measured complete & correct"
+
+    # Measure complete & correct also moves the house to 4.1 - Pre Walk
+    # Complete automatically (never downgrading a house already past it), which
+    # with the sweep filter below takes it off the phase-check route for good
+    # (Brian 10/29/26). Idempotent: once at 4.1+ nothing is re-logged.
+    measured_jobs = [
+        r[0] for r in db.query(FieldMeasure.job_id)
+        .join(Job, Job.id == FieldMeasure.job_id)
+        .filter(FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
+                Job.status.in_(TRACK_TO_BLUE_STATUSES))
+        .all()
+    ]
+    measured_phase = _latest_phase_map(db, measured_jobs)
+    advanced = 0
+    for jid in measured_jobs:
+        n = _phase_num(measured_phase.get(jid))
+        if n is None or n < 4.1:
+            db.add(PhaseUpdate(job_id=jid, phase="4.1", source="autobot",
+                               noted_by="Autobot — measure complete & correct"))
+            advanced += 1
+    if advanced:
+        created["phase_to_4.1"] = advanced
 
     # Self-heal: earlier system closures were stamped with the sync's clock —
     # re-stamp them with the real measure date (idempotent, runs every sync).
@@ -538,8 +572,6 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         if service_request_id is not None:
             q = q.filter(Visit.service_request_id == service_request_id)
         return db.query(q.exists()).scalar()
-
-    created: dict[str, int] = {}
 
     def add(vtype: str, **kw) -> None:
         db.add(Visit(visit_type=vtype, created_by=created_by, **kw))
