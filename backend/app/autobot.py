@@ -576,6 +576,41 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         close = j.measure_date + timedelta(days=1) if j.measure_date else today + timedelta(days=3)
         add("field_measure", job_id=j.id, open_date=open_d, close_date=max(close, today))
 
+    # Stale tracker dates (Brian 10/29/26): supers are notorious for not moving
+    # the measure date when a house slips, so a date more than a week past gets
+    # sanity-checked against the phase log. If the slab actually went in AFTER
+    # the tracker's date, the clock re-anchors there: due 3 days from the real
+    # slab-poured log, not screaming-overdue off fiction. Hand-pinned days and
+    # recheck trips are left alone.
+    from app.models import PhaseUpdate
+
+    db.flush()  # include measures spawned just above
+    STALE_AFTER = timedelta(days=7)
+    pending_fm = (
+        db.query(Visit)
+        .options(joinedload(Visit.job))
+        .filter(Visit.visit_type == "field_measure", Visit.status == "pending",
+                Visit.trip == 1, Visit.scheduled_date.is_(None), Visit.job_id.isnot(None))
+        .all()
+    )
+    slab_logged: dict[int, date] = {}
+    fm_ids = [v.job_id for v in pending_fm]
+    if fm_ids:
+        for pu in (db.query(PhaseUpdate).filter(PhaseUpdate.job_id.in_(fm_ids))
+                   .order_by(PhaseUpdate.id).all()):
+            n = _phase_num(pu.phase)
+            if n is not None and n >= 2 and pu.job_id not in slab_logged and pu.noted_at:
+                slab_logged[pu.job_id] = pu.noted_at.date()
+    for v in pending_fm:
+        md = v.job.measure_date if v.job else None
+        sd = slab_logged.get(v.job_id)
+        if md and sd and md < today - STALE_AFTER and sd > md:
+            v.open_date = min(sd, today)
+            v.close_date = max(sd + timedelta(days=3), today)
+            if not v.notes:
+                v.notes = (f"tracker measure date {md.month}/{md.day}/{str(md.year)[2:]} looks stale — "
+                           f"re-anchored to slab poured (logged {sd.month}/{sd.day}/{str(sd.year)[2:]})")
+
     # Post-walks: the 48-hour clock starts at the install date, for any house past
     # install (2.1-Inst with a date, or 3.0 and up). Only recent installs — a months-old install has no live 48h clock, and
     # spawning the backlog as due-today anchors would swamp every route.
