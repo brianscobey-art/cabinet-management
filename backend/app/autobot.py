@@ -343,20 +343,47 @@ def visit_label(visit: Visit) -> str:
     return f"visit #{visit.id}"
 
 
-def _active_house_count(db: Session, community_id: int) -> int:
-    """Tract houses under construction — phase checks are production-builder sweeps,
-    so retail/custom catch-all 'communities' never spawn them."""
-    from app.models.job import JobType
+def _checkable_houses(db: Session, community_id: int) -> list[Job]:
+    """Tract houses still worth a phase check: active statuses, production builder
+    (retail/custom catch-all 'communities' never sweep), and NOT yet in the
+    finished tail — once a house's latest logged phase hits 12 - Cabinets
+    Installed it leaves the sweep (Brian 10/29/26). No phase logged = still in.
+    """
+    from sqlalchemy import func as _func
 
-    return (
+    from app.models import PhaseUpdate
+    from app.models.job import JobType
+    from app.phases import FINISHED_PHASES
+
+    houses = (
         db.query(Job)
         .filter(
             Job.community_id == community_id,
             Job.status.in_(ACTIVE_HOUSE_STATUSES),
             Job.job_type == JobType.tract,
         )
-        .count()
+        .all()
     )
+    if not houses:
+        return houses
+    ids = [j.id for j in houses]
+    latest = (
+        db.query(PhaseUpdate.job_id, _func.max(PhaseUpdate.id).label("max_id"))
+        .filter(PhaseUpdate.job_id.in_(ids))
+        .group_by(PhaseUpdate.job_id)
+        .subquery()
+    )
+    finished_ids = {
+        pu.job_id
+        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
+        if pu.phase in FINISHED_PHASES
+    }
+    return [j for j in houses if j.id not in finished_ids]
+
+
+def _active_house_count(db: Session, community_id: int) -> int:
+    """How many houses a sweep of this community would actually look at."""
+    return len(_checkable_houses(db, community_id))
 
 
 RESIDENTIAL_MPH = 20.0  # creeping between lots inside a community
@@ -370,17 +397,7 @@ def phase_check_metrics(db: Session, community_id: int) -> tuple[int, int, tuple
     nearest-neighbor walk over the pinned houses at residential speed. The stop
     itself anchors at the centroid of the pinned houses when we have them.
     """
-    from app.models.job import JobType
-
-    houses = (
-        db.query(Job)
-        .filter(
-            Job.community_id == community_id,
-            Job.status.in_(ACTIVE_HOUSE_STATUSES),
-            Job.job_type == JobType.tract,
-        )
-        .all()
-    )
+    houses = _checkable_houses(db, community_id)
     count = len(houses)
     pinned = [(j.lat, j.lon) for j in houses if j.lat is not None and j.lon is not None]
     # Outlier armor: a mis-geocoded house (wrong city entirely) must never turn
