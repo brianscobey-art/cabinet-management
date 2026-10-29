@@ -340,6 +340,8 @@ const TYPE_LABELS = {
   warranty_t1: "Warranty T1", warranty_t2_eval: "Warranty T2 Eval",
   warranty_t2_complete: "Warranty T2 Complete",
 };
+// A measure for a house still flagged incorrect shows as a Remeasure.
+const stopLabel = (s) => s.remeasure ? "Remeasure" : (TYPE_LABELS[s.visit_type] || s.visit_type);
 let me = null;
 let jobsCache = null;
 let workers = [];
@@ -542,11 +544,12 @@ function routeHtml(plan, note) {
     <li class="stop ${s.anchor ? "anchor" : ""}" onclick="toggleStop(event, ${s.visit_id}, ${s.community_id ?? "null"}, '${s.visit_type}')">
       <div class="stop-head">
         <span class="num">${s.order}</span>
-        <span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+        <span class="chip t-${slug(s.visit_type)}">${stopLabel(s)}</span>
         ${s.due_today ? `<span class="due">DUE ${fmtDate(s.close_date)}</span>` : ""}
         <span class="times">${s.arrive} – ${s.depart}</span>
       </div>
       <div class="stop-body">${esc(s.label)}${s.houses ? ` <span class="muted">· ${s.houses} active houses</span>` : ""}</div>
+      ${s.measure_notes ? `<div class="stop-foot" style="color:#9c3b1e">✎ first measure: ${esc(s.measure_notes)}</div>` : ""}
       <div class="stop-foot muted">
         ${s.drive_min} min drive · ${s.duration_min} min on-site${s.notes ? " · " + esc(s.notes) : ""}
         <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}" target="_blank" rel="noreferrer">navigate</a>
@@ -721,7 +724,7 @@ function printRoute() {
     <tr>
       <td class="pr-num">${s.order}</td>
       <td class="pr-time">${s.arrive}<br><span class="pr-sub">${s.depart}</span></td>
-      <td>${TYPE_LABELS[s.visit_type] || s.visit_type}${s.due_today ? " <b>· DUE</b>" : ""}</td>
+      <td>${stopLabel(s)}${s.due_today ? " <b>· DUE</b>" : ""}</td>
       <td>${esc(s.label)}${s.houses ? ` <span class="pr-sub">(${s.houses} houses)</span>` : ""}${s.notes ? `<br><span class="pr-sub">${esc(s.notes)}</span>` : ""}</td>
       <td class="pr-mins">${s.drive_min}</td>
       <td class="pr-mins">${s.duration_min}</td>
@@ -1076,7 +1079,7 @@ async function renderForecast() {
           <ol class="fc-stops">${p.stops.map((s) => `
           <li>
             <span class="fc-time">${s.arrive}</span>
-            <span class="chip t-${slug(s.visit_type)}">${TYPE_LABELS[s.visit_type] || s.visit_type}</span>
+            <span class="chip t-${slug(s.visit_type)}">${stopLabel(s)}</span>
             <span class="fc-label">${esc(s.label)}</span>
             ${s.due_today ? `<span class="due">DUE</span>` : ""}
           </li>`).join("")}</ol>

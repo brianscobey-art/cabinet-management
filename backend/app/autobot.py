@@ -907,10 +907,12 @@ def plan_day(
     fm_job_ids = [v.job_id for v in visits if v.visit_type == "field_measure" and v.job_id]
     phase_by_job = _latest_phase_map(db, fm_job_ids)
     measured_ok: set[int] = set()
+    remeasure_jobs: set[int] = set()
+    remeasure_notes: dict[int, str] = {}
     if fm_job_ids:
         # Measured complete & correct in CabinetTron = off the route immediately
         # (the sync also closes the visit for good).
-        from app.models import FieldMeasure
+        from app.models import FieldMeasure, FieldMeasureNote
 
         measured_ok = {
             r[0] for r in db.query(FieldMeasure.job_id).filter(
@@ -918,6 +920,20 @@ def plan_day(
                 FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
             ).all()
         }
+        # Measured but still flagged INCORRECT = this trip is a remeasure, and it
+        # carries the original measure's notes. Checked live every plan, so
+        # clearing the incorrect flag drops the label and notes (Brian 10/29/26).
+        remeasure_jobs = {
+            r[0] for r in db.query(FieldMeasure.job_id).filter(
+                FieldMeasure.job_id.in_(fm_job_ids), FieldMeasure.incorrect.is_(True),
+            ).all()
+        }
+        if remeasure_jobs:
+            for n in (db.query(FieldMeasureNote)
+                      .filter(FieldMeasureNote.job_id.in_(remeasure_jobs))
+                      .order_by(FieldMeasureNote.id).all()):
+                prev = remeasure_notes.get(n.job_id)
+                remeasure_notes[n.job_id] = (prev + " · " + n.body) if prev else n.body
 
     candidates: list[dict] = []
     skipped: list[dict] = []
@@ -1128,6 +1144,9 @@ def plan_day(
             "anchor": is_anchor(c),
             "houses": c["houses"] or None,
             "notes": v.notes,
+            "remeasure": v.visit_type == "field_measure" and v.job_id in remeasure_jobs,
+            "measure_notes": remeasure_notes.get(v.job_id)
+            if v.visit_type == "field_measure" and v.job_id in remeasure_jobs else None,
         })
     leg_home = leg_min(prev, None) if route else 0.0
     clock += leg_home
