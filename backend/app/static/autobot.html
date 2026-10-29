@@ -485,6 +485,7 @@ function showTab(tab) {
 // ---------------------------------------------------------------- route
 
 let routeDay = todayIso();
+let routeRev = false;  // ⇄ run today's loop in the opposite direction
 let lastPlan = null;  // most recently built plan — feeds the one-page print sheet
 
 async function renderRoute(genFirst = false) {
@@ -506,7 +507,8 @@ async function renderRoute(genFirst = false) {
           Object.entries(gen.created).map(([t, n]) => n + " " + (TYPE_LABELS[t] || t)).join(", ")
         : "No new visits — the board already matches CabinetTron.";
     }
-    const plan = await api("/autobot/plan?day=" + routeDay + "&real_drive=true" + workerParam());
+    const plan = await api("/autobot/plan?day=" + routeDay + "&real_drive=true" + workerParam()
+      + (routeRev ? "&reverse=true" : ""));
     lastPlan = plan;
     if (plan.time_off) {
       el.innerHTML = `
@@ -566,6 +568,9 @@ function routeHtml(plan, note) {
       <input type="date" value="${plan.day}" onchange="routeDay=this.value;renderRoute()" />
       ${workerSelect()}
       <button onclick="renderRoute()">Rebuild Route</button>
+      <button class="ghost" ${plan.reversed ? 'style="background:#125952;color:#fff"' : ""}
+        onclick="routeRev=!routeRev;renderRoute()"
+        title="Run the same loop in the opposite direction">⇄ ${plan.reversed ? "Reversed" : "Reverse"}</button>
       <button class="ghost" onclick="renderRoute(true)">⟳ Sync from CabinetTron</button>
       ${plan.stops.length ? `<a class="gmaps" href="${gmaps}" target="_blank" rel="noreferrer">🧭 Google Maps</a>
       <button class="ghost" onclick="printRoute()" title="One-page schedule for the clipboard">🖨 Print</button>` : ""}

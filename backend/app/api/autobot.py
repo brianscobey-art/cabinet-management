@@ -660,9 +660,11 @@ def plan(
     day: date | None = None,
     real_drive: bool = True,
     worker_id: int | None = None,
+    reverse: bool = False,
     db: Session = Depends(get_db),
 ):
-    return plan_day(db, day or date.today(), real_drive=real_drive, worker_id=worker_id)
+    return plan_day(db, day or date.today(), real_drive=real_drive, worker_id=worker_id,
+                    reverse=reverse)
 
 
 @router.get("/autobot/forecast", dependencies=[Depends(autobot_access)])

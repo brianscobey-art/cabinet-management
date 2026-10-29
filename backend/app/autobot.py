@@ -812,6 +812,7 @@ def plan_day(
     real_drive: bool = False,
     exclude_ids: frozenset[int] = frozenset(),
     worker_id: int | None = None,
+    reverse: bool = False,
 ) -> dict:
     """Build one day's loop for one person. Default = the service tech, whose
     pool also holds every unassigned visit; an area worker's route starts and
@@ -1092,6 +1093,11 @@ def plan_day(
             continue
         route = best
 
+    # Reverse on request: same stops, opposite direction — the timeline below
+    # recomputes every arrive/depart from the flipped order.
+    if reverse:
+        route = route[::-1]
+
     # Final timeline.
     stops, clock, prev, drive_total, onsite_total = [], float(start_clock), None, 0.0, 0.0
     for n, c in enumerate(route, start=1):
@@ -1141,6 +1147,7 @@ def plan_day(
         "completed": completed_today,
         "resumed": bool(completed_today),
         "resumed_from": completed_today[-1]["label"] if completed_today else None,
+        "reversed": reverse,
         "stops": stops,
         "drive_min": round(drive_total),
         "onsite_min": round(onsite_total),
