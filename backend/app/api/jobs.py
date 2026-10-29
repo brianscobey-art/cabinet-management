@@ -170,6 +170,12 @@ def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)):
     # Warranty starts at install date (spec §4) — default it when install_date is set.
     if updates.get("install_date") and not job.warranty_start_date and "warranty_start_date" not in updates:
         updates["warranty_start_date"] = updates["install_date"]
+    # Picking a KSR makes them the sales contact (Brian 10/29/26).
+    if updates.get("ksr"):
+        from app.sales import ksr_contact
+
+        name, phone, email = ksr_contact(db, updates["ksr"])
+        updates.update(ksr=name, sales_contact_name=name, sales_contact_phone=phone, sales_contact_email=email)
     for key, value in updates.items():
         setattr(job, key, value)
     db.commit()

@@ -50,6 +50,22 @@ def canonical_ksr(raw: str | None) -> str | None:
     return _KSR_CANON.get(raw.strip().lower(), raw.strip())
 
 
+# Phones the user table doesn't carry. Emails come from the KSR's login.
+KSR_PHONES = {"Brian Scobey": "850-890-0482"}
+
+
+def ksr_contact(db, ksr: str) -> tuple[str, str | None, str | None]:
+    """(name, phone, email) for a KSR -- the job's sales contact once a KSR is
+    picked on it (Brian 10/29/26)."""
+    from sqlalchemy import func
+
+    from app.models import User
+
+    name = canonical_ksr(ksr) or ksr
+    user = db.query(User).filter(func.lower(User.full_name) == name.lower(), User.is_active.is_(True)).first()
+    return name, KSR_PHONES.get(name), user.email if user else None
+
+
 def effective_ksr(job) -> str | None:
     """The KSR credited for a job: its own override, else the account default."""
     return job.ksr or (job.account.ksr if job.account is not None else None)

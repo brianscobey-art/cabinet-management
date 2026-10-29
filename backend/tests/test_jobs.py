@@ -181,3 +181,24 @@ def test_field_role_cannot_write_jobs(client, db):
     field = login(client, "field@example.com")
     assert client.get(f"/jobs/{job['id']}", headers=field).status_code == 200
     assert client.patch(f"/jobs/{job['id']}", headers=field, json={"status": "2.0-Ord"}).status_code == 403
+
+
+def test_picking_ksr_makes_them_sales_contact(client, db):
+    make_user(db, email="sales@example.com", role=Role.sales)
+    alex = make_user(db, email="alex.talley@example.com", role=Role.sales)
+    alex.full_name = "Alex Talley"
+    db.commit()
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    job = make_job(client, headers, account_id, community_id, sales_contact_phone="850-555-0199")
+
+    resp = client.patch(f"/jobs/{job['id']}", headers=headers, json={"ksr": "alex t."})
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["ksr"] == "Alex Talley"
+    assert out["sales_contact_name"] == "Alex Talley"
+    assert out["sales_contact_email"] == "alex.talley@example.com"
+    assert out["sales_contact_phone"] is None   # Brian's number doesn't follow the job
+
+    out = client.patch(f"/jobs/{job['id']}", headers=headers, json={"ksr": "Brian Scobey"}).json()
+    assert (out["sales_contact_name"], out["sales_contact_phone"]) == ("Brian Scobey", "850-890-0482")
