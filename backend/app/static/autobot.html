@@ -725,7 +725,7 @@ function printRoute() {
       <td class="pr-num">${s.order}</td>
       <td class="pr-time">${s.arrive}<br><span class="pr-sub">${s.depart}</span></td>
       <td>${stopLabel(s)}${s.due_today ? " <b>· DUE</b>" : ""}</td>
-      <td>${esc(s.label)}${s.houses ? ` <span class="pr-sub">(${s.houses} houses)</span>` : ""}${s.notes ? `<br><span class="pr-sub">${esc(s.notes)}</span>` : ""}</td>
+      <td>${esc(s.label)}${s.houses ? ` <span class="pr-sub">(${s.houses} houses)</span>` : ""}${s.measure_notes ? `<br><b>✎ first measure: ${esc(s.measure_notes)}</b>` : ""}${s.notes ? `<br><span class="pr-sub">${esc(s.notes)}</span>` : ""}</td>
       <td class="pr-mins">${s.drive_min}</td>
       <td class="pr-mins">${s.duration_min}</td>
       <td class="pr-check">☐</td>
