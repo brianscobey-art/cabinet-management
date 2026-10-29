@@ -62,8 +62,10 @@ def _num(v):
 
 
 def _upsert_receipts(db, rows: list[dict]) -> int:
-    """rows: dicts keyed by the COLS names. Full refresh (delete + insert)."""
-    db.query(PoReceipt).delete()
+    """rows: dicts keyed by the COLS names. Merge by receipt # (10/29/26): the
+    emailed DOMO card is filtered to This Year, so a full replace would wipe
+    last year's receipts every January. Receipts don't get un-received."""
+    existing = {r.receipt_number: r for r in db.query(PoReceipt).all()}
     seen = set()
     n = 0
     for r in rows:
@@ -71,15 +73,19 @@ def _upsert_receipts(db, rows: list[dict]) -> int:
         if not num or num in seen:
             continue
         seen.add(num)
-        db.add(PoReceipt(
-            receipt_number=num,
+        vals = dict(
             receipt_date=_as_date(r.get("Receipt Date")),
             pos=(str(r.get("POS")).strip() if r.get("POS") is not None else None),
             supplier=(str(r.get("Supplier")).strip() if r.get("Supplier") is not None else None),
             supplier_cost=_num(r.get("Supplier Cost")),
             landed_cost=_num(r.get("Landed Cost")),
             order_number=(str(r.get("Order #")).strip() if r.get("Order #") is not None else None),
-        ))
+        )
+        if num in existing:
+            for k, v in vals.items():
+                setattr(existing[num], k, v)
+        else:
+            db.add(PoReceipt(receipt_number=num, **vals))
         n += 1
     return n
 

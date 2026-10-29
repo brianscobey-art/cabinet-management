@@ -82,10 +82,19 @@ def load_pairs(path: Path) -> list[dict]:
                 "created": (row.get("Created") or "")[:10], "limit": row.get("Credit Limit") or "",
                 "linked_g": (row.get("Linked G") or "").strip().upper(),
             }
+    # The emailed "Job Account" card (scripts/domo_email_feed.py) has no Linked
+    # G column -- pair an I with the one G account carrying the same name.
+    g_by_name: dict[tuple, list[str]] = defaultdict(list)
+    for a in accts.values():
+        if a["acct"].startswith("G"):
+            g_by_name[(a["customer"].upper(), a["name"].upper())].append(a["acct"])
     pairs, used_g = [], set()
     for a in accts.values():
         if a["acct"].startswith("I"):
             g = a["linked_g"] if a["linked_g"] in accts else None
+            if g is None and not a["linked_g"]:
+                same = g_by_name.get((a["customer"].upper(), a["name"].upper()), [])
+                g = same[0] if len(same) == 1 else None
             if g:
                 used_g.add(g)
             pairs.append({"name": a["name"], "customer": a["customer"], "g": g or a["linked_g"] or None,
