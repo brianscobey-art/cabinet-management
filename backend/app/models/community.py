@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -19,6 +19,10 @@ class Community(Base):
     # Community pin for Autobot routing — every lot inherits this unless the visit has its own.
     lat: Mapped[float | None] = mapped_column(Float, default=None)
     lon: Mapped[float | None] = mapped_column(Float, default=None)
+    # Autobot-only hold: nothing schedules here and pending visits stay parked,
+    # while the jobs themselves are untouched in CabinetTron (Clear Lake Estates,
+    # POs being voided, 10/29/26).
+    autobot_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -961,6 +961,11 @@ class DutyRowOut(BaseModel):
     national: bool  # national builders only take national_ok workers
     active_houses: int
     duties: dict[str, int | None | str]  # duty -> worker_id, None (explicit tech), or "rules"
+    paused: bool = False  # held out of Autobot entirely
+
+
+class PauseIn(BaseModel):
+    paused: bool
 
 
 class DutyCellIn(BaseModel):
@@ -996,9 +1001,22 @@ def duty_chart(db: Session = Depends(get_db)):
         rows.append(DutyRowOut(
             community_id=c.id, name=c.name, account_name=c.account.name,
             national=c.account.name.startswith(NATIONAL_PREFIXES),
-            active_houses=tracking, duties=duties,
+            active_houses=tracking, duties=duties, paused=c.autobot_paused,
         ))
     return {"duties": list(DUTIES), "rows": rows}
+
+
+@router.put("/autobot/communities/{community_id}/pause", dependencies=[Depends(autobot_write)])
+def set_community_pause(community_id: int, payload: PauseIn, db: Session = Depends(get_db)):
+    """Hold a community out of Autobot (or let it back in). Only Autobot's
+    scheduling changes — the jobs in CabinetTron are untouched, and parked
+    visits come back on the next plan when the pause is lifted."""
+    c = db.get(Community, community_id)
+    if not c:
+        raise HTTPException(404, "Community not found")
+    c.autobot_paused = payload.paused
+    db.commit()
+    return {"community_id": c.id, "name": c.name, "paused": c.autobot_paused}
 
 
 @router.put("/autobot/duties", dependencies=[Depends(autobot_write)])

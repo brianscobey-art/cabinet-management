@@ -712,7 +712,7 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
     # Never checked → due now; checked → due 10 days after the last sweep.
     # "Retail" is the catch-all bucket for one-off jobs, not a subdivision to sweep.
     for c in db.query(Community).all():
-        if c.name.strip().lower() == "retail":
+        if c.name.strip().lower() == "retail" or c.autobot_paused:
             continue
         if _active_house_count(db, c.id) == 0 or _pending_phase_check(db, c.id):
             continue
@@ -996,6 +996,9 @@ def plan_day(
             continue  # handled on an earlier forecast day
         if v.job and v.job.status in INACTIVE_JOB_STATUSES:
             continue  # job archived in CabinetTron since the visit was made
+        comm = v.community or (v.job.community if v.job else None)
+        if comm is not None and comm.autobot_paused:
+            continue  # community held out of Autobot (Duties tab pause)
         # Deadline rescue: an off worker's due measure/post-walk rides the truck.
         rescued = (
             tech_pool

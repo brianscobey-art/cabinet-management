@@ -1319,12 +1319,14 @@ async function renderDuties() {
       <thead><tr><th>Community</th><th>Houses</th>${chart.duties.map((d) =>
         `<th>${DUTY_LABELS[d] || d}</th>`).join("")}</tr></thead>
       <tbody>${chart.rows.map((r) => `
-        <tr>
+        <tr ${r.paused ? 'style="opacity:0.55"' : ""}>
           <td>
             <div class="duty-name">
-              <span>${esc(r.name)}<div class="muted" style="font-size:0.78rem">${esc(r.account_name)}</div></span>
+              <span>${esc(r.name)}<div class="muted" style="font-size:0.78rem">${esc(r.account_name)}${r.paused ? " · <b>PAUSED</b> — nothing schedules here" : ""}</div></span>
               <button class="ghost duty-tech-btn" onclick="techAll(${r.community_id}, this)"
                 title="Assign every task in ${esc(r.name)} to the tech">Tech</button>
+              <button class="ghost duty-tech-btn" onclick="togglePause(${r.community_id}, ${!r.paused})"
+                title="${r.paused ? "Let Autobot schedule this community again" : "Hold this community out of Autobot — the jobs in CabinetTron stay as they are"}">${r.paused ? "Resume" : "Pause"}</button>
             </div>
           </td>
           <td>${r.active_houses}</td>
@@ -1337,6 +1339,14 @@ async function renderDuties() {
   } catch (ex) {
     el.innerHTML += `<p class="error">${esc(ex.message)}</p>`;
   }
+}
+
+async function togglePause(communityId, paused) {
+  try {
+    await api("/autobot/communities/" + communityId + "/pause", {
+      method: "PUT", body: JSON.stringify({ paused }) });
+    renderDuties();
+  } catch (ex) { alert(ex.message); }
 }
 
 async function techAll(communityId, btn) {
