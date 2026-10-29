@@ -702,7 +702,7 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
     active houses with their current construction phase (for phase sweeps)."""
     from sqlalchemy import func
 
-    from app.phases import PHASE_LABELS, PHASE_TRACKED_STATUSES, PHASES
+    from app.phases import FINISHED_PHASES, PHASE_LABELS, PHASE_TRACKED_STATUSES, PHASES
 
     community = db.get(Community, community_id)
     if not community:
@@ -745,6 +745,8 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
     houses = []
     for j in sorted(jobs, key=lot_key):
         cur = latest.get(j.id)
+        if cur and cur.phase in FINISHED_PHASES:
+            continue  # cabinets are in (12+) — nothing left to phase-check here
         houses.append(HouseOut(
             job_id=j.id, job_code=j.job_code, lot_number=j.lot_number, address=j.address,
             plan=j.plan,
