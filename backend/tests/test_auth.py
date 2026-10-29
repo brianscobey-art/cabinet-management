@@ -36,7 +36,7 @@ def test_admin_can_create_user(client, db):
         },
     )
     assert resp.status_code == 201, resp.text
-    assert resp.json()["role"] == "installer_coordinator"
+    assert resp.json()["user"]["role"] == "installer_coordinator"
     # new user can log in
     login(client, "installer@example.com")
 

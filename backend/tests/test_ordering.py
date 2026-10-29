@@ -50,10 +50,11 @@ def test_board_lists_builder_jobs(client, db):
     row = next(r for r in board if r["job_code"] == "DRTEST-0001")
     assert row["checklist"]["stage1_done"] is False
 
-    # closed jobs drop off unless requested
+    # closed jobs are archived: off the board for good (8/7/26 -- they live only
+    # on the Archive page), even with include_ordered
     client.patch(f"/jobs/{job['id']}", headers=headers, json={"status": "6.0-Clsd"})
     assert client.get("/ordering", headers=headers).json() == []
-    assert len(client.get("/ordering?include_closed=true", headers=headers).json()) == 1
+    assert client.get("/ordering?include_ordered=true", headers=headers).json() == []
 
 
 def test_checklist_seeds_from_documents(client, db, tmp_path):

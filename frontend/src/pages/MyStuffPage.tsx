@@ -14,6 +14,7 @@ import {
   markNotesRead,
 } from "../api";
 import { fmtDate } from "../format";
+import MySummaryReports from "./MySummaryReports";
 
 /** The five COAST apps, as a compact strip at the top of the landing page. */
 const APPS = [
@@ -327,11 +328,7 @@ export default function MyStuffPage({ me }: { me: User }) {
         notes.map((n) => <NoteCard key={n.id} note={n} me={me} onChange={load} />)
       )}
 
-      {/* Summary reports land here later */}
-      <div className="card" style={{ marginTop: "1.25rem" }}>
-        <h3 style={{ marginTop: 0 }}>Summary reports</h3>
-        <p className="muted">Coming soon — your key numbers will show up here.</p>
-      </div>
+      <MySummaryReports />
     </div>
   );
 }

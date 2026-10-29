@@ -15,6 +15,7 @@ from app.api.documents import router as documents_router
 from app.api.fieldmeasure import router as fieldmeasure_router
 from app.api.jobs import router as jobs_router
 from app.api.job_notes import router as job_notes_router
+from app.api.my_summary import router as my_summary_router
 from app.api.notes import router as notes_router
 from app.api.ordering import router as ordering_router
 from app.api.ordering_platform import router as ordering_platform_router
@@ -363,6 +364,7 @@ app.include_router(reports_router)
 app.include_router(wallpaper_router)
 app.include_router(notes_router)
 app.include_router(job_notes_router)
+app.include_router(my_summary_router)
 app.include_router(fieldmeasure_router)
 app.include_router(service_router)
 app.include_router(autobot_router)

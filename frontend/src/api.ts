@@ -349,6 +349,42 @@ export interface JobNote {
 /** What a job note is about (Brian 10/29/26) -- mirrors JOB_NOTE_TOPICS. */
 export const JOB_NOTE_TOPICS = ["Sales", "Delivery", "Installation", "Service", "Warranty", "Misc"];
 
+/** My Stuff > Summary reports: one KSR's received items, installs, service. */
+export interface MySummaryJob {
+  job_id: number;
+  job_code: string | null;
+  address: string;
+  community: string | null;
+  status: string;
+}
+export interface MySummary {
+  ksr: string;
+  roster: string[];
+  days: number | null;
+  active_jobs: number;
+  received_cost: number;
+  received: (MySummaryJob & {
+    received: string | null;
+    our_po: string;
+    vendor: string | null;
+    product: string | null;
+    receipt_number: string;
+    landed_cost: number | null;
+  })[];
+  installs: (MySummaryJob & { install_date: string; material: string })[];
+  service: (MySummaryJob & {
+    date: string | null;
+    scheduled: boolean;
+    due: string | null;
+    kind: string;
+    who: string | null;
+    notes: string | null;
+  })[];
+}
+
+export const getMySummary = (ksr: string | null, days: number) =>
+  api<MySummary>(`/my/summary?days=${days}${ksr ? `&ksr=${encodeURIComponent(ksr)}` : ""}`);
+
 export const listJobNotes = (jobId: number) => api<JobNote[]>(`/jobs/${jobId}/notes`);
 export const addJobNote = (jobId: number, body: string, topic: string) =>
   api<JobNote>(`/jobs/${jobId}/notes`, { method: "POST", body: JSON.stringify({ body, topic }) });
