@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import math
 import urllib.request
-from datetime import date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -440,6 +440,25 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
     """
     cancel_visits_for_dead_jobs(db)
 
+    # A measure marked complete AND correct in CabinetTron is finished work —
+    # close its pending visit so it never rides a route (Brian 10/29/26).
+    from app.models import FieldMeasure
+
+    measured_ok_rows = (
+        db.query(Visit)
+        .join(FieldMeasure, FieldMeasure.job_id == Visit.job_id)
+        .filter(
+            Visit.visit_type == "field_measure", Visit.status == "pending",
+            FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
+        )
+        .all()
+    )
+    for v in measured_ok_rows:
+        v.status = "done"
+        v.result = "complete"
+        v.completed_at = datetime.now(timezone.utc)
+        v.completed_by = "CabinetTron — measured complete & correct"
+
     def exists(vtype: str, job_id: int | None = None, community_id: int | None = None,
                service_request_id: int | None = None) -> bool:
         q = db.query(Visit.id).filter(Visit.visit_type == vtype, Visit.status != "canceled")
@@ -757,6 +776,37 @@ def plan_day(
         .all()
     )
 
+    # A measure only shows once the house is really there: latest logged phase
+    # must be at least 2 - Slab Poured (Brian 10/29/26). No phase logged = no
+    # gate, so houses the phase feed hasn't touched still schedule normally.
+    from sqlalchemy import func as _func
+
+    from app.models import PhaseUpdate
+    from app.phases import PHASE_LABELS
+
+    fm_job_ids = [v.job_id for v in visits if v.visit_type == "field_measure" and v.job_id]
+    phase_by_job: dict[int, str] = {}
+    measured_ok: set[int] = set()
+    if fm_job_ids:
+        latest = (
+            db.query(PhaseUpdate.job_id, _func.max(PhaseUpdate.id).label("max_id"))
+            .filter(PhaseUpdate.job_id.in_(fm_job_ids))
+            .group_by(PhaseUpdate.job_id)
+            .subquery()
+        )
+        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all():
+            phase_by_job[pu.job_id] = pu.phase
+        # Measured complete & correct in CabinetTron = off the route immediately
+        # (the sync also closes the visit for good).
+        from app.models import FieldMeasure
+
+        measured_ok = {
+            r[0] for r in db.query(FieldMeasure.job_id).filter(
+                FieldMeasure.job_id.in_(fm_job_ids),
+                FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
+            ).all()
+        }
+
     candidates: list[dict] = []
     skipped: list[dict] = []
     for v in visits:
@@ -784,6 +834,18 @@ def plan_day(
             continue  # pinned to another day
         if v.open_date and v.open_date > day:
             continue  # not open yet
+        if v.visit_type == "field_measure" and v.job_id in measured_ok:
+            continue  # measured complete & correct in CabinetTron — nothing to do out there
+        if v.visit_type == "field_measure" and v.job_id in phase_by_job:
+            code = phase_by_job[v.job_id]
+            try:
+                num = float(code)
+            except ValueError:
+                num = None
+            if num is not None and num < 2:
+                skipped.append({"visit_id": v.id, "label": label, "visit_type": v.visit_type,
+                                "reason": f"slab not poured yet — house is at {PHASE_LABELS.get(code, 'phase ' + code)}"})
+                continue
         if v.service_request:
             ready, detail = parts_state(v.service_request, day)
             if not ready:
