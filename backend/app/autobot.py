@@ -728,7 +728,29 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
             if last_done and last_done.completed_at
             else today
         )
-        add("phase_check", community_id=c.id, close_date=due)
+        # Once every 10 days (Brian 10/29/26): the next check can't schedule
+        # before the 10th day, then has a couple of days to catch a nearby trip.
+        add("phase_check", community_id=c.id, open_date=due,
+            close_date=due + timedelta(days=PHASE_CHECK_PULL_FORWARD_DAYS))
+
+    # Self-heal: checks spawned before the fix had no open date, so they rode a
+    # route the day after the last check. Hold each until 10 days after it.
+    for v in (db.query(Visit)
+              .filter(Visit.visit_type == "phase_check", Visit.status == "pending",
+                      Visit.open_date.is_(None), Visit.community_id.isnot(None))
+              .all()):
+        last = (
+            db.query(Visit.completed_at)
+            .filter(Visit.visit_type == "phase_check", Visit.community_id == v.community_id,
+                    Visit.status == "done", Visit.completed_at.isnot(None))
+            .order_by(Visit.completed_at.desc())
+            .first()
+        )
+        if last and last[0]:
+            nxt = last[0].date() + timedelta(days=PHASE_CHECK_INTERVAL_DAYS)
+            if nxt > today:
+                v.open_date = nxt
+                v.close_date = nxt + timedelta(days=PHASE_CHECK_PULL_FORWARD_DAYS)
 
     db.commit()
     return created
