@@ -343,6 +343,36 @@ def visit_label(visit: Visit) -> str:
     return f"visit #{visit.id}"
 
 
+def _phase_num(code: str | None) -> float | None:
+    """A phase code as a number for ordering ('4.1' -> 4.1); None if unknown."""
+    if not code:
+        return None
+    try:
+        return float(code)
+    except ValueError:
+        return None
+
+
+def _latest_phase_map(db: Session, job_ids: list[int]) -> dict[int, str]:
+    """job_id -> latest logged phase code, for the given jobs."""
+    from sqlalchemy import func as _func
+
+    from app.models import PhaseUpdate
+
+    if not job_ids:
+        return {}
+    latest = (
+        db.query(PhaseUpdate.job_id, _func.max(PhaseUpdate.id).label("max_id"))
+        .filter(PhaseUpdate.job_id.in_(job_ids))
+        .group_by(PhaseUpdate.job_id)
+        .subquery()
+    )
+    return {
+        pu.job_id: pu.phase
+        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
+    }
+
+
 def _checkable_houses(db: Session, community_id: int) -> list[Job]:
     """Tract houses still worth a phase check: active statuses, production builder
     (retail/custom catch-all 'communities' never sweep), and NOT yet in the
@@ -507,6 +537,19 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         if not exists("field_measure", job_id=j.id):
             add("field_measure", job_id=j.id, open_date=j.measure_date,
                 close_date=j.measure_date + timedelta(days=1))
+
+    # Phase-driven measures: slab poured (or beyond) means the house is measurable
+    # NOW, measure date or not (Brian 10/29/26). Covers jobs with no measure date
+    # yet; the date-spawned visits above get pulled forward at plan time instead.
+    pre = db.query(Job).filter(Job.status.in_(PRE_MEASURE_STATUSES)).all()
+    phase_map = _latest_phase_map(db, [j.id for j in pre])
+    for j in pre:
+        num = _phase_num(phase_map.get(j.id))
+        if num is None or num < 2:
+            continue
+        if not exists("field_measure", job_id=j.id):
+            close = j.measure_date + timedelta(days=1) if j.measure_date else today + timedelta(days=3)
+            add("field_measure", job_id=j.id, open_date=today, close_date=max(close, today))
 
     # Post-walks: the 48-hour clock starts at the install date, for any house past
     # install (2.1-Inst with a date, or 3.0 and up). Only recent installs — a months-old install has no live 48h clock, and
@@ -796,23 +839,12 @@ def plan_day(
     # A measure only shows once the house is really there: latest logged phase
     # must be at least 2 - Slab Poured (Brian 10/29/26). No phase logged = no
     # gate, so houses the phase feed hasn't touched still schedule normally.
-    from sqlalchemy import func as _func
-
-    from app.models import PhaseUpdate
     from app.phases import PHASE_LABELS
 
     fm_job_ids = [v.job_id for v in visits if v.visit_type == "field_measure" and v.job_id]
-    phase_by_job: dict[int, str] = {}
+    phase_by_job = _latest_phase_map(db, fm_job_ids)
     measured_ok: set[int] = set()
     if fm_job_ids:
-        latest = (
-            db.query(PhaseUpdate.job_id, _func.max(PhaseUpdate.id).label("max_id"))
-            .filter(PhaseUpdate.job_id.in_(fm_job_ids))
-            .group_by(PhaseUpdate.job_id)
-            .subquery()
-        )
-        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all():
-            phase_by_job[pu.job_id] = pu.phase
         # Measured complete & correct in CabinetTron = off the route immediately
         # (the sync also closes the visit for good).
         from app.models import FieldMeasure
@@ -850,7 +882,15 @@ def plan_day(
         if v.scheduled_date and v.scheduled_date != day:
             continue  # pinned to another day
         if v.open_date and v.open_date > day:
-            continue  # not open yet
+            # A measure's open date is the tracker's measure date — but slab
+            # poured (or beyond) means the house is measurable now, so the
+            # phase pulls it forward past the date (Brian 10/29/26).
+            fm_ready = (
+                v.visit_type == "field_measure"
+                and (_phase_num(phase_by_job.get(v.job_id)) or 0) >= 2
+            )
+            if not fm_ready:
+                continue  # not open yet
         if v.visit_type == "field_measure" and v.job_id in measured_ok:
             continue  # measured complete & correct in CabinetTron — nothing to do out there
         if v.visit_type == "field_measure" and v.job_id in phase_by_job:
