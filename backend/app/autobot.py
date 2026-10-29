@@ -104,6 +104,12 @@ ACTIVE_HOUSE_STATUSES = (
 PRE_MEASURE_STATUSES = (
     JobStatus.track, JobStatus.preord, JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub,
 )
+# A house can be ordered before anyone measured it (CCOL-6119, 10/29/26) — the
+# measure net covers everything ahead of install, not just ahead of order.
+MEASURE_SPAWN_STATUSES = (
+    JobStatus.track, JobStatus.preord, JobStatus.ndord, JobStatus.ordprcss,
+    JobStatus.ordsub, JobStatus.ordpo, JobStatus.ord,
+)
 
 # Closed/void jobs are archived in CabinetTron — Autobot never shows their work.
 INACTIVE_JOB_STATUSES = (JobStatus.closed, JobStatus.void)
@@ -539,33 +545,36 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         db.add(Visit(visit_type=vtype, created_by=created_by, **kw))
         created[vtype] = created.get(vtype, 0) + 1
 
-    # Field measures: framing floor = the measure date (never early), may slip one day late.
-    measures = (
-        db.query(Job)
-        .filter(
-            Job.measure_date.isnot(None),
-            Job.measure_date >= today - timedelta(days=30),
-            Job.status.in_(PRE_MEASURE_STATUSES),
-        )
-        .all()
-    )
-    for j in measures:
-        if not exists("field_measure", job_id=j.id):
-            add("field_measure", job_id=j.id, open_date=j.measure_date,
-                close_date=j.measure_date + timedelta(days=1))
-
-    # Phase-driven measures: slab poured (or beyond) means the house is measurable
-    # NOW, measure date or not (Brian 10/29/26). Covers jobs with no measure date
-    # yet; the date-spawned visits above get pulled forward at plan time instead.
-    pre = db.query(Job).filter(Job.status.in_(PRE_MEASURE_STATUSES)).all()
-    phase_map = _latest_phase_map(db, [j.id for j in pre])
-    for j in pre:
-        num = _phase_num(phase_map.get(j.id))
-        if num is None or num < 2:
+    # Field measures go by the PHASE, not the construction/status level (Brian
+    # 10/29/26): any live house whose latest logged phase is 2 - Slab Poured up
+    # to (not including) 12 - Cabinets Installed needs a measure, even if the
+    # order pipeline already shows it ordered. A house with no phase logged yet
+    # falls back to the old signal: a tracker measure date while still ahead of
+    # install. Either way it only leaves the net measured complete & correct.
+    spawn_jobs = db.query(Job).filter(Job.status.in_(TRACK_TO_BLUE_STATUSES)).all()
+    phase_map = _latest_phase_map(db, [j.id for j in spawn_jobs])
+    already_measured = {
+        r[0] for r in db.query(FieldMeasure.job_id).filter(
+            FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True)
+        ).all()
+    }
+    for j in spawn_jobs:
+        if j.id in already_measured:
             continue
-        if not exists("field_measure", job_id=j.id):
-            close = j.measure_date + timedelta(days=1) if j.measure_date else today + timedelta(days=3)
-            add("field_measure", job_id=j.id, open_date=today, close_date=max(close, today))
+        num = _phase_num(phase_map.get(j.id))
+        if num is not None:
+            if not (2 <= num < 12):
+                continue  # before the slab, or cabinets already in
+            slab_ready = True
+        else:
+            if j.measure_date is None or j.status not in MEASURE_SPAWN_STATUSES:
+                continue  # no phase and no date = nothing says it's measurable
+            slab_ready = False
+        if exists("field_measure", job_id=j.id):
+            continue
+        open_d = j.measure_date if j.measure_date and not slab_ready else min(j.measure_date or today, today)
+        close = j.measure_date + timedelta(days=1) if j.measure_date else today + timedelta(days=3)
+        add("field_measure", job_id=j.id, open_date=open_d, close_date=max(close, today))
 
     # Post-walks: the 48-hour clock starts at the install date, for any house past
     # install (2.1-Inst with a date, or 3.0 and up). Only recent installs — a months-old install has no live 48h clock, and
@@ -920,6 +929,10 @@ def plan_day(
             if num is not None and num < 2:
                 skipped.append({"visit_id": v.id, "label": label, "visit_type": v.visit_type,
                                 "reason": f"slab not poured yet — house is at {PHASE_LABELS.get(code, 'phase ' + code)}"})
+                continue
+            if num is not None and num >= 12:
+                skipped.append({"visit_id": v.id, "label": label, "visit_type": v.visit_type,
+                                "reason": f"cabinets already in — house is at {PHASE_LABELS.get(code, 'phase ' + code)}"})
                 continue
         if v.service_request:
             ready, detail = parts_state(v.service_request, day)
