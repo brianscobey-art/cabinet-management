@@ -751,6 +751,7 @@ const RESULT_OPTS = {
   post_walk: [["ok", "OK — installed right, nothing missing"], ["issues", "Issues — damage / missing / not done"]],
   punch_out: [["complete", "Complete"], ["incomplete", "Incomplete — coming back"], ["no_access", "No access — coming back"], ["rescheduled", "Rescheduled"]],
   blue_tape: [["complete", "Complete"], ["incomplete", "Incomplete — coming back"], ["no_access", "No access — coming back"], ["rescheduled", "Rescheduled"]],
+  field_measure: [["complete", "Complete"], ["incomplete", "Incomplete — recheck in 2-4 days"], ["no_access", "No access — coming back"], ["rescheduled", "Rescheduled"]],
 };
 const REASONS = ["damaged", "missing", "wrong", "warranty", "other"];
 const WHO_PAYS = ["warranty", "our_error", "installer", "builder", "vendor"];
@@ -783,6 +784,7 @@ function openFinish(visitId, visitType, slotId, after) {
       <div id="fpart-${visitId}"></div>
     </form>`;
   slot.dataset.after = after ? "board" : "route";
+  slot.dataset.vtype = visitType;
 }
 
 async function submitFinish(e, visitId, slotId) {
@@ -796,7 +798,9 @@ async function submitFinish(e, visitId, slotId) {
     return_date: document.getElementById("frdate-" + visitId).value || null,
     completed_on: document.getElementById("fon-" + visitId).value || null,
   };
-  if (["incomplete", "no_access", "rescheduled"].includes(result) && !body.return_date) {
+  const vtype = (document.getElementById(slotId) || {}).dataset?.vtype;
+  if (["incomplete", "no_access", "rescheduled"].includes(result) && !body.return_date
+      && !(vtype === "field_measure" && result === "incomplete")) {
     err.textContent = "Pick the day you'll be back"; return false;
   }
   try {

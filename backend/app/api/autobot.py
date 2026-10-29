@@ -413,13 +413,16 @@ def complete_visit(
 ):
     """Finish a visit with what was found. A punch or blue tape that could not be
     finished (incomplete / no access / rescheduled) with a return date spawns the
-    next trip, pinned to that day. Returns [this visit, follow-up if any]."""
+    next trip, pinned to that day. A field measure marked incomplete needs no
+    return date: the job is rechecked automatically in 2-4 days (the router picks
+    the day inside that window). Returns [this visit, follow-up if any]."""
     visit = db.get(Visit, visit_id)
     if not visit:
         raise HTTPException(404, "Visit not found")
     if payload.result not in VISIT_RESULTS:
         raise HTTPException(422, f"result must be one of: {', '.join(VISIT_RESULTS)}")
-    if payload.result in RETURN_RESULTS and not payload.return_date:
+    auto_recheck = visit.visit_type == "field_measure" and payload.result == "incomplete"
+    if payload.result in RETURN_RESULTS and not payload.return_date and not auto_recheck:
         raise HTTPException(422, "Give the day you'll be back (return_date) for a visit that didn't finish")
     visit.status = "done"
     visit.result = payload.result
@@ -435,12 +438,19 @@ def complete_visit(
     visit.completed_by = user.full_name
     out_ids = [visit.id]
     if payload.result in RETURN_RESULTS:
+        if auto_recheck and not payload.return_date:
+            # Measured but incomplete: recheck the job in 2-4 days. A window, not a
+            # pinned day, so the router folds it into whatever trip passes nearest.
+            done_day = payload.completed_on or date.today()
+            f_open, f_close, f_sched = done_day + timedelta(days=2), done_day + timedelta(days=4), None
+        else:
+            f_open = f_close = f_sched = payload.return_date
         follow = Visit(
             visit_type=visit.visit_type, job_id=visit.job_id, community_id=visit.community_id,
             service_request_id=visit.service_request_id, assigned_to=visit.assigned_to,
             lat=visit.lat, lon=visit.lon,
-            open_date=payload.return_date, close_date=payload.return_date,
-            scheduled_date=payload.return_date, priority=visit.priority,
+            open_date=f_open, close_date=f_close,
+            scheduled_date=f_sched, priority=visit.priority,
             duration_min=visit.duration_min, status="pending",
             notes=payload.notes or visit.notes,
             requested_on=visit.requested_on, confirmed_with=visit.confirmed_with,
