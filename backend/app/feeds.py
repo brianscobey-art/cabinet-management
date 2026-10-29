@@ -843,6 +843,12 @@ def sync_all(db: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         result["job_accounts"] = {"error": str(exc)}
     try:
+        from app import domo_pos
+
+        result["domo_pos"] = domo_pos.apply(db)
+    except Exception as exc:  # noqa: BLE001
+        result["domo_pos"] = {"error": str(exc)}
+    try:
         result["job_codes"] = {"merged_duplicates": merge_duplicate_houses(db),
                                "assigned": backfill_job_codes(db)}
     except Exception as exc:  # noqa: BLE001
@@ -900,6 +906,7 @@ def poll_tracker(db: Session) -> dict:
             _pull(settings, "new-orders/", Path(settings.new_orders_file).parent, keep=1)
             _pull(settings, "po-receipts/", Path(settings.po_receipt_folder), keep=2)
             _pull(settings, "domo-accounts/", Path(settings.domo_accounts_folder), keep=2)
+            _pull(settings, "domo-pos/", Path(settings.domo_pos_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
 
@@ -942,6 +949,19 @@ def poll_tracker(db: Session) -> dict:
             _stamp(db, "fp_domo_accounts", f)
     except Exception as exc:  # noqa: BLE001
         result["job_accounts"] = {"error": str(exc)}
+
+    # Our POs per job from DOMO (ordered + received): re-match on a new file, or
+    # when job accounts / the tracker moved (a job that just got its I-code).
+    try:
+        from app import domo_pos
+
+        f = domo_pos.newest_file(Path(settings.domo_pos_folder))
+        if f is not None and (tracker_changed or "job_accounts" in result
+                              or not _unchanged(db, "fp_domo_pos", f)):
+            result["domo_pos"] = domo_pos.apply(db, f)
+            _stamp(db, "fp_domo_pos", f)
+    except Exception as exc:  # noqa: BLE001
+        result["domo_pos"] = {"error": str(exc)}
 
     db.commit()
     return result

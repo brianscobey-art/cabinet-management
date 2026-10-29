@@ -10,8 +10,15 @@
 ' in between carrying the CSV up. Exit code 2 means the DOMO session has
 ' expired: run  backend\.venv\Scripts\python.exe scripts\pull_domo_receipts.py --login
 ' once and it resumes.
+'
+' Any arguments pass through: "CarterKB DOMO Keepalive" runs it hourly with
+' --keepalive so the session isn't idled out before the 02:30 pull.
 Set sh = CreateObject("WScript.Shell")
+args = ""
+For Each a In WScript.Arguments
+  args = args & " " & a
+Next
 base = "C:\Users\Brian SE6\OneDrive - carterlumber.com\AI Utilities\cabinet-management\backend"
-cmd = "cmd /c cd /d """ & base & """ && "".venv\Scripts\python.exe"" -X utf8 scripts\pull_domo_receipts.py >> ""%TEMP%\carterkb_domo_receipts.log"" 2>&1"
+cmd = "cmd /c cd /d """ & base & """ && "".venv\Scripts\python.exe"" -X utf8 scripts\pull_domo_receipts.py" & args & " >> ""%TEMP%\carterkb_domo_receipts.log"" 2>&1"
 rc = sh.Run(cmd, 0, True)
 WScript.Quit rc

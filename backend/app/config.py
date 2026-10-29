@@ -170,6 +170,20 @@ class Settings(BaseSettings):
 
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-accounts")
+
+    # DOMO "O00059 - Purchases - Purchase Order Details" -- every PO line with
+    # its job account (I/G code), status and receipt (Brian 10/29/26: daily
+    # ordered + received per job). Pulled nightly beside the receipts.
+    domo_po_dataset_id: str = "7c4c8579-c487-4344-95f3-00a1ae4f3482"
+
+    @property
+    def domo_pos_folder(self) -> str:
+        """Downloads on the PC (where the pull writes), its own feed-disk folder
+        in the cloud -- same pattern as domo_accounts_folder."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-pos")
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

@@ -11,6 +11,9 @@ from a Chromium profile that stays signed in, so Task Scheduler can run it at
               Brian to sign in (SSO / MFA are HIS to complete -- this script
               never types a credential). Run once; the profile keeps the session.
     (no flag) headless: run the query, write the CSV, exit.
+    --keepalive  headless: one tiny authenticated call so DOMO doesn't idle the
+              session out between nightly pulls (scheduled hourly, 10/29/26 --
+              the 10/28 4:55 PM sign-in was already dead by the 2:30 AM pull).
 
 The CSV lands in settings.po_receipt_folder (Downloads) under the exact name
 and 7 columns po_receipts expects. From there nothing else is new: the
@@ -150,6 +153,63 @@ def pull_accounts(ctx, page, folder: Path) -> str:
         return f"accounts: error {type(exc).__name__}: {str(exc)[:120]}"
 
 
+KEEPALIVE_STATUS = BACKEND.parents[1] / "ai-health" / "domo_keepalive.json"
+
+
+def keepalive() -> int:
+    """Touch the session (one schema read on the accounts dataset) and save any
+    rolled cookies. A 401 here is the earliest warning the session is gone, so
+    it also marks the main status signed-out for the health check."""
+    from playwright.sync_api import sync_playwright
+
+    if not STATE.exists():
+        return 2
+    with sync_playwright() as pw:
+        ctx = pw.chromium.launch_persistent_context(str(PROFILE), headless=True)
+        try:
+            ctx.add_cookies(json.loads(STATE.read_text(encoding="utf-8")).get("cookies", []))
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.goto(DOMO, wait_until="domcontentloaded", timeout=60_000)
+            ds = get_settings().domo_accounts_dataset_id.strip()
+            status = page.evaluate(
+                "async (u) => (await fetch(u, {credentials: 'include'})).status",
+                f"{DOMO}/api/query/v1/datasources/{ds}/schema/indexed",
+            )
+            payload = {"state": "ok" if status == 200 else "signed-out", "http": status,
+                       "at": dt.datetime.now().isoformat(timespec="seconds")}
+            KEEPALIVE_STATUS.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            if status != 200:
+                write_status("signed-out", http=status, note="keepalive found the session gone")
+                return 2
+            ctx.storage_state(path=str(STATE))
+            return 0
+        finally:
+            try:
+                ctx.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def pull_job_pos(ctx, page, folder: Path) -> str:
+    """DOMO's PO details rolled up per PO for cabinet jobs -> "DOMO Job POs
+    MMDDYY.csv" (Brian 10/29/26: ordered + received per job, daily). Own try,
+    like the accounts: never costs the receipts."""
+    from app.domo_pos import COLS as PO_COLS, PO_SQL
+
+    try:
+        rows, status, route = query(ctx, get_settings().domo_po_dataset_id.strip(), page, PO_SQL)
+        if status != 200 or not rows:
+            return f"job POs: DOMO {status}, {len(rows or [])} rows - skipped"
+        out = folder / f"DOMO Job POs {dt.date.today():%m%d%y}.csv"
+        with out.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(PO_COLS)
+            w.writerows(rows)
+        return f"job POs: {len(rows)} via {route} -> {out.name}"
+    except Exception as exc:  # noqa: BLE001
+        return f"job POs: error {type(exc).__name__}: {str(exc)[:120]}"
+
+
 def max_receipt_date(rows) -> str | None:
     i = COLS.index("Receipt Date")
     dates = [str(r[i])[:10] for r in rows if r[i]]
@@ -232,8 +292,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
             print(f"{len(rows)} receipts via {route} -> {out.name}  (latest receipt {as_of})")
             accounts = pull_accounts(ctx, page, folder)
             print(accounts)
+            job_pos = pull_job_pos(ctx, page, folder)
+            print(job_pos)
             write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out), route=route,
-                         accounts=accounts)
+                         accounts=accounts, job_pos=job_pos)
             return 0
         finally:
             try:
@@ -246,9 +308,16 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--login", action="store_true", help="open a window and wait for Brian to sign in")
     ap.add_argument("--headed", action="store_true", help="run the pull with a visible window")
+    ap.add_argument("--keepalive", action="store_true", help="just touch the session (hourly task)")
     ap.add_argument("--wait", type=int, default=LOGIN_WAIT_S // 60,
                     help="minutes to wait for sign-in with --login (default 10)")
     a = ap.parse_args()
+    if a.keepalive:
+        try:
+            sys.exit(keepalive())
+        except Exception as exc:  # noqa: BLE001
+            print(f"keepalive error: {exc}")
+            sys.exit(1)
     try:
         sys.exit(run(a.login, a.headed, a.wait * 60))
     except Exception as exc:  # noqa: BLE001 — the status file is how failures get seen

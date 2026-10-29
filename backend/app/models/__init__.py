@@ -15,7 +15,7 @@ from app.models.pack import RUN_KINDS, RUN_STATUSES, PackRun
 from app.models.phase import PhaseUpdate
 from app.models.layout_print import LayoutPrint
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
-from app.models.receipt import JobPo, PoReceipt
+from app.models.receipt import DomoPo, JobPo, PoReceipt
 from app.models.selections import HardwareSelection, RoomSelection
 from app.models.smartsheet import SmartsheetHistory, SmartsheetRow
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
@@ -54,6 +54,7 @@ __all__ = [
     "RUN_STATUSES",
     "PhaseUpdate",
     "LayoutPrint",
+    "DomoPo",
     "JobPo",
     "PoReceipt",
     "Quote",

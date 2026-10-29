@@ -5,8 +5,9 @@ import { fmtDate } from "../format";
 const money = (n: number | null | undefined) =>
   n == null ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// Every PO on the job (Brian 10/28/26): our POs from the tracker's PO Tracking
-// sheet, each with its DOMO receipt -- or how late it is.
+// Every PO on the job (Brian 10/28/26): our POs from DOMO's PO details (matched
+// by the job's I/G code, refreshed nightly -- 10/29/26) and the tracker's PO
+// Tracking sheet, each with its DOMO receipt -- or how late it is.
 export default function PurchaseOrdersSection({ jobId }: { jobId: number }) {
   const [data, setData] = useState<JobPurchaseOrders | null>(null);
   const [error, setError] = useState("");
@@ -34,6 +35,7 @@ export default function PurchaseOrdersSection({ jobId }: { jobId: number }) {
               <th>Our PO #</th>
               <th>Vendor</th>
               <th>Product</th>
+              <th>SO #</th>
               <th>Ordered</th>
               <th>Due</th>
               <th className="num">PO cost</th>
@@ -53,16 +55,19 @@ export default function PurchaseOrdersSection({ jobId }: { jobId: number }) {
                       <td>{i === 0 ? p.our_po : ""}</td>
                       <td>{i === 0 ? p.vendor ?? "—" : ""}</td>
                       <td>{i === 0 ? p.product ?? "—" : ""}</td>
+                      <td>{i === 0 ? p.sales_order ?? "—" : ""}</td>
                       <td>{i === 0 ? fmtDate(p.order_date) : ""}</td>
                       <td>{i === 0 ? fmtDate(p.due_date) : ""}</td>
                       <td className="num">{i === 0 ? money(p.cost) : ""}</td>
                       <td>
                         {r ? (
                           fmtDate(r.receipt_date)
+                        ) : p.received ? (
+                          <span className="muted">closed</span>
                         ) : p.days_overdue ? (
                           <span className="error">{p.days_overdue}d overdue</span>
                         ) : (
-                          <span className="muted">awaiting</span>
+                          <span className="muted">{p.status === "Open" ? "open — awaiting" : "awaiting"}</span>
                         )}
                       </td>
                       <td>{r?.receipt_number ?? ""}</td>
@@ -75,8 +80,8 @@ export default function PurchaseOrdersSection({ jobId }: { jobId: number }) {
             })}
             {pos.length === 0 && (
               <tr>
-                <td colSpan={10} className="muted">
-                  No POs on the tracker's PO Tracking sheet for this job yet.
+                <td colSpan={11} className="muted">
+                  No POs in DOMO or on the tracker's PO Tracking sheet for this job yet.
                 </td>
               </tr>
             )}

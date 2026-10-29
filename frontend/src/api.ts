@@ -155,6 +155,9 @@ export interface JobPurchaseOrders {
     order_date: string | null;
     due_date: string | null;
     cost: number | null;
+    status?: string | null; // DOMO: Open / Closed
+    sales_order?: string | null;
+    source?: string; // DOMO, tracker, or both
     received: boolean;
     days_overdue: number | null;
     receipts: {

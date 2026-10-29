@@ -269,38 +269,90 @@ def _f(v):
     return float(v) if v is not None else None
 
 
-def job_purchase_orders(db, job: Job, today: date | None = None) -> dict:
-    """Every PO on one job for its Orders section (Brian 10/28/26): our POs
-    from the tracker's PO Tracking sheet, each with its DOMO receipt(s) --
-    received date, receipt #, supplier and landed cost -- or how late it is."""
-    today = today or date.today()
-    lines = (db.query(JobPo).filter(JobPo.job_code == job.job_code).order_by(JobPo.order_date, JobPo.our_po).all()
-             if job.job_code else [])
-    pos = sorted({jp.our_po for jp in lines if jp.our_po})
+def po_lines(db, jobs: list[Job]) -> dict[int, list[dict]]:
+    """job id -> its POs, merged from both sources (Brian 10/29/26): DOMO's PO
+    details (app.domo_pos, matched by I/G code -- covers POs nobody typed in)
+    and the tracker's PO Tracking sheet. The sheet wins on product/cost/due when
+    it has them (it's hand-kept per PO); DOMO adds status, sales order and its
+    own receipt. Each line carries its DOMO receipts (PoReceipt) as well."""
+    from app.models import DomoPo
+
+    by_id = {j.id: j for j in jobs}
+    id_by_code = {j.job_code: j.id for j in jobs if j.job_code}
+    merged: dict[int, dict[str, dict]] = {}
+    if by_id:
+        for d in db.query(DomoPo).filter(DomoPo.job_id.in_(list(by_id))).all():
+            ordered = _f(d.ordered_cost)
+            merged.setdefault(d.job_id, {})[d.our_po] = {
+                "our_po": d.our_po, "vendor": d.vendor, "product": d.product,
+                "order_date": d.order_date, "due_date": d.due_date,
+                # special orders carry a $1 placeholder until they're received
+                "cost": ordered if ordered and ordered > 1 else _f(d.received_cost),
+                "status": d.status, "sales_order": d.sales_order, "source": "DOMO",
+                "domo_receipt": (d.last_receipt_number, d.last_receipt_date, _f(d.received_cost))
+                if d.last_receipt_date or (d.received_cost or 0) > 0 else None,
+            }
+    if id_by_code:
+        for jp in (db.query(JobPo).filter(JobPo.job_code.in_(list(id_by_code)))
+                   .order_by(JobPo.order_date, JobPo.our_po).all()):
+            if not jp.our_po:
+                continue
+            row = merged.setdefault(id_by_code[jp.job_code], {}).get(jp.our_po)
+            sheet = {"vendor": jp.vendor, "product": jp.product, "order_date": jp.order_date,
+                     "due_date": jp.tent_due_date, "cost": _f(jp.cost)}
+            if row is None:
+                merged[id_by_code[jp.job_code]][jp.our_po] = {
+                    "our_po": jp.our_po, **sheet, "status": None, "sales_order": None,
+                    "source": "tracker", "domo_receipt": None}
+            else:
+                row.update({k: v for k, v in sheet.items() if v not in (None, "")})
+                row["source"] = "DOMO + tracker"
+
+    pos = {po for lines in merged.values() for po in lines}
     receipts: dict[str, list[PoReceipt]] = {}
     if pos:
-        for r in db.query(PoReceipt).filter(PoReceipt.order_number.in_(pos)).all():
+        for r in db.query(PoReceipt).filter(PoReceipt.order_number.in_(list(pos))).all():
             receipts.setdefault(r.order_number, []).append(r)
-    out, seen = [], set()
-    for jp in lines:
-        if not jp.our_po or jp.our_po in seen:
-            continue
-        seen.add(jp.our_po)
-        recs = sorted(receipts.get(jp.our_po, []), key=lambda r: r.receipt_date or date.min)
-        due = jp.tent_due_date
-        out.append({
-            "our_po": jp.our_po, "vendor": jp.vendor, "product": jp.product,
-            "order_date": jp.order_date.isoformat() if jp.order_date else None,
-            "due_date": due.isoformat() if due else None,
-            "cost": _f(jp.cost),
-            "received": bool(recs),
-            "days_overdue": (today - due).days if not recs and due and due < today else None,
-            "receipts": [{
-                "receipt_number": r.receipt_number,
-                "receipt_date": r.receipt_date.isoformat() if r.receipt_date else None,
+    out: dict[int, list[dict]] = {}
+    for job_id, lines in merged.items():
+        rows = []
+        for line in lines.values():
+            recs = [{
+                "receipt_number": r.receipt_number, "receipt_date": r.receipt_date,
                 "pos": r.pos, "supplier": r.supplier,
                 "supplier_cost": _f(r.supplier_cost), "landed_cost": _f(r.landed_cost),
-            } for r in recs],
+            } for r in sorted(receipts.get(line["our_po"], []), key=lambda r: r.receipt_date or date.min)]
+            dr = line.pop("domo_receipt")
+            if not recs and dr:  # receipt list hasn't caught up; DOMO's PO detail has it
+                recs = [{"receipt_number": dr[0], "receipt_date": dr[1], "pos": None, "supplier": line["vendor"],
+                         "supplier_cost": None, "landed_cost": dr[2]}]
+            rows.append({**line, "receipts": recs})
+        rows.sort(key=lambda r: (r["order_date"] or date.min, r["our_po"]))
+        out[job_id] = rows
+    return out
+
+
+def _iso(d):
+    return d.isoformat() if d else None
+
+
+def job_purchase_orders(db, job: Job, today: date | None = None) -> dict:
+    """Every PO on one job for its Orders section (Brian 10/28/26): our POs
+    (DOMO + the tracker's PO Tracking sheet, see po_lines), each with its DOMO
+    receipt(s) -- received date, receipt #, supplier and landed cost -- or how
+    late it is."""
+    today = today or date.today()
+    out = []
+    for p in po_lines(db, [job]).get(job.id, []):
+        recs, due = p["receipts"], p["due_date"]
+        received = bool(recs) or (p["status"] or "").lower() == "closed"
+        out.append({
+            "our_po": p["our_po"], "vendor": p["vendor"], "product": p["product"],
+            "order_date": _iso(p["order_date"]), "due_date": _iso(due),
+            "cost": p["cost"], "status": p["status"], "sales_order": p["sales_order"], "source": p["source"],
+            "received": received,
+            "days_overdue": (today - due).days if not received and due and due < today else None,
+            "receipts": [{**r, "receipt_date": _iso(r["receipt_date"])} for r in recs],
         })
     return {
         "builder_po": job.builder_po, "po_amount": _f(job.po_amount), "cabinet_po": job.cabinet_po,
