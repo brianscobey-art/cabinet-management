@@ -492,7 +492,7 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
     from app.models import FieldMeasure
 
     measured_ok_rows = (
-        db.query(Visit)
+        db.query(Visit, FieldMeasure.complete_date)
         .join(FieldMeasure, FieldMeasure.job_id == Visit.job_id)
         .filter(
             Visit.visit_type == "field_measure", Visit.status == "pending",
@@ -500,11 +500,27 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
         )
         .all()
     )
-    for v in measured_ok_rows:
+    for v, complete_date in measured_ok_rows:
         v.status = "done"
         v.result = "complete"
-        v.completed_at = datetime.now(timezone.utc)
+        # The day it was really measured, not the moment the sync noticed —
+        # so bulk closures never crowd the route's done-today log.
+        v.completed_at = datetime.combine(complete_date, datetime.min.time(), tzinfo=timezone.utc)
         v.completed_by = "CabinetTron — measured complete & correct"
+
+    # Self-heal: earlier system closures were stamped with the sync's clock —
+    # re-stamp them with the real measure date (idempotent, runs every sync).
+    stale_stamped = (
+        db.query(Visit, FieldMeasure.complete_date)
+        .join(FieldMeasure, FieldMeasure.job_id == Visit.job_id)
+        .filter(
+            Visit.visit_type == "field_measure", Visit.status == "done",
+            Visit.completed_by.like("CabinetTron%"), FieldMeasure.complete_date.isnot(None),
+        )
+        .all()
+    )
+    for v, complete_date in stale_stamped:
+        v.completed_at = datetime.combine(complete_date, datetime.min.time(), tzinfo=timezone.utc)
 
     def exists(vtype: str, job_id: int | None = None, community_id: int | None = None,
                service_request_id: int | None = None) -> bool:
@@ -781,6 +797,8 @@ def plan_day(
             .all()
         )
         for v in done_rows:
+            if v.completed_by and v.completed_by.startswith("CabinetTron"):
+                continue  # closed by the system, not a stop anyone drove to
             if worker is not None and v.assigned_to != worker.id and not (
                 v.assigned_to is None and tech_pool
             ):
