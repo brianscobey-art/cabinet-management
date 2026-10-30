@@ -862,9 +862,20 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
         for row in db.query(PhaseUpdate).join(sub, PhaseUpdate.id == sub.c.max_id).all():
             latest[row.job_id] = row
 
+    import re
+
+    from app.autobot import INSTALLED_STATUSES
+
     def lot_key(job: Job):
+        # Lots ascending; houses past install after them, grouped by street with
+        # house numbers ascending (Brian 10/30/26).
+        past = job.status in INSTALLED_STATUSES or bool(job.install_date and job.install_date <= today)
+        if past:
+            m = re.match(r"^\s*(\d+)\s+([^,]+)", job.address or "")
+            return (1, m.group(2).strip().lower(), int(m.group(1)), "") if m else (1, (job.address or "").lower(), 0, "")
         lot = (job.lot_number or "").strip()
-        return (0, int(lot)) if lot.isdigit() else (1, lot)
+        digits = re.sub(r"\D", "", lot)
+        return (0, "", int(digits), lot) if digits else (0, "~", 0, lot)
 
     houses = []
     for j in sorted(jobs, key=lot_key):

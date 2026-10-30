@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
@@ -58,6 +59,12 @@ PHASE_CHECK_INTERVAL_DAYS = 10      # a community's check is due by day 10 ...
 PHASE_CHECK_MIN_GAP_DAYS = 7        # ... and can't show up before day 7 (Brian 10/30/26)
 PHASE_CHECK_PULL_FORWARD_DAYS = 2   # within N days of stale → pull forward if nearby
 PHASE_CHECK_MAX_DETOUR_MIN = 30     # "nearby" = adds at most this much drive
+
+# Visit kinds that only happen once the cabinets are in.
+POST_INSTALL_TYPES = {
+    "post_walk", "punch_out", "blue_tape", "service_t1", "service_t2", "service_t3",
+    "warranty_t1", "warranty_t2_eval", "warranty_t2_complete",
+}
 
 # The two non-negotiable deadline kinds; everything else flexes around them.
 HARD_ANCHOR_TYPES = {"field_measure", "post_walk"}
@@ -1185,6 +1192,7 @@ def plan_day(
     # recomputes every arrive/depart from the flipped order.
     if reverse:
         route = route[::-1]
+    route = _order_within_communities(route, day, route_minutes)
 
     # Final timeline.
     stops, clock, prev, drive_total, onsite_total = [], float(start_clock), None, 0.0, 0.0
@@ -1247,6 +1255,75 @@ def plan_day(
         "drive_source": source,
         "skipped": skipped,
     }
+
+
+_ADDR_RE = re.compile(r"^\s*(\d+)\s+([^,]+)")
+LOT_ORDER_MAX_EXTRA_MIN = 10  # sprawling communities (Compass Lakes) keep the fast order
+
+
+def _order_within_communities(route: list[dict], day: date, route_minutes=None) -> list[dict]:
+    """Inside a community, walk the houses in a sensible order (Brian 10/30/26):
+    lot number ascending, except houses already past install, which come after,
+    grouped by street with house numbers ascending. The route's order BETWEEN
+    communities is untouched; only each consecutive same-community run is
+    rearranged. Community-wide stops (a phase sweep) lead their run. When lot
+    order would add more than LOT_ORDER_MAX_EXTRA_MIN of driving (houses miles
+    apart), that community keeps the optimizer's order."""
+
+    def community_of(c: dict):
+        v = c["visit"]
+        return v.community_id or (v.job.community_id if v.job else None)
+
+    def past_install(c: dict) -> bool:
+        v = c["visit"]
+        j = v.job
+        if v.visit_type in POST_INSTALL_TYPES:
+            return True
+        if j is None:
+            return False
+        return j.status in INSTALLED_STATUSES or bool(j.install_date and j.install_date <= day)
+
+    def lot_key(c: dict):
+        j = c["visit"].job
+        lot = (j.lot_number or "").strip() if j else ""
+        digits = re.sub(r"\D", "", lot)
+        return (0, int(digits), lot) if digits else (1, 0, lot or (j.job_code if j and j.job_code else ""))
+
+    def street_key(c: dict):
+        j = c["visit"].job
+        m = _ADDR_RE.match((j.address or "") if j else "")
+        if not m:
+            return (1, (j.address or "").lower() if j else "", 0)
+        return (0, m.group(2).strip().lower(), int(m.group(1)))
+
+    def sort_run(run: list[dict]) -> list[dict]:
+        if len(run) < 2:
+            return run
+        wide = [c for c in run if c["visit"].job is None]  # community sweep first
+        houses = [c for c in run if c["visit"].job is not None]
+        before = sorted((c for c in houses if not past_install(c)), key=lot_key)
+        after = sorted((c for c in houses if past_install(c)), key=street_key)
+        return wide + before + after
+
+    runs: list[list[dict]] = []
+    run_comm = object()
+    for c in route:
+        comm = community_of(c)
+        if runs and comm == run_comm and comm is not None:
+            runs[-1].append(c)
+        else:
+            runs.append([c])
+            run_comm = comm
+
+    out: list[dict] = []
+    for i, run in enumerate(runs):
+        tidy = sort_run(run)
+        if route_minutes is not None and tidy != run:
+            rest = [c for r in runs[i + 1:] for c in r]
+            if route_minutes(out + tidy + rest) - route_minutes(out + run + rest) > LOT_ORDER_MAX_EXTRA_MIN:
+                tidy = run  # too spread out — lot order would cost real driving
+        out.extend(tidy)
+    return out
 
 
 def plan_horizon(
