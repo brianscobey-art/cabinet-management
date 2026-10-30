@@ -561,7 +561,13 @@ function routeHtml(plan, note) {
         <button class="ghost car-btn" onclick="sendToCar(${s.lat}, ${s.lon}, '${esc(s.label).replace(/'/g, "\\'")}')"
           title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
         <span class="stop-open">▸ tap for details</span>
-        ${s.visit_type === "field_measure" && s.job_id
+        ${s.visit_type === "field_measure" && s.job_id && s.remeasure
+          ? `<button class="ghost" style="color:#9c3b1e;border-color:#9c3b1e"
+               onclick="event.stopPropagation(); remeasureAnswer(${s.visit_id}, 'not_corrected', this)"
+               title="Still wrong — logged now, next remeasure in 2-4 days">✗ Not corrected</button>
+             <button onclick="event.stopPropagation(); remeasureAnswer(${s.visit_id}, 'corrected', this)"
+               title="Fixed — logged now, measure complete & correct">✓ Corrected</button>`
+          : s.visit_type === "field_measure" && s.job_id
           ? `<button class="ghost" onclick="event.stopPropagation(); notReady(${s.visit_id}, this)"
                title="House isn't ready to measure — back on the schedule in 2 days">⏸ Not ready</button>
              <button onclick="openMeasure(${s.visit_id}, 'finish-${s.visit_id}')">✓ Finish measure</button>`
@@ -825,6 +831,26 @@ const MEASURE_CHOICES = [
   ["incomplete", "↻ Incomplete", "Recheck scheduled in 2-4 days"],
   ["not_ready", "⏸ Not ready", "House isn't ready to measure — back on the schedule in 2 days"],
 ];
+
+// A remeasure's answer: Corrected or Not corrected, logged with the moment it was pressed.
+async function remeasureAnswer(visitId, outcome, btn) {
+  const row = btn.parentElement;
+  row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  const was = btn.textContent;
+  btn.textContent = "…";
+  try {
+    await api("/autobot/visits/" + visitId + "/field-measure", { method: "POST",
+      body: JSON.stringify({ outcome }) });
+    const t = new Date().toLocaleString("en-US", { month: "numeric", day: "numeric", year: "2-digit",
+      hour: "numeric", minute: "2-digit" });
+    btn.textContent = (outcome === "corrected" ? "✓ Corrected " : "✗ Not corrected ") + t;
+    setTimeout(renderRoute, 1200);
+  } catch (ex) {
+    row.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    btn.textContent = was;
+    alert(ex.message);
+  }
+}
 
 // One tap from the stop: the house wasn't ready, put it back on in 2 days.
 async function notReady(visitId, btn) {

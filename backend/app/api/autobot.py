@@ -478,7 +478,9 @@ class MeasureResultIn(BaseModel):
     completed_on: date | None = None               # blank = today
 
 
-MEASURE_OUTCOMES = ("correct", "incorrect", "incomplete", "not_ready")
+MEASURE_OUTCOMES = ("correct", "incorrect", "incomplete", "not_ready", "corrected", "not_corrected")
+# A remeasure's two answers ride the same paths as a first measure's.
+REMEASURE_AS = {"corrected": "correct", "not_corrected": "incorrect"}
 RECHECK_OPEN_DAYS, RECHECK_CLOSE_DAYS = 2, 4
 NOT_READY_DAYS = 2  # house wasn't ready to measure: back on the schedule 2 days later
 
@@ -507,6 +509,9 @@ def finish_field_measure(
     - incomplete: couldn't finish. A recheck is scheduled in 2-4 days.
     - not_ready: the house wasn't ready to measure. Nothing is written to the
       field-measure record; the measure is pinned 2 days out (next workday).
+    - corrected / not_corrected: the answer on a Remeasure. Corrected = now
+      complete & correct (as above); not corrected = still incorrect, next
+      remeasure in 2-4 days. Either way a dated, timed note is logged.
 
     Returns [this visit, follow-up if any]."""
     from app.api.fieldmeasure import get_or_create
@@ -524,22 +529,33 @@ def finish_field_measure(
     day = payload.completed_on or date.today()
     now = datetime.now(timezone.utc)
     notes = (payload.notes or "").strip() or None
+    asked = payload.outcome
+    outcome = REMEASURE_AS.get(asked, asked)
 
     # The CabinetTron field-measure record — one source of truth with the job page.
-    if payload.outcome in ("correct", "incorrect"):
+    if outcome in ("correct", "incorrect"):
         fm = get_or_create(db, visit.job_id)
         fm.complete_date = day
-        good = payload.outcome == "correct"
+        good = outcome == "correct"
         fm.correct, fm.correct_by, fm.correct_at = good, (user.full_name if good else None), (now if good else None)
         fm.incorrect, fm.incorrect_by, fm.incorrect_at = (not good), (None if good else user.full_name), (None if good else now)
-    if notes:
-        body = f"Not ready: {notes}" if payload.outcome == "not_ready" else notes
+    if asked in REMEASURE_AS:
+        # The remeasure answer is always logged with the moment it was pressed.
+        from zoneinfo import ZoneInfo
+
+        local = now.astimezone(ZoneInfo("America/Chicago"))
+        stamp = f"{local.month}/{local.day}/{str(local.year)[2:]} {local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+        word = "Corrected" if asked == "corrected" else "Not corrected"
+        db.add(FieldMeasureNote(job_id=visit.job_id, author=user.full_name,
+                                body=f"Remeasure: {word} — {stamp}" + (f" — {notes}" if notes else "")))
+    elif notes:
+        body = f"Not ready: {notes}" if outcome == "not_ready" else notes
         db.add(FieldMeasureNote(job_id=visit.job_id, body=body, author=user.full_name))
 
     # Close this trip. Today's finish keeps the real clock time (waterfall).
     visit.status = "done"
     visit.result = {"correct": "complete", "incorrect": "issues", "incomplete": "incomplete",
-                    "not_ready": "rescheduled"}[payload.outcome]
+                    "not_ready": "rescheduled"}[outcome]
     if notes:
         visit.result_notes = notes
     visit.completed_at = (
@@ -549,13 +565,13 @@ def finish_field_measure(
     visit.completed_by = user.full_name
     out_ids = [visit.id]
 
-    if payload.outcome == "correct":
+    if outcome == "correct":
         n = _phase_num(_latest_phase_map(db, [visit.job_id]).get(visit.job_id))
         if n is None or n < 4.1:
             db.add(PhaseUpdate(job_id=visit.job_id, phase="4.1", source="autobot",
                                noted_by=f"{user.full_name} — measure complete & correct"))
     else:
-        if payload.outcome == "not_ready":
+        if outcome == "not_ready":
             back = _workday_on_or_after(day + timedelta(days=NOT_READY_DAYS))
             f_open = f_close = f_pin = back
             f_notes = f"not ready {day.month}/{day.day}" + (f" — {notes}" if notes else "")
