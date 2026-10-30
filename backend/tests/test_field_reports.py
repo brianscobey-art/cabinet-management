@@ -64,7 +64,8 @@ def test_qc_reports_become_post_walk_history(client, db):
               "Are there service issues to address?": "Yes", "Repair or Replace": "Repair",
               "What's the damage?": "Right vanity paint chipped", "Island Pull - Fridge Side": "NA"}),
         (11, {"PWID": "170.0", "Job Code": "DRT-0002", "Created": "2026-09-28T15:50:50Z",
-              "Are there service issues to address?": "No"}),
+              "Are there service issues to address?": "No", "Are there Parts Left on the Site?": "Yes",
+              "What Parts are being left onsite?": "2 fillers"}),
     ]
     out = sync_qc_reports(db, rows)
     db.commit()
@@ -72,6 +73,7 @@ def test_qc_reports_become_post_walk_history(client, db):
     v = db.query(Visit).filter(Visit.job_id == a["id"], Visit.visit_type == "post_walk").one()
     assert v.status == "done" and v.result == "issues" and "paint chipped" in v.result_notes
     assert db.get(QcReport, 11).visit_id is None  # b keeps its Autobot post walk
+    assert db.get(QcReport, 11).result == "ok"  # leftover parts are a note, not an issue
     sync_qc_reports(db, rows)
     db.commit()
     assert db.query(Visit).filter(Visit.visit_type == "post_walk").count() == 2

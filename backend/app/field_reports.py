@@ -209,7 +209,8 @@ def _qc_result(c: dict) -> tuple[str, str]:
     pulls = [_text(c.get("Island Pull - Fridge Side")), _text(c.get("Island Pull - Opposite Fridge"))]
     if any(p and p.upper() != "NA" for p in pulls):
         flags.append(f"island pulls {pulls[0] or '-'} / {pulls[1] or '-'}")
-    result = "issues" if any(not f.startswith("island") for f in flags) else "ok"
+    # Leftover parts on site and island pulls are notes, not problems.
+    result = "issues" if any(not f.startswith(("island", "parts left")) for f in flags) else "ok"
     return result, ("QC v2 post walk. " + "; ".join(flags)) if flags else "QC v2 post walk: no issues."
 
 
@@ -235,6 +236,10 @@ def sync_qc_reports(db: Session, rows: list[tuple[int, dict]]) -> dict:
         if job is None:
             unmatched += 1
             continue
+        if rep.visit_id is not None:  # our own import record: keep it in step with the rule
+            v = db.get(Visit, rep.visit_id)
+            if v is not None:
+                v.result, v.result_notes = rep.result, rep.summary
         if rep.visit_id is None and job.id not in walked:
             day = rep.walked_at.date() if rep.walked_at else (_date(c.get("Install Date")) or date.today())
             v = Visit(visit_type="post_walk", job_id=job.id, status="done", open_date=day, close_date=day,
