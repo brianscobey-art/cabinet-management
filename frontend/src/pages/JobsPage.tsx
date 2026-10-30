@@ -110,9 +110,13 @@ function savedNav(): Partial<Record<string, string | boolean>> {
 
 // Same split as the Phases tab (CLOSEOUT_PHASES there): 12 - Cabinets
 // Installed through 16 - Closed is close-out; everything before, and jobs with
-// no phase logged yet, is construction (Brian 10/30/26).
+// no phase logged yet, is construction (Brian 10/30/26). A job nobody logged a
+// phase on falls back to its status: installed onward (2.1-Inst, punch, blue
+// tape, EPO...) is close-out, so a 4.0-Punch house doesn't sit in Construction.
 const CLOSEOUT_PHASES = new Set(["12", "13", "14", "15", "16"]);
-const isCloseout = (phase: string | null | undefined) => !!phase && CLOSEOUT_PHASES.has(phase);
+const CLOSEOUT_STATUSES = new Set(["2.1-Inst", "3.0-Nd QW", "3.1-Parts", "4.0-Punch", "4.1-Blue", "5.0-EPO"]);
+const isCloseout = (j: { phase?: string | null; status: string }) =>
+  j.phase ? CLOSEOUT_PHASES.has(j.phase) : CLOSEOUT_STATUSES.has(j.status);
 type PhaseGroup = "all" | "construction" | "closeout";
 
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
@@ -356,12 +360,12 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     );
   }
 
-  const closeoutCount = jobs.filter((j) => isCloseout(j.phase)).length;
+  const closeoutCount = jobs.filter(isCloseout).length;
   const constructionCount = jobs.length - closeoutCount;
   const shownJobs =
     archived || group === "all" ? jobs
-    : group === "closeout" ? jobs.filter((j) => isCloseout(j.phase))
-    : jobs.filter((j) => !isCloseout(j.phase));
+    : group === "closeout" ? jobs.filter(isCloseout)
+    : jobs.filter((j) => !isCloseout(j));
   // Clicking the active button turns the filter off again (as on the Phases tab).
   const pick = (g: PhaseGroup) => setGroup((cur) => (cur === g ? "all" : g));
 
