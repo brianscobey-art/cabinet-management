@@ -705,6 +705,10 @@ async function logPhase(jobId) {
 async function sendToCar(lat, lon, label) {
   // The Tesla app is a share target: share the pin, pick Tesla, the car navigates.
   const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+  if (window.AutobotAndroid) {  // inside the Android app: its share sheet, same Tesla pick
+    window.AutobotAndroid.share(label, url);
+    return;
+  }
   if (navigator.share) {
     try {
       await navigator.share({ title: label, text: label, url });
@@ -758,7 +762,8 @@ function printRoute() {
     ${p.stops.length > 18 ? "" : `<div class="pr-map">${mapSvg(p)}</div>`}`;
   // keep it to ONE sheet: shrink on busy days, and the map already bowed out above
   document.getElementById("print-sheet").className = p.stops.length > 11 ? "pr-dense" : "";
-  window.print();
+  if (window.AutobotAndroid) window.AutobotAndroid.print();  // Android app: system print / Save as PDF
+  else window.print();
 }
 
 async function doneVisit(id) {
