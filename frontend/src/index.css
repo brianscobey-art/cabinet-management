@@ -136,6 +136,38 @@ button:disabled {
   opacity: 0.9;
 }
 
+.view-as select {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.85rem;
+  max-width: 16rem;
+}
+
+.view-as select option {
+  color: #222;
+}
+
+.view-as-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 1rem;
+  background: #fff3cd;
+  color: #5c4400;
+  border-bottom: 1px solid #e6c65c;
+  font-size: 0.9rem;
+}
+
+.view-as-banner button {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+
 .cal-btn {
   background: var(--action);
   color: #fff;
@@ -438,6 +470,13 @@ td a {
 }
 .card-stack > .card {
   margin-bottom: 0;
+}
+.site-address {
+  width: 100%;
+  font: inherit;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #d5e0dd;
+  border-radius: 6px;
 }
 .site-note {
   width: 100%;

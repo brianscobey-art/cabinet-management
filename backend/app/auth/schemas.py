@@ -52,6 +52,17 @@ class UserOut(BaseModel):
     created_at: datetime
 
 
+class MeOut(UserOut):
+    # set while an admin is viewing the app as this user: the admin's name
+    viewed_by: str | None = None
+
+
+class ViewAsOption(BaseModel):
+    id: int
+    full_name: str
+    role: Role
+
+
 class UserCreatedOut(BaseModel):
     """Result of creating a user: the user plus whether the invite email went out."""
 

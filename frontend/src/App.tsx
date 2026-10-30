@@ -1,5 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { fetchMe, getToken, login, noteUnreadCount, runFeedSync, setToken, User } from "./api";
+import {
+  fetchMe, getToken, getViewAs, listViewAs, login, noteUnreadCount, roleLabel, runFeedSync, setToken, setViewAs, User,
+  ViewAsOption,
+} from "./api";
 import AccountsPage from "./pages/AccountsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import ServiceRequestPage from "./pages/ServiceRequestPage";
@@ -95,7 +98,15 @@ export default function App() {
     if (!getToken()) return;
     fetchMe()
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch(() => {
+        // a view-as pick that no longer resolves (user disabled) -- drop it and retry as yourself
+        if (getViewAs()) {
+          setViewAs(null);
+          window.location.reload();
+          return;
+        }
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -231,9 +242,13 @@ export default function App() {
           <a className="cal-btn" href="#/schedule" title="Open the install calendar">
             📅 Install Calendar
           </a>
-          <span className="who">
-            {user.full_name} · {user.role}
-          </span>
+          {user.role === "admin" || user.viewed_by ? (
+            <ViewAsPicker user={user} />
+          ) : (
+            <span className="who">
+              {user.full_name} · {user.role}
+            </span>
+          )}
           <button
             onClick={() => {
               setToken(null);
@@ -246,9 +261,45 @@ export default function App() {
           </button>
         </div>
       </header>
+      {user.viewed_by && (
+        <div className="view-as-banner">
+          Viewing as <b>{user.full_name}</b> ({roleLabel(user.role)}) — exactly what they see, read-only.
+          <button onClick={() => switchViewAs(null)}>Back to {user.viewed_by}</button>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
       <main>{page}</main>
     </div>
+  );
+}
+
+function switchViewAs(userId: number | null) {
+  setViewAs(userId);
+  // reload so every page and count re-reads as the chosen user
+  window.location.reload();
+}
+
+/** Admin-only: pick a user to see the app as they would. */
+function ViewAsPicker({ user }: { user: User }) {
+  const [options, setOptions] = useState<ViewAsOption[]>([]);
+  useEffect(() => {
+    listViewAs().then(setOptions).catch(() => setOptions([]));
+  }, []);
+  const realName = user.viewed_by ?? user.full_name;
+  return (
+    <label className="who view-as" title="See the app exactly as another user would (read-only)">
+      <select
+        value={user.viewed_by ? String(user.id) : ""}
+        onChange={(e) => switchViewAs(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">{realName} · admin</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            View as {o.full_name} · {roleLabel(o.role)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

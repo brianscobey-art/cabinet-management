@@ -1,18 +1,20 @@
 import secrets
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_roles
+from app.auth.deps import get_current_user, get_real_user, require_roles, view_as_target
 from app.auth.schemas import (
     PasswordReset,
     SetPassword,
     Token,
     UserCreate,
+    MeOut,
     UserCreatedOut,
     UserOut,
+    ViewAsOption,
     UserUpdate,
 )
 from app.auth.security import (
@@ -85,9 +87,26 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     return Token(access_token=create_access_token(user.email, user.role.value))
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
-    return user
+@router.get("/me", response_model=MeOut)
+def me(request: Request, real: User = Depends(get_real_user), db: Session = Depends(get_db)):
+    """The user the app should render as -- the admin's view-as pick when one
+    is set, with `viewed_by` naming the real admin so the header can say so."""
+    target = view_as_target(request, real, db)
+    if target is None:
+        return MeOut.model_validate(real)
+    return MeOut.model_validate(target).model_copy(update={"viewed_by": real.full_name})
+
+
+@router.get("/view-as", response_model=list[ViewAsOption])
+def view_as_options(real: User = Depends(get_real_user), db: Session = Depends(get_db)):
+    """Who an admin can view the app as. Keyed on the REAL user, so the list
+    still loads while the admin is already viewing as someone else. Leaves out
+    the admin themself -- "yourself" is the picker's blank option."""
+    if real.role != Role.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
+    users = (db.query(User).filter(User.is_active.is_(True), User.id != real.id)
+             .order_by(User.full_name).all())
+    return [ViewAsOption(id=u.id, full_name=u.full_name, role=u.role) for u in users]
 
 
 @router.get("/invite-status", dependencies=[Depends(require_roles(Role.admin))])

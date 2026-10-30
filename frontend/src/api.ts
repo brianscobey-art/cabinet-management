@@ -6,7 +6,33 @@ export function getToken(): string | null {
 
 export function setToken(token: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  else {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem("cms_view_as");
+  }
+}
+
+// Admin "view as": the user id the app is rendered as, kept per browser tab.
+// Every request carries it; the server checks the real token is an admin's and
+// refuses anything but reads while it's set.
+const VIEW_AS_KEY = "cms_view_as";
+
+export function getViewAs(): number | null {
+  const v = sessionStorage.getItem(VIEW_AS_KEY);
+  return v ? Number(v) : null;
+}
+
+export function setViewAs(userId: number | null) {
+  if (userId) sessionStorage.setItem(VIEW_AS_KEY, String(userId));
+  else sessionStorage.removeItem(VIEW_AS_KEY);
+}
+
+export function authHeaders(): Record<string, string> {
+  const viewAs = getViewAs();
+  return {
+    Authorization: `Bearer ${getToken()}`,
+    ...(viewAs ? { "X-View-As": String(viewAs) } : {}),
+  };
 }
 
 export interface User {
@@ -16,6 +42,14 @@ export interface User {
   full_name: string;
   role: string;
   is_active: boolean;
+  // set while an admin is viewing the app as this user: the admin's name
+  viewed_by?: string | null;
+}
+
+export interface ViewAsOption {
+  id: number;
+  full_name: string;
+  role: string;
 }
 
 export interface Account {
@@ -244,7 +278,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers: {
       ...(options.body ? { "Content-Type": "application/json" } : {}),
-      Authorization: `Bearer ${getToken()}`,
+      ...authHeaders(),
       ...options.headers,
     },
   });
@@ -273,6 +307,7 @@ export async function login(email: string, password: string): Promise<void> {
 }
 
 export const fetchMe = () => api<User>("/auth/me");
+export const listViewAs = () => api<ViewAsOption[]>("/auth/view-as");
 
 // --- User management (admin only) ------------------------------------------
 export interface ManagedUser extends User {
@@ -508,7 +543,7 @@ export const removeDocument = (id: number) => api<void>(`/documents/${id}`, { me
 
 export async function openDocument(docId: number): Promise<void> {
   const resp = await fetch(`/api/documents/${docId}/file`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
   });
   if (!resp.ok) {
     const detail = (await resp.json().catch(() => null))?.detail;
@@ -656,7 +691,7 @@ export const getPhaseReport = () => api<PhaseReportRow[]>("/reports/phases");
 /** DR Horton + Century, CONST LVL 1-4, in the tracker's Import Data column order. */
 export async function exportPhaseReport(): Promise<{ rows: number; skipped: number }> {
   const resp = await fetch("/api/reports/phases/export", {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
   });
   if (!resp.ok) throw new Error("Export failed");
   const blob = await resp.blob();
@@ -756,7 +791,7 @@ export const pushPoTracker = () =>
 export async function exportSmartsheet(): Promise<void> {
   // Plain <a href> would carry no Authorization header and 401.
   const resp = await fetch("/api/reports/smartsheet/export", {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
   });
   if (!resp.ok) throw new Error("Export failed");
   const blob = await resp.blob();
@@ -849,7 +884,7 @@ export async function printFieldMeasures(
 ): Promise<{ printed: number; skipped: number; url: string; filename: string }> {
   const resp = await fetch("/api/reports/field-measures/print", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ job_ids: jobIds }),
   });
   if (!resp.ok) {
@@ -1182,7 +1217,7 @@ export const updateOrder = (id: number, data: Record<string, unknown>) =>
 
 export async function downloadOrderFile(orderId: number): Promise<void> {
   const resp = await fetch(`/api/orders/${orderId}/file`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
   });
   if (!resp.ok) throw new Error("Download failed");
   const disposition = resp.headers.get("content-disposition") ?? "";
@@ -1299,7 +1334,7 @@ export const deleteServiceLine = (lineId: number) =>
 
 export async function downloadServiceTemplate(): Promise<void> {
   const resp = await fetch("/api/forms/service-template", {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
   });
   if (!resp.ok) throw new Error("Download failed");
   const blob = await resp.blob();
@@ -1316,7 +1351,7 @@ export async function importServiceExcel(file: File): Promise<ServiceRequestDeta
   fd.append("file", file);
   const resp = await fetch("/api/service-requests/import", {
     method: "POST",
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { ...authHeaders() },
     body: fd,
   });
   if (!resp.ok) {
@@ -1390,7 +1425,7 @@ export const noteUnreadCount = () => api<{ count: number }>("/notes/unread-count
 export async function isOrderPackOwner(): Promise<boolean> {
   try {
     const resp = await fetch("/api/ordering-platform/pack/meta", {
-      headers: { Authorization: `Bearer ${getToken()}` },
+      headers: { ...authHeaders() },
     });
     return resp.ok;
   } catch {
