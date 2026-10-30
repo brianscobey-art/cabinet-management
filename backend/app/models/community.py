@@ -23,6 +23,10 @@ class Community(Base):
     # while the jobs themselves are untouched in CabinetTron (Clear Lake Estates,
     # POs being voided, 10/29/26).
     autobot_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # How Autobot orders the houses inside this community on a route: None = auto
+    # (from how spread out the house pins are), "compact" = always lot order,
+    # "scattered" = fastest drive order (Brian 10/30/26).
+    lot_layout: Mapped[str | None] = mapped_column(String(12), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

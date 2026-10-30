@@ -189,10 +189,29 @@ def drive_matrix(
     # The public OSRM table endpoint caps around 100 locations; estimate past that.
     if real_drive and 1 < len(coords) <= 80:
         try:
-            return _osrm_matrix(coords), "osrm"
+            return _cap_neighbor_hops(coords, _osrm_matrix(coords)), "osrm"
         except Exception:
             pass
     return _estimate_matrix(coords), "estimate"
+
+
+NEIGHBOR_MILES = 0.5  # houses this close are an in-neighborhood hop
+
+
+def _cap_neighbor_hops(coords: list[tuple[float, float]], m: list[list[float]]) -> list[list[float]]:
+    """A house pin that snaps to the wrong road (back street, other side of a
+    median) makes the road router send you around the block — Destini Lane's
+    0.09-mile hop came back as 10 minutes. Between pins under half a mile apart,
+    never charge more than a slow residential crawl plus a minute."""
+    n = len(coords)
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            miles = haversine_miles(coords[i], coords[j])
+            if miles < NEIGHBOR_MILES:
+                m[i][j] = min(m[i][j], miles * ROAD_FACTOR / RESIDENTIAL_MPH * 60 + 1)
+    return m
 
 
 # ---------------------------------------------------------------- geocoding
@@ -338,15 +357,37 @@ def parts_state(sr: ServiceRequest, day: date) -> tuple[bool, str]:
 # ---------------------------------------------------------------- helpers
 
 def effective_coords(visit: Visit) -> tuple[float, float] | None:
-    """Most specific pin wins: the visit's own, then the house, then the community."""
+    """Most specific pin wins: the visit's own, then the house, then the middle
+    of the community's pinned houses, then the community pin. A house Google
+    can't place exactly (a street too new for the map) sits with its neighbors
+    rather than at a community pin that can be miles off — Grand Oaks' was 3.4
+    miles from the houses on Hagin Dr / Elyse Way (10/30/26)."""
     if visit.lat is not None and visit.lon is not None:
         return visit.lat, visit.lon
     if visit.job and visit.job.lat is not None and visit.job.lon is not None:
         return visit.job.lat, visit.job.lon
     community = visit.community or (visit.job.community if visit.job else None)
-    if community and community.lat is not None and community.lon is not None:
+    if community is None:
+        return None
+    if visit.job is not None:
+        mid = _house_center(community)
+        if mid is not None:
+            return mid
+    if community.lat is not None and community.lon is not None:
         return community.lat, community.lon
     return None
+
+
+def _house_center(community: Community) -> tuple[float, float] | None:
+    """Median point of the community's pinned active houses (median, so one
+    stray pin can't drag it)."""
+    pts = [(j.lat, j.lon) for j in community.jobs
+           if j.lat is not None and j.lon is not None and j.status in ACTIVE_HOUSE_STATUSES]
+    if not pts:
+        return None
+    lats = sorted(p[0] for p in pts)
+    lons = sorted(p[1] for p in pts)
+    return lats[len(lats) // 2], lons[len(lons) // 2]
 
 
 def visit_label(visit: Visit) -> str:
@@ -1192,7 +1233,15 @@ def plan_day(
     # recomputes every arrive/depart from the flipped order.
     if reverse:
         route = route[::-1]
-    route = _order_within_communities(route, day, route_minutes)
+    layout_cache: dict[int, bool] = {}
+
+    def is_scattered(cid: int) -> bool:
+        if cid not in layout_cache:
+            comm = db.get(Community, cid)
+            layout_cache[cid] = bool(comm) and community_layout(db, comm)[0] == "scattered"
+        return layout_cache[cid]
+
+    route = _order_within_communities(route, day, is_scattered)
 
     # Final timeline.
     stops, clock, prev, drive_total, onsite_total = [], float(start_clock), None, 0.0, 0.0
@@ -1258,17 +1307,47 @@ def plan_day(
 
 
 _ADDR_RE = re.compile(r"^\s*(\d+)\s+([^,]+)")
-LOT_ORDER_MAX_EXTRA_MIN = 2  # sprawling communities (Compass Lakes) keep the fast order
+# A community whose houses spread farther than this from their center is a
+# scattered-lot area (Compass Lakes ~2.6 mi); every tract subdivision measured
+# 10/30/26 sits under 0.2 mi, so 1 mile separates them cleanly.
+SCATTERED_SPREAD_MILES = 1.0
+LOT_LAYOUTS = ("compact", "scattered")
 
 
-def _order_within_communities(route: list[dict], day: date, route_minutes=None) -> list[dict]:
+def community_spread_miles(db: Session, community_id: int) -> float | None:
+    """How spread out a community's active houses are: the distance from their
+    center that 90% of the pinned houses fall within. None under 3 pins."""
+    pts = list(dict.fromkeys(
+        (j.lat, j.lon) for j in db.query(Job).filter(
+            Job.community_id == community_id, Job.status.in_(ACTIVE_HOUSE_STATUSES),
+            Job.lat.isnot(None), Job.lon.isnot(None),
+        ).all()
+    ))
+    if len(pts) < 3:
+        return None
+    cen = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+    dists = sorted(haversine_miles(p, cen) for p in pts)
+    return dists[max(int(len(dists) * 0.9) - 1, 0)]
+
+
+def community_layout(db: Session, community: Community) -> tuple[str, str, float | None]:
+    """(layout, how it was decided, spread) — layout is compact or scattered;
+    a manual setting on the Places tab beats the pin measurement."""
+    spread = community_spread_miles(db, community.id)
+    if community.lot_layout in LOT_LAYOUTS:
+        return community.lot_layout, "set by hand", spread
+    if spread is not None and spread > SCATTERED_SPREAD_MILES:
+        return "scattered", "auto", spread
+    return "compact", "auto", spread
+
+
+def _order_within_communities(route: list[dict], day: date, is_scattered=None) -> list[dict]:
     """Inside a community, walk the houses in a sensible order (Brian 10/30/26):
     lot number ascending, except houses already past install, which come after,
     grouped by street with house numbers ascending. The route's order BETWEEN
     communities is untouched; only each consecutive same-community run is
-    rearranged. Community-wide stops (a phase sweep) lead their run. When lot
-    order would add more than LOT_ORDER_MAX_EXTRA_MIN of driving (houses miles
-    apart), that community keeps the optimizer's order."""
+    rearranged. Community-wide stops (a phase sweep) lead their run. A
+    scattered-lot community (houses miles apart) keeps the fastest order."""
 
     def community_of(c: dict):
         v = c["visit"]
@@ -1316,13 +1395,12 @@ def _order_within_communities(route: list[dict], day: date, route_minutes=None) 
             run_comm = comm
 
     out: list[dict] = []
-    for i, run in enumerate(runs):
-        tidy = sort_run(run)
-        if route_minutes is not None and tidy != run:
-            rest = [c for r in runs[i + 1:] for c in r]
-            if route_minutes(out + tidy + rest) - route_minutes(out + run + rest) > LOT_ORDER_MAX_EXTRA_MIN:
-                tidy = run  # too spread out — lot order would cost real driving
-        out.extend(tidy)
+    for run in runs:
+        comm = community_of(run[0])
+        if is_scattered is not None and comm is not None and is_scattered(comm):
+            out.extend(run)  # scattered lots: lot order would zig-zag for miles
+        else:
+            out.extend(sort_run(run))
     return out
 
 

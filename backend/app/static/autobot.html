@@ -1333,10 +1333,14 @@ async function renderPlaces() {
   el.innerHTML = `
     <p class="muted">Every community needs a pin — one pin covers every lot in it.
     “Find” looks it up; check the 📍 link, then Save. Paste exact coordinates from
-    Google Maps (right-click a spot → the numbers) to tighten any pin.</p>
+    Google Maps (right-click a spot → the numbers) to tighten any pin.
+    <b>Lots</b> sets the order houses are visited inside the community: compact
+    communities go in lot order; scattered-lot areas (houses miles apart) take the
+    fastest drive. Auto decides from the house pins — houses spread more than 1
+    mile from the center = scattered.</p>
     <div class="table-wrap"><table>
-      <thead><tr><th>Community</th><th>Builder</th><th>Houses</th><th>Sweep due</th><th>Pin</th><th></th></tr></thead>
-      <tbody id="place-rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>Community</th><th>Builder</th><th>Houses</th><th>Sweep due</th><th>Lots</th><th>Pin</th><th></th></tr></thead>
+      <tbody id="place-rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
     </table></div>`;
   try {
     const places = await api("/autobot/places");
@@ -1346,6 +1350,7 @@ async function renderPlaces() {
         <td>${esc(p.account_name)}</td>
         <td>${p.active_houses}</td>
         <td class="${p.phase_check_due && p.phase_check_due <= todayIso() ? "late" : ""}">${fmtDate(p.phase_check_due)}</td>
+        <td style="white-space:nowrap">${lotLayoutSelect(p)}<div id="lot-msg-${p.community_id}" class="muted" style="font-size:0.75rem"></div></td>
         <td style="white-space:nowrap">
           <input id="lat-${p.community_id}" value="${p.lat ?? ""}" placeholder="lat" style="width:6.2rem" />
           <input id="lon-${p.community_id}" value="${p.lon ?? ""}" placeholder="lon" style="width:6.8rem" />
@@ -1359,8 +1364,29 @@ async function renderPlaces() {
       </tr>`).join("");
   } catch (ex) {
     document.getElementById("place-rows").innerHTML =
-      `<tr><td colspan="6" class="error">${esc(ex.message)}</td></tr>`;
+      `<tr><td colspan="7" class="error">${esc(ex.message)}</td></tr>`;
   }
+}
+
+const LOT_WORDS = { compact: "lot order", scattered: "fastest (scattered)" };
+function lotLayoutSelect(p) {
+  const spread = p.spread_miles != null ? ` · ${p.spread_miles} mi` : "";
+  const auto = `Auto — ${LOT_WORDS[p.lot_layout]}${spread}`;
+  return `<select onchange="setLotLayout(${p.community_id}, this.value)" title="How houses inside this community are ordered on a route">
+    <option value="auto" ${p.lot_setting === "auto" ? "selected" : ""}>${auto}</option>
+    <option value="compact" ${p.lot_setting === "compact" ? "selected" : ""}>Lot order</option>
+    <option value="scattered" ${p.lot_setting === "scattered" ? "selected" : ""}>Fastest (scattered)</option>
+  </select>`;
+}
+
+async function setLotLayout(cid, layout) {
+  const msg = document.getElementById("lot-msg-" + cid);
+  msg.textContent = "…";
+  try {
+    const r = await api("/autobot/communities/" + cid + "/lot-layout", {
+      method: "PUT", body: JSON.stringify({ layout }) });
+    msg.textContent = "saved — " + LOT_WORDS[r.lot_layout] + (r.decided === "auto" ? " (auto)" : "");
+  } catch (ex) { msg.textContent = ex.message; }
 }
 
 async function findPlace(cid, name, market) {

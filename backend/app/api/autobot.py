@@ -224,6 +224,13 @@ class PlaceOut(BaseModel):
     active_houses: int
     last_phase_check: date | None
     phase_check_due: date | None
+    lot_setting: str = "auto"          # auto | compact | scattered (the switch)
+    lot_layout: str = "compact"        # what routing actually uses
+    spread_miles: float | None = None  # how spread out the house pins are
+
+
+class LotLayoutIn(BaseModel):
+    layout: str  # auto | compact | scattered
 
 
 def _visit_query(db: Session):
@@ -1241,9 +1248,12 @@ def places(db: Session = Depends(get_db)):
     communities = (
         db.query(Community).options(joinedload(Community.account)).order_by(Community.name).all()
     )
+    from app.autobot import community_layout
+
     out = []
     for c in communities:
         houses = _active_house_count(db, c.id)
+        layout, _how, spread = community_layout(db, c)
         last_done = (
             db.query(Visit)
             .filter(Visit.visit_type == "phase_check", Visit.community_id == c.id,
@@ -1269,8 +1279,29 @@ def places(db: Session = Depends(get_db)):
                 last_done.completed_at.date() if last_done and last_done.completed_at else None
             ),
             phase_check_due=pending.close_date if pending else None,
+            lot_setting=c.lot_layout or "auto",
+            lot_layout=layout,
+            spread_miles=round(spread, 2) if spread is not None else None,
         ))
     return out
+
+
+@router.put("/autobot/communities/{community_id}/lot-layout", dependencies=[Depends(autobot_write)])
+def set_lot_layout(community_id: int, payload: LotLayoutIn, db: Session = Depends(get_db)):
+    """The manual switch: auto (measure the pins), compact (always lot order) or
+    scattered (fastest drive order)."""
+    from app.autobot import LOT_LAYOUTS, community_layout
+
+    if payload.layout not in ("auto",) + LOT_LAYOUTS:
+        raise HTTPException(422, "layout must be auto, compact or scattered")
+    c = db.get(Community, community_id)
+    if not c:
+        raise HTTPException(404, "Community not found")
+    c.lot_layout = None if payload.layout == "auto" else payload.layout
+    db.commit()
+    layout, how, spread = community_layout(db, c)
+    return {"community_id": c.id, "lot_setting": payload.layout, "lot_layout": layout,
+            "decided": how, "spread_miles": round(spread, 2) if spread is not None else None}
 
 
 @router.patch(
