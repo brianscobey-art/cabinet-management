@@ -1105,6 +1105,8 @@ def plan_day(
             for n in (db.query(FieldMeasureNote)
                       .filter(FieldMeasureNote.job_id.in_(remeasure_jobs))
                       .order_by(FieldMeasureNote.id).all()):
+                if n.body.startswith("Remeasure:"):
+                    continue  # the Corrected / Not corrected log, not what was wrong
                 prev = remeasure_notes.get(n.job_id)
                 remeasure_notes[n.job_id] = (prev + " · " + n.body) if prev else n.body
 
@@ -1140,8 +1142,12 @@ def plan_day(
             # A measure's open date is the tracker's measure date — but slab
             # poured (or beyond) means the house is measurable now, so the
             # phase pulls it forward past the date (Brian 10/29/26).
+            # First trip only: a remeasure / recheck / not-ready follow-up was
+            # scheduled on purpose for later and must stay there — pulling it
+            # back made "Not corrected" look like it never left (10/30/26).
             fm_ready = (
                 v.visit_type == "field_measure"
+                and (v.trip or 1) == 1
                 and (_phase_num(phase_by_job.get(v.job_id)) or 0) >= 2
             )
             if not fm_ready:

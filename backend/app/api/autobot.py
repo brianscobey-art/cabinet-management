@@ -530,6 +530,8 @@ def finish_field_measure(
         raise HTTPException(404, "Visit not found")
     if visit.visit_type != "field_measure" or not visit.job_id:
         raise HTTPException(422, "Only a house's field measure takes this form")
+    if visit.status != "pending":
+        raise HTTPException(409, "This stop was already finished — refresh the route")
     if payload.outcome not in MEASURE_OUTCOMES:
         raise HTTPException(422, f"outcome must be one of: {', '.join(MEASURE_OUTCOMES)}")
 
