@@ -361,7 +361,7 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 job_code=_derive_job_code(db, community, lot4),
                 account_id=account.id,
                 community_id=community.id,
-                lot_number=lot4.lstrip("0") or "0",
+                lot_number=lot4,  # 4 digits like the job code and tracker (0065, not 65)
                 address=str(row.get("Street Address") or f"{project} Lot {lot4}").title(),
                 job_type=JobType.tract,
                 plan=plan[:100] or None,

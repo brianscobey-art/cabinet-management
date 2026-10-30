@@ -140,3 +140,17 @@ def add_field_measure_note(
     db.commit()
     db.refresh(note)
     return note
+
+
+@router.delete("/jobs/{job_id}/field-measure/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_field_measure_note(
+    job_id: int, note_id: int,
+    db: Session = Depends(get_db), user: User = Depends(require_roles(Role.admin)),
+):
+    """Remove a field-measure note (admin only) — e.g. duplicates from a button
+    pressed several times."""
+    note = db.get(FieldMeasureNote, note_id)
+    if note is None or note.job_id != job_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    db.delete(note)
+    db.commit()
