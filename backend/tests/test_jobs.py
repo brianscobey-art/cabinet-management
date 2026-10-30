@@ -228,3 +228,19 @@ def test_delivery_instructions_and_site(client, db):
     assert out["delivery_instructions"] == "Call Daniel first"
     site = client.get(f"/jobs/{job['id']}/site", headers=headers)
     assert site.status_code == 200 and "in_tracker" in site.json()
+
+
+def test_job_list_carries_latest_phase(client, db):
+    from app.models import PhaseUpdate
+
+    make_user(db, email="sales@example.com", role=Role.sales)
+    headers = login(client, "sales@example.com")
+    account_id, community_id = setup_account(client, headers)
+    building = make_job(client, headers, account_id, community_id, job_code="DRT-0001")
+    make_job(client, headers, account_id, community_id, job_code="DRT-0002", lot_number="43")
+    db.add_all([PhaseUpdate(job_id=building["id"], phase="5"), PhaseUpdate(job_id=building["id"], phase="12")])
+    db.commit()
+
+    rows = {r["job_code"]: r for r in client.get("/jobs", headers=headers).json()}
+    assert (rows["DRT-0001"]["phase"], rows["DRT-0001"]["phase_label"]) == ("12", "12 - Cabinets Installed")
+    assert rows["DRT-0002"]["phase"] is None  # nothing logged -> counts as construction on the page

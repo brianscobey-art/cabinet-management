@@ -95,6 +95,8 @@ export interface JobListItem {
   job_type: JobType;
   status: JobStatus;
   install_date: string | null;
+  phase?: string | null; // latest logged construction phase code
+  phase_label?: string | null;
 }
 
 export interface Job {

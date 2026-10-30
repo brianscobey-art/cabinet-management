@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import NATIONAL_BUILDER_PREFIXES, read_access, write_access
 from app.api.schemas import JobCreate, JobDetail, JobListItem, JobOut, JobUpdate
 from app.database import get_db
-from app.models import Account, Community, Job, JobStatus
+from app.models import Account, Community, Job, JobStatus, PhaseUpdate
+from app.phases import PHASE_LABELS
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -43,7 +44,21 @@ def _check_job_code(db: Session, job_code: str | None, exclude_id: int | None = 
         )
 
 
-def _to_list_item(job: Job) -> JobListItem:
+def _latest_phases(db: Session, job_ids: list[int]) -> dict[int, str]:
+    """job id -> its newest logged phase code (same rule as the phase board)."""
+    if not job_ids:
+        return {}
+    sub = (
+        db.query(func.max(PhaseUpdate.id).label("max_id"))
+        .filter(PhaseUpdate.job_id.in_(job_ids))
+        .group_by(PhaseUpdate.job_id)
+        .subquery()
+    )
+    rows = db.query(PhaseUpdate.job_id, PhaseUpdate.phase).join(sub, PhaseUpdate.id == sub.c.max_id).all()
+    return {job_id: phase for job_id, phase in rows}
+
+
+def _to_list_item(job: Job, phase: str | None = None) -> JobListItem:
     return JobListItem(
         id=job.id,
         job_code=job.job_code,
@@ -55,6 +70,8 @@ def _to_list_item(job: Job) -> JobListItem:
         job_type=job.job_type,
         status=job.status,
         install_date=job.install_date,
+        phase=phase,
+        phase_label=PHASE_LABELS.get(phase) if phase else None,
     )
 
 
@@ -107,7 +124,8 @@ def list_jobs(
             or_(Job.address.ilike(like), Job.lot_number.ilike(like), Job.job_code.ilike(like))
         )
     jobs = query.order_by(Job.job_code.asc().nulls_last(), Job.id).limit(2000).all()
-    return [_to_list_item(j) for j in jobs]
+    phases = _latest_phases(db, [j.id for j in jobs])
+    return [_to_list_item(j, phases.get(j.id)) for j in jobs]
 
 
 @router.post(

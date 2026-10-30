@@ -229,6 +229,10 @@ class JobListItem(BaseModel):
     job_type: JobType
     status: JobStatus
     install_date: date | None
+    # Latest logged construction phase -- the Jobs tab's Construction / Close Out
+    # buttons split on it like the phase report (Brian 10/30/26).
+    phase: str | None = None
+    phase_label: str | None = None
 
 
 class JobDetail(JobOut):

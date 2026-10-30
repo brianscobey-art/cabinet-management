@@ -108,6 +108,13 @@ function savedNav(): Partial<Record<string, string | boolean>> {
   }
 }
 
+// Same split as the Phases tab (CLOSEOUT_PHASES there): 12 - Cabinets
+// Installed through 16 - Closed is close-out; everything before, and jobs with
+// no phase logged yet, is construction (Brian 10/30/26).
+const CLOSEOUT_PHASES = new Set(["12", "13", "14", "15", "16"]);
+const isCloseout = (phase: string | null | undefined) => !!phase && CLOSEOUT_PHASES.has(phase);
+type PhaseGroup = "all" | "construction" | "closeout";
+
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const nav = archived ? {} : savedNav();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
@@ -125,6 +132,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     Array.isArray(nav.communityIds) ? (nav.communityIds as string[]) : []
   );
   const [search, setSearch] = useState((nav.search as string) || "");
+  const [group, setGroup] = useState<PhaseGroup>((nav.group as PhaseGroup) || "all");
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
@@ -133,9 +141,9 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (archived) return;
     sessionStorage.setItem(
       NAV_KEY,
-      JSON.stringify({ category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search })
+      JSON.stringify({ category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group })
     );
-  }, [archived, category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search]);
+  }, [archived, category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group]);
 
   async function refresh() {
     const params: Record<string, string | string[]> = {};
@@ -348,6 +356,15 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     );
   }
 
+  const closeoutCount = jobs.filter((j) => isCloseout(j.phase)).length;
+  const constructionCount = jobs.length - closeoutCount;
+  const shownJobs =
+    archived || group === "all" ? jobs
+    : group === "closeout" ? jobs.filter((j) => isCloseout(j.phase))
+    : jobs.filter((j) => !isCloseout(j.phase));
+  // Clicking the active button turns the filter off again (as on the Phases tab).
+  const pick = (g: PhaseGroup) => setGroup((cur) => (cur === g ? "all" : g));
+
   return (
     <div>
       <div className="page-sticky">
@@ -434,6 +451,28 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
             ))}
           </select>
         )}
+        {!archived && (
+          <>
+            <button
+              type="button"
+              className={group === "construction" ? "toggle-btn on" : "toggle-btn"}
+              onClick={() => pick("construction")}
+              title="Phases 0 - Dirt/Staked through 11 - Cab Delivered, and jobs with no phase logged yet"
+            >
+              Construction
+              <span className="chip-count">{constructionCount}</span>
+            </button>
+            <button
+              type="button"
+              className={group === "closeout" ? "toggle-btn on" : "toggle-btn"}
+              onClick={() => pick("closeout")}
+              title="Phases 12 - Cabinets Installed through 16 - Closed: post walk, punch, blue tape"
+            >
+              Close Out
+              <span className="chip-count">{closeoutCount}</span>
+            </button>
+          </>
+        )}
       </div>
       </div>
 
@@ -460,11 +499,12 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
               <th>Lot</th>
               <th>Type</th>
               <th>Status</th>
+              <th>Phase</th>
               <th>Install</th>
             </tr>
           </thead>
           <tbody>
-            {jobs.map((j) => (
+            {shownJobs.map((j) => (
               <tr key={j.id} className="clickable" onClick={() => (window.location.hash = `#/jobs/${j.id}`)}>
                 <td>
                   <a href={`#/jobs/${j.id}`}>{j.job_code ?? `#${j.id}`}</a>
@@ -479,13 +519,14 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 <td>
                   <span className={`badge badge-${statusSlug(j.status)}`}>{statusLabel(j.status)}</span>
                 </td>
+                <td>{j.phase_label ?? "—"}</td>
                 <td>{fmtDate(j.install_date)}</td>
               </tr>
             ))}
-            {jobs.length === 0 && (
+            {shownJobs.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted">
-                  No jobs yet.
+                <td colSpan={9} className="muted">
+                  {jobs.length ? "No jobs in this group." : "No jobs yet."}
                 </td>
               </tr>
             )}
