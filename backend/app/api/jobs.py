@@ -187,6 +187,15 @@ def _clean(v):
     return None if s.upper() in ("", "NA", "N/A", "#N/A", "NONE") else s
 
 
+@router.get("/{job_id}/field-reports", dependencies=[Depends(read_access)])
+def job_field_reports(job_id: int, db: Session = Depends(get_db)):
+    """Installer sign-offs and old QC post walks read from Smartsheet (10/30/26)."""
+    from app.field_reports import job_reports
+
+    get_job_or_404(job_id, db)
+    return job_reports(db, job_id)
+
+
 @router.get("/{job_id}/site", dependencies=[Depends(read_access)])
 def job_site(job_id: int, db: Session = Depends(get_db)):
     """The job page's Jobsite card: what CabinetTron doesn't store (city/state,

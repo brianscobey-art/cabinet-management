@@ -141,6 +141,32 @@ export interface JobSite {
   builder_po?: string | null;
 }
 
+/** Installer sign-offs + old QC post walks read from Smartsheet (10/30/26). */
+export interface JobFieldReports {
+  install_reports: {
+    install_date: string | null;
+    installer: string | null;
+    complete: boolean | null;
+    trade_stopping: boolean | null;
+    needed_to_finish: string | null;
+    shoe_sticks: number | null;
+    damage_parts: boolean | null;
+    damage_detail: string | null;
+    submitted_at: string | null;
+    actions: string | null;
+  }[];
+  qc_reports: {
+    pwid: string | null;
+    walked_at: string | null;
+    walked_by: string | null;
+    result: string | null;
+    summary: string | null;
+    answers: Record<string, string>;
+  }[];
+}
+
+export const getJobFieldReports = (jobId: number) => api<JobFieldReports>(`/jobs/${jobId}/field-reports`);
+
 export const getJobSite = (jobId: number) => api<JobSite>(`/jobs/${jobId}/site`);
 
 export interface JobPurchaseOrders {

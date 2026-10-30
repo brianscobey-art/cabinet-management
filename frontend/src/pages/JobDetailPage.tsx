@@ -15,6 +15,7 @@ import {
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
 import FieldMeasureSection from "./FieldMeasureSection";
+import FieldReportsSection from "./FieldReportsSection";
 import { fmtDate, fmtPhone } from "../format";
 import { statusLabel } from "./JobsPage";
 import JobNotes from "./JobNotes";
@@ -173,6 +174,8 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
       {job.job_type === "tract" && <OrderingCard jobId={job.id} canWrite={canWrite} />}
 
       <PurchaseOrdersSection jobId={job.id} />
+
+      <FieldReportsSection jobId={job.id} />
 
       <h3 className="kb-head">Room selections</h3>
       <div className="table-wrap">

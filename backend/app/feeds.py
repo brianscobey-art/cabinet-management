@@ -891,6 +891,14 @@ def poll_slow(db: Session) -> dict:
         db, century_candidates(Path(settings.century_dir)), sync_century, guard_key="fp_century",
     )
     db.commit()
+    # Installer sign-offs and old post walks from Smartsheet (read only, 10/30/26).
+    # Hourly so a finished install starts its 48h post-walk clock the same day.
+    try:
+        from app import field_reports
+
+        result["field_reports"] = field_reports.run(db)
+    except Exception as exc:  # noqa: BLE001
+        result["field_reports"] = {"error": str(exc)}
     return result
 
 

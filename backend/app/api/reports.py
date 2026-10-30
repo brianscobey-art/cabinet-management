@@ -391,6 +391,14 @@ def job_accounts_run(db: Session = Depends(get_db)):
     return last_report(db) or res
 
 
+@router.post("/reports/field-reports/run", dependencies=[Depends(write_access)])
+def field_reports_run(db: Session = Depends(get_db)):
+    """Read Install Reports + QC v2 from Smartsheet now (normally hourly)."""
+    from app.field_reports import run
+
+    return run(db)
+
+
 @router.post("/reports/po-receipts/refresh", dependencies=[Depends(write_access)])
 def po_receipts_refresh(db: Session = Depends(get_db)):
     res = refresh_receipts(db)

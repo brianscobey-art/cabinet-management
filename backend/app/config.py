@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # The PO tracker sheet -- one parent row per job, its POTracker lines
     # beneath. Same rules: CabinetTron owns it, never the Masters. 0 disables.
     smartsheet_po_sheet_id: int = 2088438751776644
+    # Field reports CabinetTron READS hourly (app.field_reports, 10/30/26).
+    smartsheet_install_reports_sheet_id: int = 3540682907012996  # "Install Reports"
+    smartsheet_qc_sheet_id: int = 6386322848567172  # "TBS Quality Control v2" (old post walks)
 
     smartsheet_sync_hour: int = 2
 

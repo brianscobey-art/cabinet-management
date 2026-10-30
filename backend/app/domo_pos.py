@@ -32,17 +32,24 @@ FILE_GLOB = "DOMO Job POs*.csv"
 COLS = ["PO #", "Order Date", "Due Date", "Status", "Close Date", "Vendor", "Product", "Job Account",
         "Sales Order #", "Ordered Cost", "Received Cost", "Last Receipt Date", "Last Receipt #",
         "Salesperson", "POS", "Lines"]
-# Cabinet-job POs only (their job account is a "- CAB ..." account), one row per PO.
+# Cabinet-job POs, one row per PO: any "- CAB ..." job account, plus any G/I job
+# account buying kitchen cabinets / tops / cabinet hardware -- hand-named
+# accounts ("CB PG 96", "DR Horton Montgomery - DRPREX-0116") were missed when
+# this keyed on the name alone (Brian 10/30/26). Salespeople's Z accounts stay out.
 PO_SQL = (
     "SELECT `transaction number`, MIN(`transaction date`), MAX(`request date`), MAX(`po status`), "
     "MAX(`po close date`), MAX(`supplier name title`), MAX(`sku description`), MAX(`job`), "
     "MAX(`sales order number`), SUM(`landed cost - ordered`), SUM(`landed cost - received`), "
     "MAX(`receipt date`), MAX(`receipt number`), MAX(`assigned salesperson`), MAX(`pos`), COUNT(*) "
-    "FROM table WHERE `job` LIKE '%- CAB %' GROUP BY `transaction number`"
+    "FROM table WHERE `job` LIKE '%- CAB %' OR ((`job` LIKE 'G%' OR `job` LIKE 'I%') AND "
+    "(`minor category` LIKE '2201%' OR `minor category` LIKE '2202%' OR `minor category` LIKE '2206%')) "
+    "GROUP BY `transaction number`"
 )
 
-# "I7510029-304: DR HORTON PC ONLY - CAB CESF 24"
-_JOB = re.compile(r"^(?P<acct>[GI][0-9A-Z]+-[0-9A-Z]+):\s*(?P<cust>.*?)\s+-\s+(?P<name>CAB\b.*)$", re.I)
+# "I7510029-304: DR HORTON PC ONLY - CAB CESF 24": the job name is whatever
+# follows the LAST " - " ("... Montgomery - DRPREX-0116" keeps its hyphen).
+_JOB = re.compile(
+    r"^(?P<acct>[GI][0-9A-Z]+-[0-9A-Z]+):\s*(?:(?P<cust>.*)\s+-\s+(?P<name>.+?)|(?P<only>.*?))\s*$", re.I)
 
 
 def _date(v) -> date | None:
@@ -89,8 +96,8 @@ def load_rows(path: Path) -> list[dict]:
             out.append({
                 "our_po": po,
                 "job_account": m["acct"].upper() if m else None,
-                "customer": m["cust"].strip()[:200] if m else None,
-                "job_name": " ".join(m["name"].split())[:120] if m else None,
+                "customer": (m["cust"] or m["only"] or "").strip()[:200] or None if m else None,
+                "job_name": " ".join((m["name"] or "").split())[:120] or None if m else None,
                 "vendor": (_strip_code(r.get("Vendor")) or "")[:160] or None,
                 "product": (str(r.get("Product") or "").strip()[:200]) or None,
                 "order_date": _date(r.get("Order Date")),
@@ -140,6 +147,10 @@ def apply(db: Session, path: Path | None = None) -> dict:
         job = by_code.get(code_key(r["job_account"])) if r["job_account"] else None
         if job is not None:
             how["code"] += 1
+        elif r["job_name"] and r["job_name"].upper() in by_job_code:
+            # hand-named accounts often carry the job code itself ("... - DRPREX-0116")
+            job = by_job_code[r["job_name"].upper()]
+            how["job_code"] = how.get("job_code", 0) + 1
         elif r["job_name"]:
             by_ash = _ash_index() if by_ash is None else by_ash
             codes = by_ash.get(ash_key(r["job_name"]), set())

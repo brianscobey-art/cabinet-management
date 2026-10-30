@@ -4,6 +4,7 @@ from app.models.appsetting import AppSetting, get_setting, set_setting
 from app.models.community import Community
 from app.models.document import JobDocument
 from app.models.domotxn import DomoTxn
+from app.models.field_report import InstallReport, QcReport
 from app.models.fieldmeasure import FieldMeasure, FieldMeasureNote
 from app.models.job import Job, JobStatus, JobType
 from app.models.jobcost import JobCost
@@ -55,6 +56,7 @@ __all__ = [
     "PhaseUpdate",
     "LayoutPrint",
     "DomoPo",
+    "InstallReport",
     "JobPo",
     "PoReceipt",
     "Quote",
@@ -64,6 +66,7 @@ __all__ = [
     "RoomSelection",
     "ServiceLine",
     "ServicePart",
+    "QcReport",
     "ServiceRequest",
     "ShipStatus",
     "SmartsheetHistory",
