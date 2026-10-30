@@ -1258,7 +1258,7 @@ def plan_day(
 
 
 _ADDR_RE = re.compile(r"^\s*(\d+)\s+([^,]+)")
-LOT_ORDER_MAX_EXTRA_MIN = 10  # sprawling communities (Compass Lakes) keep the fast order
+LOT_ORDER_MAX_EXTRA_MIN = 2  # sprawling communities (Compass Lakes) keep the fast order
 
 
 def _order_within_communities(route: list[dict], day: date, route_minutes=None) -> list[dict]:
