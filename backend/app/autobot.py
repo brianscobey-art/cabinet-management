@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from zoneinfo import ZoneInfo
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
@@ -59,6 +60,15 @@ PHASE_CHECK_INTERVAL_DAYS = 10      # a community's check is due by day 10 ...
 PHASE_CHECK_MIN_GAP_DAYS = 7        # ... and can't show up before day 7 (Brian 10/30/26)
 PHASE_CHECK_PULL_FORWARD_DAYS = 2   # within N days of stale → pull forward if nearby
 PHASE_CHECK_MAX_DETOUR_MIN = 30     # "nearby" = adds at most this much drive
+
+# The crews' clock. The live server runs on UTC, so "now" and "today" must be
+# converted on purpose — an 8:18 AM Done read back as 1:18 PM (10/30/26).
+CENTRAL = ZoneInfo("America/Chicago")
+
+
+def today_central() -> date:
+    return datetime.now(CENTRAL).date()
+
 
 # Visit kinds that only happen once the cabinets are in.
 POST_INSTALL_TYPES = {
@@ -527,7 +537,7 @@ def _checkable_houses(db: Session, community_id: int, skip_recent: bool = False)
     finished_ids = {pu.job_id for pu in latest_rows if pu.phase in FINISHED_PHASES}
     recent_ids: set[int] = set()
     if skip_recent:
-        cutoff = date.today() - timedelta(days=PHASE_CHECK_MIN_GAP_DAYS)
+        cutoff = today_central() - timedelta(days=PHASE_CHECK_MIN_GAP_DAYS)
         for pu in latest_rows:
             at = pu.noted_at
             if at is not None and (at.date() if hasattr(at, "date") else at) > cutoff:
@@ -1006,7 +1016,7 @@ def plan_day(
     origin = depot
     start_clock = float(day_start)
     completed_today: list[dict] = []
-    if day == date.today():
+    if day == today_central():
         done_rows = (
             db.query(Visit)
             .options(joinedload(Visit.job).joinedload(Job.community), joinedload(Visit.community))
@@ -1023,7 +1033,7 @@ def plan_day(
             ca = v.completed_at
             if ca.tzinfo is None:
                 ca = ca.replace(tzinfo=timezone.utc)
-            local = ca.astimezone()
+            local = ca.astimezone(CENTRAL)
             if local.date() != day:
                 continue
             completed_today.append({

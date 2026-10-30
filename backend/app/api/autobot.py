@@ -1,4 +1,4 @@
-﻿"""Autobot API: the universal visit board, the daily route plan, and the
+"""Autobot API: the universal visit board, the daily route plan, and the
 community pins the router needs. Engine logic lives in app/autobot.py."""
 
 from datetime import date, datetime, timedelta, timezone
@@ -27,6 +27,7 @@ from app.autobot import (
     phase_check_metrics,
     plan_day,
     plan_horizon,
+    today_central,
     visit_duration_min,
     visit_label,
 )
@@ -348,7 +349,7 @@ def list_visits(
         v for v in visits
         if not (v.status == "pending" and v.job and v.job.status in INACTIVE_JOB_STATUSES)
     ]
-    today = date.today()
+    today = today_central()
     return [_out(db, v, today) for v in visits]
 
 
@@ -370,7 +371,7 @@ def create_visit(
     db.add(visit)
     db.commit()
     v = _visit_query(db).filter(Visit.id == visit.id).one()
-    return _out(db, v, date.today())
+    return _out(db, v, today_central())
 
 
 @router.patch("/autobot/visits/{visit_id}", response_model=VisitOut)
@@ -402,7 +403,7 @@ def patch_visit(
         setattr(visit, key, value)
     db.commit()
     v = _visit_query(db).filter(Visit.id == visit_id).one()
-    return _out(db, v, date.today())
+    return _out(db, v, today_central())
 
 
 # ---------------------------------------------------------------- walks & punch
@@ -443,7 +444,7 @@ def complete_visit(
     # keeps the picked day (midnight) since the actual clock time is unknown.
     visit.completed_at = (
         datetime.combine(payload.completed_on, datetime.min.time(), tzinfo=timezone.utc)
-        if payload.completed_on and payload.completed_on != date.today()
+        if payload.completed_on and payload.completed_on != today_central()
         else datetime.now(timezone.utc)
     )
     visit.completed_by = user.full_name
@@ -452,7 +453,7 @@ def complete_visit(
         if auto_recheck and not payload.return_date:
             # Measured but incomplete: recheck the job in 2-4 days. A window, not a
             # pinned day, so the router folds it into whatever trip passes nearest.
-            done_day = payload.completed_on or date.today()
+            done_day = payload.completed_on or today_central()
             f_open, f_close, f_sched = done_day + timedelta(days=2), done_day + timedelta(days=4), None
         else:
             f_open = f_close = f_sched = payload.return_date
@@ -475,7 +476,7 @@ def complete_visit(
     db.commit()
     rows = _visit_query(db).filter(Visit.id.in_(out_ids)).all()
     rows.sort(key=lambda v: out_ids.index(v.id))
-    return [_out(db, v, date.today()) for v in rows]
+    return [_out(db, v, today_central()) for v in rows]
 
 
 class MeasureResultIn(BaseModel):
@@ -535,7 +536,7 @@ def finish_field_measure(
     if payload.outcome not in MEASURE_OUTCOMES:
         raise HTTPException(422, f"outcome must be one of: {', '.join(MEASURE_OUTCOMES)}")
 
-    day = payload.completed_on or date.today()
+    day = payload.completed_on or today_central()
     now = datetime.now(timezone.utc)
     notes = (payload.notes or "").strip() or None
     asked = payload.outcome
@@ -568,7 +569,7 @@ def finish_field_measure(
     if notes:
         visit.result_notes = notes
     visit.completed_at = (
-        now if day == date.today()
+        now if day == today_central()
         else datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
     )
     visit.completed_by = user.full_name
@@ -605,7 +606,7 @@ def finish_field_measure(
     db.commit()
     rows = _visit_query(db).filter(Visit.id.in_(out_ids)).all()
     rows.sort(key=lambda v: out_ids.index(v.id))
-    return [_out(db, v, date.today()) for v in rows]
+    return [_out(db, v, today_central()) for v in rows]
 
 
 def _live_walk(db: Session, job_id: int, vtype: str) -> Visit | None:
@@ -629,8 +630,8 @@ def punch_request(
         raise HTTPException(404, "Job not found")
     visit = _live_walk(db, job_id, "punch_out")
     if visit is None:
-        visit = Visit(visit_type="punch_out", job_id=job_id, open_date=date.today(),
-                      close_date=date.today() + timedelta(days=7), created_by=user.full_name)
+        visit = Visit(visit_type="punch_out", job_id=job_id, open_date=today_central(),
+                      close_date=today_central() + timedelta(days=7), created_by=user.full_name)
         db.add(visit)
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
@@ -642,7 +643,7 @@ def punch_request(
     if payload.scheduled_date:
         visit.close_date = payload.scheduled_date
     db.commit()
-    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), date.today())
+    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), today_central())
 
 
 @router.post("/autobot/jobs/{job_id}/blue-tape", response_model=VisitOut)
@@ -656,7 +657,7 @@ def blue_tape_request(
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    requested = payload.requested_on or date.today()
+    requested = payload.requested_on or today_central()
     visit = _live_walk(db, job_id, "blue_tape")
     if visit is None:
         visit = Visit(visit_type="blue_tape", job_id=job_id, created_by=user.full_name, priority=5)
@@ -673,7 +674,7 @@ def blue_tape_request(
     if job.status in BEFORE_BLUE:
         job.status = JobStatus.blue
     db.commit()
-    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), date.today())
+    return _out(db, _visit_query(db).filter(Visit.id == visit.id).one(), today_central())
 
 
 @router.get("/autobot/jobs/{job_id}/walks", response_model=list[VisitOut], dependencies=[Depends(autobot_access)])
@@ -685,7 +686,7 @@ def job_walks(job_id: int, db: Session = Depends(get_db)):
         .order_by(Visit.id)
         .all()
     )
-    return [_out(db, v, date.today()) for v in rows]
+    return [_out(db, v, today_central()) for v in rows]
 
 
 def _part_state(p: ServicePart) -> str:
@@ -783,12 +784,12 @@ def patch_job_part(
 def punch_board(db: Session = Depends(get_db)):
     """Every house past install: post walk, punch, blue tape and open parts —
     the board the office and the truck both read."""
-    return house_board(db, date.today())
+    return house_board(db, today_central())
 
 
 @router.post("/autobot/generate", dependencies=[Depends(autobot_write)])
 def generate(db: Session = Depends(get_db), user: User = Depends(autobot_write)):
-    created = generate_visits(db, date.today(), created_by=user.full_name)
+    created = generate_visits(db, today_central(), created_by=user.full_name)
     assigned = auto_assign(db)
     return {"created": created, "total": sum(created.values()), "assigned": assigned}
 
@@ -801,7 +802,7 @@ def plan(
     reverse: bool = False,
     db: Session = Depends(get_db),
 ):
-    return plan_day(db, day or date.today(), real_drive=real_drive, worker_id=worker_id,
+    return plan_day(db, day or today_central(), real_drive=real_drive, worker_id=worker_id,
                     reverse=reverse)
 
 
@@ -816,7 +817,7 @@ def forecast(
     """The rest of the schedule: each day's stops treated as completed so the
     following days show what's left of the backlog."""
     return plan_horizon(
-        db, start or date.today(), days=min(days, 15), real_drive=real_drive, worker_id=worker_id
+        db, start or today_central(), days=min(days, 15), real_drive=real_drive, worker_id=worker_id
     )
 
 
@@ -848,7 +849,7 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
     if not community:
         raise HTTPException(404, "Community not found")
 
-    today = date.today()
+    today = today_central()
     tasks = [
         _out(db, v, today)
         for v in _visit_query(db)
@@ -1070,7 +1071,7 @@ class WorkerPatch(BaseModel):
 
 
 def _worker_out(w: Worker) -> WorkerOut:
-    today = date.today()
+    today = today_central()
     upcoming = [t for t in w.time_off if t.end_date >= today]
     return WorkerOut(
         id=w.id, name=w.name, is_tech=w.is_tech, sales_match=w.sales_match,

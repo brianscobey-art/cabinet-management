@@ -191,12 +191,12 @@ def _run_feed_sync() -> None:
 def _run_autobot_sync() -> None:
     from datetime import date
 
-    from app.autobot import auto_assign, generate_visits, geocode_missing_job_pins
+    from app.autobot import auto_assign, generate_visits, geocode_missing_job_pins, today_central
     from app.database import SessionLocal
 
     try:
         with SessionLocal() as db:
-            created = generate_visits(db, date.today(), created_by="auto-sync")
+            created = generate_visits(db, today_central(), created_by="auto-sync")
             assigned = auto_assign(db)
             pinned = geocode_missing_job_pins(db, limit=25)
         if created or assigned or pinned:
