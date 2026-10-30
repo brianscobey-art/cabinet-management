@@ -76,6 +76,11 @@
     border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.9rem;
     margin-bottom: 0.8rem; font-size: 0.95rem;
   }
+  .start-bar {
+    display: flex; align-items: center; gap: 0.5rem 0.8rem; flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+  }
+  .start-btn { font-size: 1.05rem; padding: 0.6rem 1.3rem; }
   .overflow {
     background: #fdecea; border: 1px solid var(--red); color: #8f1717; font-weight: 600;
     border-radius: 10px; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem;
@@ -597,12 +602,13 @@ function routeHtml(plan, note) {
     </div>
     <p class="muted">${esc(plan.worker)}'s loop${workerId ? " — starts and ends at their place" : " — starts and ends at the shop"}</p>
     ${note ? `<p class="muted">${esc(note)}</p>` : ""}
+    ${startBar(plan)}
     ${plan.overflow ? `<div class="overflow">⚠ This day doesn't fit — it runs past ${plan.workday_end} (back at ${plan.back}). Move something, or it's a two-truck day.</div>` : ""}
     <div class="summary">
       <span><b>${plan.stops.length}</b> stops${(plan.completed || []).length ? ` <span class="muted">+ ${plan.completed.length} done</span>` : ""}</span>
       <span>drive <b>${hrs(plan.drive_min)}</b></span>
       <span>on-site <b>${hrs(plan.onsite_min)}</b></span>
-      <span>${plan.resumed ? "resume" : "leave"} <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
+      <span>${plan.resumed ? "resume" : plan.started ? "started" : "leave"} <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
       <span class="muted">drive times: ${plan.drive_source === "osrm" ? "real" : "estimated"}</span>
     </div>
     <div class="layout">
@@ -610,6 +616,54 @@ function routeHtml(plan, note) {
       ${mapSvg(plan)}
     </div>
     ${plan.skipped.length ? `<div class="skipped"><b>Not on this loop</b><ul>${skipped}</ul></div>` : ""}`;
+}
+
+// ▶ Start route: today only. Stamps the real leave time (and where the phone
+// is, if not home) so every stop re-times from then; pressed again it restarts
+// the day from the new time and place (after lunch, a stop at the yard).
+function startBar(plan) {
+  if (plan.day !== todayIso()) return "";
+  if (!plan.started && !(plan.completed || []).length) {
+    return `<div class="start-bar">
+      <button class="start-btn" onclick="startRoute(this)">▶ Start route</button>
+      <span class="muted">Planned leave ${plan.leave}. Tap when you head out — the day re-times from then and from where you are.</span>
+    </div>`;
+  }
+  const st = plan.started;
+  return `<div class="start-bar">
+    ${st ? `<span>▶ Started <b>${st.at}</b> from ${st.from === "home" ? "home" : "here"}</span>` : ""}
+    ${plan.caught_up ? `<span class="muted">· times caught up to now</span>` : ""}
+    <button class="ghost" onclick="startRoute(this, true)" title="Re-time the rest of today from right now, where you're standing">↻ Restart from here</button>
+    ${st ? `<button class="ghost" onclick="undoStart()" title="Pressed it by accident? Go back to the planned leave time">undo start</button>` : ""}
+  </div>`;
+}
+
+async function startRoute(btn, restart = false) {
+  if (restart && !confirm("Restart the rest of today's times from right now, from where you are?")) return;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  const send = async (coords) => {
+    try {
+      await api("/autobot/route/start", { method: "POST",
+        body: JSON.stringify({ worker_id: workerId ? Number(workerId) : null, ...coords }) });
+      renderRoute();
+    } catch (ex) { btn.disabled = false; btn.textContent = label; alert(ex.message); }
+  };
+  // Where he is matters only when it isn't home; no GPS = start from home.
+  if (!navigator.geolocation) return send({});
+  navigator.geolocation.getCurrentPosition(
+    (pos) => send({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy_m: pos.coords.accuracy }),
+    () => send({}),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+}
+
+async function undoStart() {
+  if (!confirm("Undo Start route? Today goes back to the planned leave time.")) return;
+  try {
+    await api("/autobot/route/start" + (workerId ? "?worker_id=" + workerId : ""), { method: "DELETE" });
+    renderRoute();
+  } catch (ex) { alert(ex.message); }
 }
 
 function mapSvg(plan, mini = false) {

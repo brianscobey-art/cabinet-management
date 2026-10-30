@@ -79,3 +79,24 @@ class DutyAssignment(Base):
 
     community: Mapped["Community"] = relationship()  # noqa: F821
     worker: Mapped["Worker | None"] = relationship()
+
+
+class RouteStart(Base):
+    """Start route: when (and where) someone actually headed out today. Today's
+    plan re-times from the later of this and the last Done stop, instead of the
+    planned leave time from home (Brian 10/30/26). worker_id NULL = the tech
+    when no tech worker exists. One row per person per day; pressing Start
+    again ("Restart from here") overwrites it."""
+
+    __tablename__ = "route_starts"
+    __table_args__ = (UniqueConstraint("worker_id", "day", name="uq_route_start_worker_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    worker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workers.id", ondelete="CASCADE"), default=None, index=True
+    )
+    day: Mapped[date] = mapped_column(Date)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    lat: Mapped[float | None] = mapped_column(Float, default=None)  # None = started from home
+    lon: Mapped[float | None] = mapped_column(Float, default=None)
+    started_by: Mapped[str | None] = mapped_column(String(120), default=None)

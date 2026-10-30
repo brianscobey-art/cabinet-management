@@ -27,6 +27,7 @@ from app.models import (
     DutyAssignment,
     Job,
     JobStatus,
+    RouteStart,
     ServiceRequest,
     Visit,
     Worker,
@@ -903,6 +904,13 @@ def exists_any_for_request(db: Session, service_request_id: int) -> bool:
 
 # ---------------------------------------------------------------- assignment
 
+def route_start_for(db: Session, worker: Worker | None, day: date) -> RouteStart | None:
+    """Today's Start route press for this person (None = not started yet)."""
+    q = db.query(RouteStart).filter(RouteStart.day == day)
+    q = q.filter(RouteStart.worker_id == worker.id) if worker else q.filter(RouteStart.worker_id.is_(None))
+    return q.first()
+
+
 def default_tech(db: Session) -> Worker | None:
     return db.query(Worker).filter(Worker.is_tech, Worker.active).order_by(Worker.id).first()
 
@@ -1016,6 +1024,10 @@ def plan_day(
     origin = depot
     start_clock = float(day_start)
     completed_today: list[dict] = []
+    route_start = None
+    started_info: dict | None = None
+    now_min: float | None = None  # set once the route is under way today
+    resumed = False
     if day == today_central():
         done_rows = (
             db.query(Visit)
@@ -1046,11 +1058,37 @@ def plan_day(
                 "coords": effective_coords(v),
             })
         completed_today.sort(key=lambda c: c["done_min"])
-        if completed_today:
-            last = completed_today[-1]
-            start_clock = max(start_clock, float(last["done_min"]))
-            if last["coords"] is not None:
-                origin = last["coords"]
+        # Start route: when and where he really headed out. The later of that
+        # and the last Done stop is where the rest of the day flows from — so
+        # a mid-day "Restart from here" (lunch, the yard) beats an older Done.
+        route_start = route_start_for(db, worker, day)
+        last_done = completed_today[-1] if completed_today else None
+        if route_start is not None:
+            st = route_start.started_at
+            if st.tzinfo is None:
+                st = st.replace(tzinfo=timezone.utc)
+            st = st.astimezone(CENTRAL)
+            start_min = st.hour * 60 + st.minute
+            started_info = {
+                "at": _fmt(start_min),
+                "from": "here" if route_start.lat is not None else "home",
+            }
+            if last_done is None or start_min >= last_done["done_min"]:
+                start_clock = float(start_min)
+                if route_start.lat is not None and route_start.lon is not None:
+                    origin = (route_start.lat, route_start.lon)
+                last_done = None  # the start is the latest word
+        if last_done is not None:
+            resumed = True
+            start_clock = max(start_clock, float(last_done["done_min"]))
+            if last_done["coords"] is not None:
+                origin = last_done["coords"]
+        # Once he's on the road, never time a stop in the past: if it's later
+        # than the plan thinks, the first remaining stop wraps up now and the
+        # rest of the day re-flows from the current time.
+        if route_start is not None or completed_today:
+            now = datetime.now(CENTRAL)
+            now_min = float(now.hour * 60 + now.minute)
         for c in completed_today:
             c.pop("done_min", None)
             c.pop("coords", None)
@@ -1282,6 +1320,9 @@ def plan_day(
         )
 
     flexible.sort(key=sort_key)
+    # Size the day from the real clock once he's under way — a late morning
+    # shouldn't keep stops on that only fit an on-time one.
+    fit_start = max(start_clock, now_min) if now_min is not None else start_clock
     for cand in flexible:
         best = min(
             (route[:pos] + [cand] + route[pos:] for pos in range(len(route) + 1)),
@@ -1291,7 +1332,7 @@ def plan_day(
         best_total = route_minutes(best)
         added_drive = best_total - base_total - cand["duration"]
         v = cand["visit"]
-        if start_clock + best_total > day_end:
+        if fit_start + best_total > day_end:
             skipped.append({"visit_id": v.id, "label": cand["label"], "visit_type": v.visit_type,
                             "reason": "day is full — didn't fit inside the workday"})
             continue
@@ -1321,12 +1362,17 @@ def plan_day(
 
     # Final timeline.
     stops, clock, prev, drive_total, onsite_total = [], float(start_clock), None, 0.0, 0.0
+    caught_up = False
+    if not route and now_min is not None and now_min > clock:
+        clock, caught_up = now_min, True  # nothing left: heading home from here, now
     for n, c in enumerate(route, start=1):
         v = c["visit"]
         leg = leg_min(prev, c)
         clock += leg
         arrive = clock
         clock += c["duration"]
+        if n == 1 and now_min is not None and now_min > clock:
+            clock, caught_up = now_min, True  # running long — wraps up now
         drive_total += leg
         onsite_total += c["duration"]
         prev = c
@@ -1365,11 +1411,13 @@ def plan_day(
         "worker": worker.name if worker else "Service Tech",
         "worker_id": worker.id if worker else None,
         "depot": {"lat": depot[0], "lon": depot[1]},
-        "leave": _fmt(start_clock) if completed_today else _fmt(day_start),
+        "leave": _fmt(start_clock) if (completed_today or route_start) else _fmt(day_start),
         "back": _fmt(clock),
         "workday_end": _fmt(day_end),
         "completed": completed_today,
-        "resumed": bool(completed_today),
+        "started": started_info,  # {"at", "from"} once Start route is pressed today
+        "caught_up": caught_up,  # times pushed to the current clock
+        "resumed": resumed,  # flowing from the last Done stop (vs the start)
         "resumed_from": completed_today[-1]["label"] if completed_today else None,
         "reversed": reverse,
         "stops": stops,

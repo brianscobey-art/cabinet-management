@@ -806,6 +806,79 @@ def plan(
                     reverse=reverse)
 
 
+class RouteStartIn(BaseModel):
+    worker_id: int | None = None
+    lat: float | None = Field(default=None, ge=-90, le=90)  # None = leaving from home
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    accuracy_m: float | None = None
+
+
+START_HOME_MILES = 0.3  # a start this close to home is "from home"
+START_MAX_ACCURACY_M = 800  # good enough to plan the first drive; worse = assume home
+
+
+def _route_worker(db: Session, worker_id: int | None) -> Worker | None:
+    from app.autobot import default_tech
+
+    if worker_id:
+        worker = db.get(Worker, worker_id)
+        if not worker:
+            raise HTTPException(404, "Worker not found")
+        return worker
+    return default_tech(db)
+
+
+@router.post("/autobot/route/start")
+def start_route(
+    payload: RouteStartIn,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    """Start route: stamp the real leave time (and place, if not home) so today's
+    plan re-times from here. Pressing it again restarts from the new time/place."""
+    from app.autobot import haversine_miles, route_start_for
+    from app.config import get_settings
+    from app.models import RouteStart
+
+    worker = _route_worker(db, payload.worker_id)
+    day = today_central()
+    lat, lon = payload.lat, payload.lon
+    if lat is None or lon is None or (
+        payload.accuracy_m is not None and payload.accuracy_m > START_MAX_ACCURACY_M
+    ):
+        lat = lon = None
+    else:
+        if worker and worker.lat is not None and worker.lon is not None:
+            home = (worker.lat, worker.lon)
+        else:
+            s = get_settings()
+            home = (s.autobot_depot_lat, s.autobot_depot_lon)
+        if haversine_miles(home, (lat, lon)) <= START_HOME_MILES:
+            lat = lon = None
+    rs = route_start_for(db, worker, day)
+    if rs is None:
+        rs = RouteStart(worker_id=worker.id if worker else None, day=day)
+        db.add(rs)
+    rs.started_at = datetime.now(timezone.utc)
+    rs.lat, rs.lon = lat, lon
+    rs.started_by = user.full_name
+    db.commit()
+    return {"day": day.isoformat(), "from": "here" if lat is not None else "home"}
+
+
+@router.delete("/autobot/route/start", status_code=status.HTTP_204_NO_CONTENT)
+def undo_route_start(
+    worker_id: int | None = None,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    """Undo an accidental Start route — today's plan goes back to the planned leave."""
+    from app.autobot import route_start_for
+
+    rs = route_start_for(db, _route_worker(db, worker_id), today_central())
+    if rs is not None:
+        db.delete(rs)
+        db.commit()
+
+
 @router.get("/autobot/forecast", dependencies=[Depends(autobot_access)])
 def forecast(
     start: date | None = None,

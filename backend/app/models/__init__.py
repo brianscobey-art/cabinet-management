@@ -22,7 +22,7 @@ from app.models.smartsheet import SmartsheetHistory, SmartsheetRow
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
 from app.models.user import Role, User
 from app.models.visit import RETURN_RESULTS, VISIT_RESULTS, VISIT_STATUSES, VISIT_TYPES, Visit
-from app.models.worker import DutyAssignment, Worker, WorkerTimeOff
+from app.models.worker import DutyAssignment, RouteStart, Worker, WorkerTimeOff
 
 __all__ = [
     "Account",
@@ -77,6 +77,7 @@ __all__ = [
     "RETURN_RESULTS", "VISIT_RESULTS", "VISIT_STATUSES",
     "VISIT_TYPES",
     "Visit",
+    "RouteStart",
     "Worker",
     "WorkerTimeOff",
 ]
