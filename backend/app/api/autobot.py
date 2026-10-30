@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth.deps import require_roles
 from app.autobot import (
     BLUE_TAPE_DAYS,
+    PHASE_CHECK_MIN_GAP_DAYS,
     DUTIES,
     WALK_TYPES,
     house_board,
@@ -872,6 +873,8 @@ def community_stop_detail(community_id: int, db: Session = Depends(get_db)):
             continue  # cabinets are in (12+) — nothing left to phase-check here
         if j.id in measured_ok_ids:
             continue  # measured complete & correct — done with phase checks
+        if cur and cur.noted_at and cur.noted_at.date() > today - timedelta(days=PHASE_CHECK_MIN_GAP_DAYS):
+            continue  # phase logged within the last week — not due for a check yet
         houses.append(HouseOut(
             job_id=j.id, job_code=j.job_code, lot_number=j.lot_number, address=j.address,
             plan=j.plan,

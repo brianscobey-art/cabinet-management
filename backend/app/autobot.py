@@ -54,7 +54,8 @@ REFERENCE_PO = 2500.0  # PO amount that equals the standard time
 PO_SCALE_MIN, PO_SCALE_MAX = 0.5, 3.0
 
 PHASE_CHECK_MIN_PER_HOUSE = 0.5  # 30 seconds a house (Brian's standard, 10/29/26)
-PHASE_CHECK_INTERVAL_DAYS = 10
+PHASE_CHECK_INTERVAL_DAYS = 10      # a community's check is due by day 10 ...
+PHASE_CHECK_MIN_GAP_DAYS = 7        # ... and can't show up before day 7 (Brian 10/30/26)
 PHASE_CHECK_PULL_FORWARD_DAYS = 2   # within N days of stale → pull forward if nearby
 PHASE_CHECK_MAX_DETOUR_MIN = 30     # "nearby" = adds at most this much drive
 
@@ -380,11 +381,15 @@ def _latest_phase_map(db: Session, job_ids: list[int]) -> dict[int, str]:
     }
 
 
-def _checkable_houses(db: Session, community_id: int) -> list[Job]:
+def _checkable_houses(db: Session, community_id: int, skip_recent: bool = False) -> list[Job]:
     """Tract houses still worth a phase check: active statuses, production builder
     (retail/custom catch-all 'communities' never sweep), and NOT yet in the
     finished tail — once a house's latest logged phase hits 12 - Cabinets
     Installed it leaves the sweep (Brian 10/29/26). No phase logged = still in.
+
+    skip_recent: also leave out houses whose phase was logged in the last
+    PHASE_CHECK_MIN_GAP_DAYS — a check is only due once it's a week old (Brian
+    10/30/26). Spawn/cancel keep the full count; the sweep itself uses this.
     """
     from sqlalchemy import func as _func
 
@@ -410,11 +415,15 @@ def _checkable_houses(db: Session, community_id: int) -> list[Job]:
         .group_by(PhaseUpdate.job_id)
         .subquery()
     )
-    finished_ids = {
-        pu.job_id
-        for pu in db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
-        if pu.phase in FINISHED_PHASES
-    }
+    latest_rows = db.query(PhaseUpdate).join(latest, PhaseUpdate.id == latest.c.max_id).all()
+    finished_ids = {pu.job_id for pu in latest_rows if pu.phase in FINISHED_PHASES}
+    recent_ids: set[int] = set()
+    if skip_recent:
+        cutoff = date.today() - timedelta(days=PHASE_CHECK_MIN_GAP_DAYS)
+        for pu in latest_rows:
+            at = pu.noted_at
+            if at is not None and (at.date() if hasattr(at, "date") else at) > cutoff:
+                recent_ids.add(pu.job_id)
     # Measured complete & correct = done with phase checks too (Brian 10/29/26):
     # the walker just stood in it and logged 4.1 on the way out.
     from app.models import FieldMeasure
@@ -425,7 +434,8 @@ def _checkable_houses(db: Session, community_id: int) -> list[Job]:
             FieldMeasure.complete_date.isnot(None), FieldMeasure.correct.is_(True),
         ).all()
     }
-    return [j for j in houses if j.id not in finished_ids and j.id not in measured_ids]
+    return [j for j in houses
+            if j.id not in finished_ids and j.id not in measured_ids and j.id not in recent_ids]
 
 
 def _active_house_count(db: Session, community_id: int) -> int:
@@ -444,7 +454,7 @@ def phase_check_metrics(db: Session, community_id: int) -> tuple[int, int, tuple
     nearest-neighbor walk over the pinned houses at residential speed. The stop
     itself anchors at the centroid of the pinned houses when we have them.
     """
-    houses = _checkable_houses(db, community_id)
+    houses = _checkable_houses(db, community_id, skip_recent=True)
     count = len(houses)
     pinned = [(j.lat, j.lon) for j in houses if j.lat is not None and j.lon is not None]
     # Outlier armor: a mis-geocoded house (wrong city entirely) must never turn
@@ -723,21 +733,22 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
             .order_by(Visit.completed_at.desc())
             .first()
         )
-        due = (
-            last_done.completed_at.date() + timedelta(days=PHASE_CHECK_INTERVAL_DAYS)
-            if last_done and last_done.completed_at
-            else today
-        )
-        # Once every 10 days (Brian 10/29/26): the next check can't schedule
-        # before the 10th day, then has a couple of days to catch a nearby trip.
-        add("phase_check", community_id=c.id, open_date=due,
-            close_date=due + timedelta(days=PHASE_CHECK_PULL_FORWARD_DAYS))
+        # Window (Brian 10/29-30/26): can't show up before 7 days since the last
+        # check, due by day 10 — so it rides a nearby trip from day 7 and is a
+        # must-go by day 10. Never checked = open and due now.
+        if last_done and last_done.completed_at:
+            last_day = last_done.completed_at.date()
+            add("phase_check", community_id=c.id,
+                open_date=last_day + timedelta(days=PHASE_CHECK_MIN_GAP_DAYS),
+                close_date=last_day + timedelta(days=PHASE_CHECK_INTERVAL_DAYS))
+        else:
+            add("phase_check", community_id=c.id, open_date=today, close_date=today)
 
-    # Self-heal: checks spawned before the fix had no open date, so they rode a
-    # route the day after the last check. Hold each until 10 days after it.
+    # Re-time waiting checks to the 7-to-10-day window (covers checks spawned
+    # under the older rules, idempotent). Hand-pinned days are left alone.
     for v in (db.query(Visit)
               .filter(Visit.visit_type == "phase_check", Visit.status == "pending",
-                      Visit.open_date.is_(None), Visit.community_id.isnot(None))
+                      Visit.scheduled_date.is_(None), Visit.community_id.isnot(None))
               .all()):
         last = (
             db.query(Visit.completed_at)
@@ -747,10 +758,9 @@ def generate_visits(db: Session, today: date, created_by: str | None = None) -> 
             .first()
         )
         if last and last[0]:
-            nxt = last[0].date() + timedelta(days=PHASE_CHECK_INTERVAL_DAYS)
-            if nxt > today:
-                v.open_date = nxt
-                v.close_date = nxt + timedelta(days=PHASE_CHECK_PULL_FORWARD_DAYS)
+            last_day = last[0].date()
+            v.open_date = last_day + timedelta(days=PHASE_CHECK_MIN_GAP_DAYS)
+            v.close_date = max(last_day + timedelta(days=PHASE_CHECK_INTERVAL_DAYS), v.open_date)
 
     db.commit()
     return created
@@ -1055,9 +1065,13 @@ def plan_day(
         if v.visit_type == "phase_check":
             houses, sweep_min, centroid = phase_check_metrics(db, v.community_id)
             if houses == 0:
-                # Every house moved past phase tracking — never send him to nothing.
+                # Never send him to nothing: either every house moved past phase
+                # tracking, or every one was checked within the last week.
+                recent_only = _active_house_count(db, v.community_id) > 0
                 skipped.append({"visit_id": v.id, "label": label, "visit_type": v.visit_type,
-                                "reason": "no houses left to phase-check — auto-cancels on next sync"})
+                                "reason": (f"every house was checked in the last {PHASE_CHECK_MIN_GAP_DAYS} days"
+                                           if recent_only else
+                                           "no houses left to phase-check — auto-cancels on next sync")})
                 continue
             if centroid is not None:
                 coords = centroid  # anchor the sweep where the houses actually are
