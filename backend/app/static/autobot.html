@@ -597,10 +597,6 @@ function routeHtml(plan, note) {
       <span>${plan.resumed ? "resume" : "leave"} <b>${plan.leave}</b> · back <b>${plan.back}</b></span>
       <span class="muted">drive times: ${plan.drive_source === "osrm" ? "real" : "estimated"}</span>
     </div>
-    ${(plan.completed || []).length ? `<ul class="done-today">${plan.completed.map((c) =>
-      `<li>✓ <span class="chip t-${slug(c.visit_type)}">${TYPE_LABELS[c.visit_type] || c.visit_type}</span>
-       ${esc(c.label)} <b>— ${({ rescheduled: "not ready", incomplete: "incomplete", issues: "measured, incorrect" })[c.result] || "done"} ${c.done_at}</b></li>`).join("")}
-      <li class="muted">Schedule below re-flowed from ${plan.leave}, leaving ${esc(plan.resumed_from || "")}.</li></ul>` : ""}
     <div class="layout">
       <ol class="stops">${stops || '<p class="muted">Nothing schedulable for ' + fmtDate(plan.day) + ".</p>"}</ol>
       ${mapSvg(plan)}
