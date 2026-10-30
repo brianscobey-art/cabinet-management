@@ -695,6 +695,11 @@ async function logPhase(jobId) {
       method: "POST", body: JSON.stringify({ phase: sel.value }),
     });
     msg.innerHTML = `<span class="ok-chip">logged ${fmtStamp(r.noted_at)}</span>`;
+    if (r.sweep_done) {
+      // Every house in this community is checked — the phase check closed itself.
+      msg.innerHTML += ` <span class="ok-chip">✓ all houses checked — phase check done</span>`;
+      setTimeout(renderRoute, 1500);
+    }
   } catch (ex) { msg.textContent = ex.message; }
 }
 

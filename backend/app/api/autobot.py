@@ -919,10 +919,35 @@ def log_phase(
         raise HTTPException(404, "Job not found")
     if payload.phase not in PHASE_CODES:
         raise HTTPException(422, f"Unknown phase '{payload.phase}'")
+    from app.autobot import _checkable_houses
+
+    job = db.get(Job, job_id)
     update = PhaseUpdate(
         job_id=job_id, phase=payload.phase, source="autobot", noted_by=user.full_name
     )
     db.add(update)
+    db.flush()
+
+    # Last house logged = the sweep is done (Brian 10/30/26): close this
+    # community's phase check so it leaves the route and the 7-day clock starts.
+    # Only the phase check — any measure or walk at the same stop stays open.
+    sweep_done_id = None
+    if job.community_id and _active_house_count(db, job.community_id) > 0 \
+            and not _checkable_houses(db, job.community_id, skip_recent=True):
+        sweep = (
+            db.query(Visit)
+            .filter(Visit.visit_type == "phase_check", Visit.community_id == job.community_id,
+                    Visit.status == "pending")
+            .order_by(Visit.close_date.is_(None), Visit.close_date)
+            .first()
+        )
+        if sweep:
+            sweep.status = "done"
+            sweep.result = "complete"
+            sweep.completed_at = datetime.now(timezone.utc)
+            sweep.completed_by = user.full_name
+            sweep_done_id = sweep.id
+
     db.commit()
     db.refresh(update)
     return {
@@ -931,6 +956,7 @@ def log_phase(
         "phase_label": PHASE_LABELS.get(update.phase),
         "noted_by": update.noted_by,
         "noted_at": update.noted_at,
+        "sweep_done": sweep_done_id,
     }
 
 
