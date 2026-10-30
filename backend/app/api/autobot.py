@@ -477,8 +477,15 @@ class MeasureResultIn(BaseModel):
     completed_on: date | None = None               # blank = today
 
 
-MEASURE_OUTCOMES = ("correct", "incorrect", "incomplete")
+MEASURE_OUTCOMES = ("correct", "incorrect", "incomplete", "not_ready")
 RECHECK_OPEN_DAYS, RECHECK_CLOSE_DAYS = 2, 4
+NOT_READY_DAYS = 2  # house wasn't ready to measure: back on the schedule 2 days later
+
+
+def _workday_on_or_after(d: date) -> date:
+    while d.weekday() >= 5:  # Sat/Sun → Monday; routes never run weekends
+        d += timedelta(days=1)
+    return d
 
 
 @router.post("/autobot/visits/{visit_id}/field-measure", response_model=list[VisitOut])
@@ -497,6 +504,8 @@ def finish_field_measure(
     - incorrect: measured, but something's wrong. A Remeasure is scheduled in
       2-4 days and carries these notes.
     - incomplete: couldn't finish. A recheck is scheduled in 2-4 days.
+    - not_ready: the house wasn't ready to measure. Nothing is written to the
+      field-measure record; the measure is pinned 2 days out (next workday).
 
     Returns [this visit, follow-up if any]."""
     from app.api.fieldmeasure import get_or_create
@@ -523,11 +532,13 @@ def finish_field_measure(
         fm.correct, fm.correct_by, fm.correct_at = good, (user.full_name if good else None), (now if good else None)
         fm.incorrect, fm.incorrect_by, fm.incorrect_at = (not good), (None if good else user.full_name), (None if good else now)
     if notes:
-        db.add(FieldMeasureNote(job_id=visit.job_id, body=notes, author=user.full_name))
+        body = f"Not ready: {notes}" if payload.outcome == "not_ready" else notes
+        db.add(FieldMeasureNote(job_id=visit.job_id, body=body, author=user.full_name))
 
     # Close this trip. Today's finish keeps the real clock time (waterfall).
     visit.status = "done"
-    visit.result = {"correct": "complete", "incorrect": "issues", "incomplete": "incomplete"}[payload.outcome]
+    visit.result = {"correct": "complete", "incorrect": "issues", "incomplete": "incomplete",
+                    "not_ready": "rescheduled"}[payload.outcome]
     if notes:
         visit.result_notes = notes
     visit.completed_at = (
@@ -543,13 +554,21 @@ def finish_field_measure(
             db.add(PhaseUpdate(job_id=visit.job_id, phase="4.1", source="autobot",
                                noted_by=f"{user.full_name} — measure complete & correct"))
     else:
+        if payload.outcome == "not_ready":
+            back = _workday_on_or_after(day + timedelta(days=NOT_READY_DAYS))
+            f_open = f_close = f_pin = back
+            f_notes = f"not ready {day.month}/{day.day}" + (f" — {notes}" if notes else "")
+        else:
+            f_open = day + timedelta(days=RECHECK_OPEN_DAYS)
+            f_close = day + timedelta(days=RECHECK_CLOSE_DAYS)
+            f_pin = None
+            f_notes = notes or visit.notes
         follow = Visit(
             visit_type="field_measure", job_id=visit.job_id, community_id=visit.community_id,
             assigned_to=visit.assigned_to, lat=visit.lat, lon=visit.lon,
-            open_date=day + timedelta(days=RECHECK_OPEN_DAYS),
-            close_date=day + timedelta(days=RECHECK_CLOSE_DAYS),
+            open_date=f_open, close_date=f_close, scheduled_date=f_pin,
             priority=visit.priority, status="pending",
-            notes=notes or visit.notes,
+            notes=f_notes,
             parent_visit_id=visit.id, trip=(visit.trip or 1) + 1,
             created_by=user.full_name,
         )

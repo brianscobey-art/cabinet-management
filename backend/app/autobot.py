@@ -911,6 +911,7 @@ def plan_day(
             completed_today.append({
                 "visit_id": v.id,
                 "visit_type": v.visit_type,
+                "result": v.result,
                 "label": visit_label(v),
                 "done_min": local.hour * 60 + local.minute,
                 "done_at": _fmt(local.hour * 60 + local.minute),

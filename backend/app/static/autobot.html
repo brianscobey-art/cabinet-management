@@ -562,7 +562,9 @@ function routeHtml(plan, note) {
           title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
         <span class="stop-open">▸ tap for details</span>
         ${s.visit_type === "field_measure" && s.job_id
-          ? `<button onclick="openMeasure(${s.visit_id}, 'finish-${s.visit_id}')">✓ Finish measure</button>`
+          ? `<button class="ghost" onclick="event.stopPropagation(); notReady(${s.visit_id}, this)"
+               title="House isn't ready to measure — back on the schedule in 2 days">⏸ Not ready</button>
+             <button onclick="openMeasure(${s.visit_id}, 'finish-${s.visit_id}')">✓ Finish measure</button>`
           : WALK_TYPES.includes(s.visit_type)
           ? `<button onclick="openFinish(${s.visit_id}, '${s.visit_type}', 'finish-${s.visit_id}')">✓ Finish</button>`
           : `<button onclick="doneVisit(${s.visit_id})">✓ Done</button>`}
@@ -597,7 +599,7 @@ function routeHtml(plan, note) {
     </div>
     ${(plan.completed || []).length ? `<ul class="done-today">${plan.completed.map((c) =>
       `<li>✓ <span class="chip t-${slug(c.visit_type)}">${TYPE_LABELS[c.visit_type] || c.visit_type}</span>
-       ${esc(c.label)} <b>— done ${c.done_at}</b></li>`).join("")}
+       ${esc(c.label)} <b>— ${({ rescheduled: "not ready", incomplete: "incomplete", issues: "measured, incorrect" })[c.result] || "done"} ${c.done_at}</b></li>`).join("")}
       <li class="muted">Schedule below re-flowed from ${plan.leave}, leaving ${esc(plan.resumed_from || "")}.</li></ul>` : ""}
     <div class="layout">
       <ol class="stops">${stops || '<p class="muted">Nothing schedulable for ' + fmtDate(plan.day) + ".</p>"}</ol>
@@ -815,7 +817,25 @@ const MEASURE_CHOICES = [
   ["correct", "✓ Complete & correct", "Off the route, phase moves to 4.1 Pre Walk Complete"],
   ["incorrect", "⚠ Complete — incorrect", "Remeasure scheduled in 2-4 days, carrying your notes"],
   ["incomplete", "↻ Incomplete", "Recheck scheduled in 2-4 days"],
+  ["not_ready", "⏸ Not ready", "House isn't ready to measure — back on the schedule in 2 days"],
 ];
+
+// One tap from the stop: the house wasn't ready, put it back on in 2 days.
+async function notReady(visitId, btn) {
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    const out = await api("/autobot/visits/" + visitId + "/field-measure", { method: "POST",
+      body: JSON.stringify({ outcome: "not_ready" }) });
+    const back = out[1] && out[1].scheduled_date;
+    btn.textContent = back ? "Back " + fmtDate(back) : "✓";
+    setTimeout(renderRoute, 900);
+  } catch (ex) {
+    btn.disabled = false;
+    btn.textContent = "⏸ Not ready";
+    alert(ex.message);
+  }
+}
 function openMeasure(visitId, slotId) {
   const slot = document.getElementById(slotId);
   if (!slot) return;
