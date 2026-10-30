@@ -161,6 +161,12 @@ export interface Job {
   po_amount?: number | null;
   cabinet_po?: string | null;
   delivery_instructions?: string | null;
+  // House pin, shared with Autobot (where routing sends people).
+  lat?: number | null;
+  lon?: number | null;
+  pin_source?: "google" | "manual" | null;
+  pin_at?: string | null;
+  pin_by?: string | null;
 }
 
 /** Tracker fields for the job page's Jobsite card (GET /jobs/{id}/site). */
@@ -484,6 +490,13 @@ export const createJob = (data: Record<string, unknown>) =>
   api<Job>("/jobs", { method: "POST", body: JSON.stringify(data) });
 export const updateJob = (id: number, data: Record<string, unknown>) =>
   api<Job>(`/jobs/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+
+/** Pin here: move the house pin to where this phone is (shared with Autobot). */
+export const pinJobHere = (id: number, lat: number, lon: number, accuracy_m: number) =>
+  api<{ moved_miles: number | null; pin_by: string; pin_at: string }>(`/jobs/${id}/pin`, {
+    method: "POST",
+    body: JSON.stringify({ lat, lon, accuracy_m }),
+  });
 
 export interface QuoteLine {
   id: number;

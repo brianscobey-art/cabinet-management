@@ -53,6 +53,14 @@ class Job(Base):
     # House pin for Autobot routing — beats the community pin when set.
     lat: Mapped[float | None] = mapped_column(Float, default=None)
     lon: Mapped[float | None] = mapped_column(Float, default=None)
+    # Where the pin came from: "google" (address lookup) or "manual" (someone
+    # stood at the house and tapped Pin here — the lookup never overwrites it).
+    # pin_address = the address the pin was made for; when job.address stops
+    # matching it (an edit or a feed), the house gets re-pinned (Brian 10/30/26).
+    pin_source: Mapped[str | None] = mapped_column(String(12), default=None)
+    pin_address: Mapped[str | None] = mapped_column(String(500), default=None)
+    pin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    pin_by: Mapped[str | None] = mapped_column(String(255), default=None)
     job_type: Mapped[JobType] = mapped_column(Enum(JobType, native_enum=False, length=16))
     plan: Mapped[str | None] = mapped_column(String(100), default=None)  # house plan, e.g. "DRH1 Madison STD"
     status: Mapped[JobStatus] = mapped_column(

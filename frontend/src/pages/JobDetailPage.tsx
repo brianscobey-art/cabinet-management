@@ -11,6 +11,7 @@ import {
   getJob,
   getJobSite,
   listKsrs,
+  pinJobHere,
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
@@ -300,16 +301,22 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
 function JobsiteCard({ job, canWrite, onSaved }: { job: JobDetail; canWrite: boolean; onSaved: () => void }) {
   const [site, setSite] = useState<JobSite | null>(null);
   const [delivery, setDelivery] = useState(job.delivery_instructions ?? "");
+  const [address, setAddress] = useState(job.address);
+  const [pinMsg, setPinMsg] = useState("");
 
   useEffect(() => {
     getJobSite(job.id).then(setSite).catch(() => setSite({ in_tracker: false }));
   }, [job.id]);
   useEffect(() => setDelivery(job.delivery_instructions ?? ""), [job.delivery_instructions]);
+  useEffect(() => setAddress(job.address), [job.address]);
 
   const cityLine = [site?.city, site?.state].filter(Boolean).join(", ");
   const mapUrl =
     "https://www.google.com/maps/search/?api=1&query=" +
     encodeURIComponent([job.address, cityLine].filter(Boolean).join(", "));
+  // The pin Autobot routes to — the exact spot, not the address lookup.
+  const pinUrl =
+    job.lat != null ? `https://www.google.com/maps/search/?api=1&query=${job.lat},${job.lon}` : null;
 
   async function saveDelivery() {
     const v = delivery.trim();
@@ -318,15 +325,90 @@ function JobsiteCard({ job, canWrite, onSaved }: { job: JobDetail; canWrite: boo
     onSaved();
   }
 
+  // A corrected address re-pins the house on the server, so Autobot follows it.
+  async function saveAddress() {
+    const v = address.trim();
+    if (!v || v === job.address) return setAddress(job.address);
+    await updateJob(job.id, { address: v });
+    setPinMsg("Address saved — the house pin follows it (Autobot uses the new spot).");
+    onSaved();
+  }
+
+  // Pin here: standing at the house, move its pin to this phone's GPS.
+  function pinHere() {
+    if (!navigator.geolocation) return setPinMsg("This device can't share its location.");
+    setPinMsg("Finding you…");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+        if (accuracy > 50) {
+          return setPinMsg(`GPS is only good to about ${Math.round(accuracy)} m — step outside and try again.`);
+        }
+        if (!window.confirm("Move this house's pin to where you are standing? Autobot will route here too.")) {
+          return setPinMsg("");
+        }
+        try {
+          const r = await pinJobHere(job.id, lat, lon, accuracy);
+          setPinMsg(
+            r.moved_miles == null
+              ? "Pinned."
+              : `Pinned — moved ${r.moved_miles < 0.1 ? Math.round(r.moved_miles * 5280) + " ft" : r.moved_miles + " mi"}.`,
+          );
+          onSaved();
+        } catch (e) {
+          setPinMsg(e instanceof Error ? e.message : "Couldn't save the pin.");
+        }
+      },
+      (err) =>
+        setPinMsg(err.code === 1 ? "Location is blocked for this site — allow it to use Pin here." : "Couldn't get a GPS fix."),
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    );
+  }
+
   return (
     <div className="card">
       <h3>Jobsite</h3>
       <dl>
         <dt>Site address</dt>
         <dd>
-          {job.address}
+          {canWrite ? (
+            <input
+              className="site-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              onBlur={saveAddress}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+          ) : (
+            job.address
+          )}
           {cityLine && <div>{cityLine}</div>}
           <a href={mapUrl} target="_blank" rel="noreferrer">Map ↗</a>
+        </dd>
+        <dt>House pin</dt>
+        <dd>
+          {pinUrl ? (
+            <a href={pinUrl} target="_blank" rel="noreferrer">
+              {job.pin_source === "manual" ? "Set at the house" : "From the address"} ↗
+            </a>
+          ) : (
+            "None yet (uses the community)"
+          )}
+          {job.pin_source === "manual" && job.pin_by && (
+            <div className="muted">
+              {job.pin_by}
+              {job.pin_at ? ` · ${fmtDate(job.pin_at)}` : ""}
+            </div>
+          )}
+          {canWrite && (
+            <div>
+              <button type="button" className="ghost" onClick={pinHere}
+                title="Standing at the house? Move its pin to where you are — Autobot routes here too">
+                📍 Pin here
+              </button>
+            </div>
+          )}
+          {pinMsg && <div className="muted">{pinMsg}</div>}
         </dd>
         <dt>Community / Lot</dt>
         <dd>

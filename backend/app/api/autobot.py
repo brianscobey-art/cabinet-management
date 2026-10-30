@@ -983,6 +983,34 @@ def log_phase(
     }
 
 
+class PinIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    accuracy_m: float | None = None  # what the phone reported
+
+
+PIN_MAX_ACCURACY_M = 75  # a fix worse than this isn't good enough to move a house
+
+
+@router.post("/autobot/jobs/{job_id}/pin")
+def pin_house_here(
+    job_id: int, payload: PinIn,
+    db: Session = Depends(get_db), user: User = Depends(autobot_do),
+):
+    """Pin here: the house is where the phone is. Same record CabinetTron uses."""
+    from app.autobot import set_job_pin
+
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if payload.accuracy_m is not None and payload.accuracy_m > PIN_MAX_ACCURACY_M:
+        raise HTTPException(422, f"GPS is only good to {round(payload.accuracy_m)} m — step outside and try again")
+    moved = set_job_pin(db, job, payload.lat, payload.lon, user.full_name)
+    db.commit()
+    return {"job_id": job.id, "lat": job.lat, "lon": job.lon, "pin_by": job.pin_by,
+            "pin_at": job.pin_at, "moved_miles": round(moved, 2) if moved is not None else None}
+
+
 @router.get("/autobot/geocode", dependencies=[Depends(autobot_access)])
 def geocode(q: str):
     """Address → pin. Google when GOOGLE_MAPS_API_KEY is set, OSM otherwise."""

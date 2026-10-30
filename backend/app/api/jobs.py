@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import NATIONAL_BUILDER_PREFIXES, read_access, write_access
 from app.api.schemas import JobCreate, JobDetail, JobListItem, JobOut, JobUpdate
+from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import Account, Community, Job, JobStatus, PhaseUpdate
+from app.models import Account, Community, Job, JobStatus, PhaseUpdate, Role, User
 from app.phases import PHASE_LABELS
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -240,8 +242,43 @@ def update_job(job_id: int, payload: JobUpdate, db: Session = Depends(get_db)):
 
         name, phone, email = ksr_contact(db, updates["ksr"])
         updates.update(ksr=name, sales_contact_name=name, sales_contact_phone=phone, sales_contact_email=email)
+    old_address = job.address
     for key, value in updates.items():
         setattr(job, key, value)
+    # A corrected address moves the house pin too, so Autobot routes to the
+    # right place on its next load (Brian 10/30/26).
+    if "address" in updates and (job.address or "") != (old_address or ""):
+        from app.autobot import repin_for_address
+
+        try:
+            repin_for_address(db, job, by="address edit")
+        except Exception:  # lookup down — the 15-minute sync retries it
+            pass
     db.commit()
     db.refresh(job)
     return job
+
+
+class PinHereIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    accuracy_m: float | None = None
+
+
+pin_write = require_roles(Role.sales, Role.field, Role.installer_coordinator, Role.admin)
+
+
+@router.post("/{job_id}/pin")
+def pin_job_here(job_id: int, payload: PinHereIn, db: Session = Depends(get_db),
+                 user: User = Depends(pin_write)):
+    """Pin here from the job page: the house is where this phone is. The same
+    pin Autobot routes to (one record)."""
+    from app.autobot import set_job_pin
+
+    job = get_job_or_404(job_id, db)
+    if payload.accuracy_m is not None and payload.accuracy_m > 75:
+        raise HTTPException(422, f"GPS is only good to {round(payload.accuracy_m)} m — step outside and try again")
+    moved = set_job_pin(db, job, payload.lat, payload.lon, user.full_name)
+    db.commit()
+    return {"job_id": job.id, "lat": job.lat, "lon": job.lon, "pin_by": job.pin_by,
+            "pin_at": job.pin_at, "moved_miles": round(moved, 2) if moved is not None else None}

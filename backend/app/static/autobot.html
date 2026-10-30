@@ -560,6 +560,8 @@ function routeHtml(plan, note) {
         <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}" target="_blank" rel="noreferrer">navigate</a>
         <button class="ghost car-btn" onclick="sendToCar(${s.lat}, ${s.lon}, '${esc(s.label).replace(/'/g, "\\'")}')"
           title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
+        ${s.job_id ? `<button class="ghost car-btn" onclick="event.stopPropagation(); pinHere(${s.job_id}, ${s.lat}, ${s.lon}, this)"
+          title="Standing at the house? Move its pin to where you are — fixes the route in Autobot and CabinetTron">📍 Pin here</button>` : ""}
         <span class="stop-open">▸ tap for details</span>
         ${s.visit_type === "field_measure" && s.job_id && s.remeasure
           ? `<button class="ghost" style="color:#9c3b1e;border-color:#9c3b1e"
@@ -707,6 +709,43 @@ async function logPhase(jobId) {
       setTimeout(renderRoute, 1500);
     }
   } catch (ex) { msg.textContent = ex.message; }
+}
+
+// Pin here: the house is where the phone is. One pin, shared with CabinetTron.
+function milesBetween(a, b) {
+  const R = 3958.8, rad = (d) => d * Math.PI / 180;
+  const h = Math.sin(rad(b[0] - a[0]) / 2) ** 2
+    + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(rad(b[1] - a[1]) / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function pinHere(jobId, oldLat, oldLon, btn) {
+  if (!navigator.geolocation) { alert("This device can't share its location."); return; }
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = "📍 finding you…";
+  const reset = () => { btn.disabled = false; btn.textContent = was; };
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+    if (accuracy > 50) {
+      reset();
+      alert(`GPS is only good to about ${Math.round(accuracy)} m right now — step outside or wait a few seconds and try again.`);
+      return;
+    }
+    const moved = oldLat != null ? milesBetween([oldLat, oldLon], [lat, lon]) : null;
+    const how = moved == null ? "set this house's pin"
+      : moved < 0.01 ? "the pin is already here (less than 50 ft off) — save it as checked"
+      : `move this house's pin ${moved < 0.1 ? Math.round(moved * 5280) + " ft" : moved.toFixed(2) + " mi"}`;
+    if (!confirm(`Pin here will ${how}.\n\nThe new pin is used by Autobot and CabinetTron. Save it?`)) { reset(); return; }
+    try {
+      await api("/autobot/jobs/" + jobId + "/pin", { method: "POST",
+        body: JSON.stringify({ lat, lon, accuracy_m: accuracy }) });
+      btn.textContent = "📍 pinned ✓";
+      setTimeout(renderRoute, 1200);
+    } catch (ex) { reset(); alert(ex.message); }
+  }, (err) => {
+    reset();
+    alert(err.code === 1 ? "Location is turned off for Autobot — allow it in the phone's settings to use Pin here."
+      : "Couldn't get a GPS fix — try again in a moment.");
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
 }
 
 async function sendToCar(lat, lon, label) {

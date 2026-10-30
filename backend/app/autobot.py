@@ -224,7 +224,7 @@ def _http_json(url: str) -> dict | list:
 
 # Addresses we already asked Google about this process — don't burn quota
 # re-asking every 10-minute sync for lots it can't find (TBD addresses etc).
-_GEOCODE_TRIED: set[int] = set()
+_GEOCODE_TRIED: set[tuple[int, str]] = set()  # (job id, address) already asked
 
 
 # A house pin farther than this from its community pin is a wrong-city geocode
@@ -232,15 +232,82 @@ _GEOCODE_TRIED: set[int] = set()
 PIN_SANITY_MILES = 40.0
 
 
+def _lookup_house(j: Job) -> tuple[float, float] | None:
+    """Google (or OSM) rooftop for a job's address: exact hits only, the
+    community's market appended when the address has no city, and anything
+    implausibly far from the community pin rejected."""
+    addr = (j.address or "").strip()
+    if len(addr) < 8 or addr.upper().startswith("TBD") or addr.lower() == "retail":
+        return None
+    # Feed addresses often lack the city — anchor them to the community's market.
+    if "," not in addr and j.community and (j.community.market or "").strip():
+        addr = f"{addr}, {j.community.market.strip()}"
+    found = geocode_address(addr)
+    if not found or found["level"] != "exact":
+        return None
+    if (
+        j.community
+        and j.community.lat is not None
+        and haversine_miles((found["lat"], found["lon"]),
+                            (j.community.lat, j.community.lon)) > PIN_SANITY_MILES
+    ):
+        return None  # exact rooftop, wrong town — worse than the community fallback
+    return found["lat"], found["lon"]
+
+
+HAND_PIN_KEEP_MILES = 0.25  # an address fix this close to a hand pin = same house, keep the pin
+
+
+def set_job_pin(db: Session, job: Job, lat: float, lon: float, by: str) -> float | None:
+    """Pin a house where someone is standing (Pin here, from Autobot or the
+    CabinetTron job page — one record, so both apps see it). Hand pins are
+    never overwritten by the address lookup. Returns how far it moved, miles."""
+    moved = (haversine_miles((job.lat, job.lon), (lat, lon))
+             if job.lat is not None and job.lon is not None else None)
+    job.lat, job.lon = lat, lon
+    job.pin_source = "manual"
+    job.pin_address = job.address
+    job.pin_at = datetime.now(timezone.utc)
+    job.pin_by = by
+    return moved
+
+
+def repin_for_address(db: Session, job: Job, by: str | None = None) -> str:
+    """The address changed (an edit in CabinetTron or a feed) since the pin was
+    made: move the pin to the new address. A hand pin within a quarter mile of
+    the new address stays (that was a typo fix, and the hand pin is the better
+    one). No exact hit: a Google pin is cleared so the house sits with its
+    neighbors until the lookup works; a hand pin is kept."""
+    if (job.address or "") == (job.pin_address or "") and job.lat is not None:
+        return "unchanged"
+    found = _lookup_house(job)
+    if job.pin_source == "manual" and job.lat is not None:
+        if found is None or haversine_miles(found, (job.lat, job.lon)) <= HAND_PIN_KEEP_MILES:
+            job.pin_address = job.address
+            return "kept hand pin"
+    if found is None:
+        if job.pin_source != "manual":
+            job.lat = job.lon = None
+            job.pin_source = None
+        job.pin_address = job.address
+        return "no exact match — sits with its neighbors"
+    job.lat, job.lon = found
+    job.pin_source = "google"
+    job.pin_address = job.address
+    job.pin_at = datetime.now(timezone.utc)
+    job.pin_by = by
+    return "moved to the new address"
+
+
 def geocode_missing_job_pins(db: Session, limit: int = 25) -> int:
     """Give active jobs their own rooftop pin so routing goes to the house, not
-    the community's front entrance. Only exact hits are stored, the community's
-    market is appended when the address has no city of its own, and any result
-    implausibly far from the community pin is rejected."""
+    the community's front entrance — and re-pin any house whose address has
+    changed since its pin was made (an address fix in CabinetTron or a feed)."""
     jobs = (
         db.query(Job)
         .options(joinedload(Job.community))
-        .filter(Job.lat.is_(None), Job.status.in_(TRACK_TO_BLUE_STATUSES))
+        .filter(Job.status.in_(TRACK_TO_BLUE_STATUSES),
+                Job.lat.is_(None) | (Job.pin_address.isnot(None) & (Job.address != Job.pin_address)))
         .order_by(Job.id.desc())
         .all()
     )
@@ -248,29 +315,22 @@ def geocode_missing_job_pins(db: Session, limit: int = 25) -> int:
     for j in jobs:
         if pinned >= limit:
             break
-        if j.id in _GEOCODE_TRIED:
+        key = (j.id, j.address)
+        if key in _GEOCODE_TRIED:
             continue
-        _GEOCODE_TRIED.add(j.id)
-        addr = (j.address or "").strip()
-        if len(addr) < 8 or addr.upper().startswith("TBD") or addr.lower() == "retail":
+        _GEOCODE_TRIED.add(key)
+        if j.lat is not None:  # address changed under an existing pin
+            if repin_for_address(db, j, by="address change") == "moved to the new address":
+                pinned += 1
             continue
-        # Feed addresses often lack the city — anchor them to the community's market.
-        if "," not in addr and j.community and (j.community.market or "").strip():
-            addr = f"{addr}, {j.community.market.strip()}"
-        found = geocode_address(addr)
-        if not found or found["level"] != "exact":
+        found = _lookup_house(j)
+        if found is None:
             continue
-        if (
-            j.community
-            and j.community.lat is not None
-            and haversine_miles((found["lat"], found["lon"]),
-                                (j.community.lat, j.community.lon)) > PIN_SANITY_MILES
-        ):
-            continue  # exact rooftop, wrong town — worse than the community fallback
-        j.lat, j.lon = found["lat"], found["lon"]
+        j.lat, j.lon = found
+        j.pin_source, j.pin_address = "google", j.address
+        j.pin_at = datetime.now(timezone.utc)
         pinned += 1
-    if pinned:
-        db.commit()
+    db.commit()
     return pinned
 
 

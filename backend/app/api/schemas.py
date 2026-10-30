@@ -210,6 +210,12 @@ class JobOut(BaseModel):
     po_amount: float | None = None
     cabinet_po: str | None = None
     delivery_instructions: str | None = None
+    # House pin (shared with Autobot): where routing sends people.
+    lat: float | None = None
+    lon: float | None = None
+    pin_source: str | None = None   # google | manual
+    pin_at: datetime | None = None
+    pin_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
