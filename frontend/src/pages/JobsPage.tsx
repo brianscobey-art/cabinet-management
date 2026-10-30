@@ -114,7 +114,7 @@ function savedNav(): Partial<Record<string, string | boolean>> {
 // phase on falls back to its status: installed onward (2.1-Inst, punch, blue
 // tape, EPO...) is close-out, so a 4.0-Punch house doesn't sit in Construction.
 const CLOSEOUT_PHASES = new Set(["12", "13", "14", "15", "16"]);
-const CLOSEOUT_STATUSES = new Set(["2.1-Inst", "3.0-Nd QW", "3.1-Parts", "4.0-Punch", "4.1-Blue", "5.0-EPO"]);
+const CLOSEOUT_STATUSES = new Set(["2.1-Inst", "3.0-Nd QW", "3.1-Parts", "4.0-Punch", "4.1-Blue", "5.0-EPO", "7.0-War"]);
 const isCloseout = (j: { phase?: string | null; status: string }) =>
   j.phase ? CLOSEOUT_PHASES.has(j.phase) : CLOSEOUT_STATUSES.has(j.status);
 type PhaseGroup = "all" | "construction" | "closeout";
