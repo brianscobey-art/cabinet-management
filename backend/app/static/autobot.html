@@ -175,6 +175,11 @@
   .skipped { margin-top: 1.1rem; }
   .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #e2e9e8; list-style: none; }
   .skipped ul { padding: 0; margin: 0.4rem 0 0; }
+  .measure-choices { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
+  .measure-choice { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.55rem 0.7rem;
+    border: 1px solid #d5e4e0; border-radius: 10px; cursor: pointer; }
+  .measure-choice:has(input:checked) { border-color: #125952; background: #eef5f3; }
+  .measure-choice input { margin-top: 0.25rem; }
   .done-today { padding: 0.5rem 0.9rem; margin: 0.6rem 0 0; background: #eef5f3; border: 1px solid #d5e4e0; border-radius: 10px; }
   .done-today li { list-style: none; padding: 0.22rem 0; color: #3c544e; }
   .done-today li b { color: #125952; }
@@ -556,7 +561,9 @@ function routeHtml(plan, note) {
         <button class="ghost car-btn" onclick="sendToCar(${s.lat}, ${s.lon}, '${esc(s.label).replace(/'/g, "\\'")}')"
           title="Opens your phone's share sheet — pick the Tesla app and the car starts navigating here">🚘 Send to car</button>
         <span class="stop-open">▸ tap for details</span>
-        ${WALK_TYPES.includes(s.visit_type)
+        ${s.visit_type === "field_measure" && s.job_id
+          ? `<button onclick="openMeasure(${s.visit_id}, 'finish-${s.visit_id}')">✓ Finish measure</button>`
+          : WALK_TYPES.includes(s.visit_type)
           ? `<button onclick="openFinish(${s.visit_id}, '${s.visit_type}', 'finish-${s.visit_id}')">✓ Finish</button>`
           : `<button onclick="doneVisit(${s.visit_id})">✓ Done</button>`}
       </div>
@@ -800,6 +807,52 @@ function openFinish(visitId, visitType, slotId, after) {
     </form>`;
   slot.dataset.after = after ? "board" : "route";
   slot.dataset.vtype = visitType;
+}
+
+// The field-measure form: how it went, notes, done. Saves to CabinetTron's
+// field-measure record (same one the job page shows).
+const MEASURE_CHOICES = [
+  ["correct", "✓ Complete & correct", "Off the route, phase moves to 4.1 Pre Walk Complete"],
+  ["incorrect", "⚠ Complete — incorrect", "Remeasure scheduled in 2-4 days, carrying your notes"],
+  ["incomplete", "↻ Incomplete", "Recheck scheduled in 2-4 days"],
+];
+function openMeasure(visitId, slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  if (slot.innerHTML) { slot.innerHTML = ""; return; }
+  slot.innerHTML = `
+    <form class="finish" onsubmit="return submitMeasure(event, ${visitId}, '${slotId}')" onclick="event.stopPropagation()">
+      <div class="measure-choices">
+        ${MEASURE_CHOICES.map(([v, l, help]) => `
+          <label class="measure-choice"><input type="radio" name="mo-${visitId}" value="${v}" />
+            <span><b>${l}</b><br><span class="muted">${help}</span></span></label>`).join("")}
+      </div>
+      <textarea id="mnotes-${visitId}" placeholder="Notes — what's wrong, what's left, anything the next trip needs to know"></textarea>
+      <div class="row">
+        <label>done on <input type="date" id="mon-${visitId}" value="${todayIso()}" /></label>
+        <button type="submit">Save</button>
+        <button type="button" class="ghost" onclick="document.getElementById('${slotId}').innerHTML=''">Cancel</button>
+        <span id="merr-${visitId}" class="error"></span>
+      </div>
+    </form>`;
+}
+
+async function submitMeasure(e, visitId, slotId) {
+  e.preventDefault();
+  const pick = document.querySelector(`input[name="mo-${visitId}"]:checked`);
+  const err = document.getElementById("merr-" + visitId);
+  if (!pick) { err.textContent = "Pick how it went"; return false; }
+  const notes = document.getElementById("mnotes-" + visitId).value.trim();
+  if (pick.value === "incorrect" && !notes) { err.textContent = "Say what's incorrect — the remeasure carries it"; return false; }
+  try {
+    await api("/autobot/visits/" + visitId + "/field-measure", { method: "POST", body: JSON.stringify({
+      outcome: pick.value, notes: notes || null,
+      completed_on: document.getElementById("mon-" + visitId).value || null,
+    })});
+    document.getElementById(slotId).innerHTML = "";
+    renderRoute();
+  } catch (ex) { err.textContent = ex.message; }
+  return false;
 }
 
 async function submitFinish(e, visitId, slotId) {

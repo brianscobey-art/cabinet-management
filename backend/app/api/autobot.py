@@ -470,6 +470,99 @@ def complete_visit(
     return [_out(db, v, date.today()) for v in rows]
 
 
+class MeasureResultIn(BaseModel):
+    """The field-measure form on an Autobot stop."""
+    outcome: str                                   # correct | incorrect | incomplete
+    notes: str | None = Field(default=None, max_length=2000)
+    completed_on: date | None = None               # blank = today
+
+
+MEASURE_OUTCOMES = ("correct", "incorrect", "incomplete")
+RECHECK_OPEN_DAYS, RECHECK_CLOSE_DAYS = 2, 4
+
+
+@router.post("/autobot/visits/{visit_id}/field-measure", response_model=list[VisitOut])
+def finish_field_measure(
+    visit_id: int,
+    payload: MeasureResultIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(autobot_do),
+):
+    """Fill out a field measure from the stop (Brian 10/30/26). Writes the same
+    field-measure record CabinetTron's job page shows (completion date, correct
+    / incorrect stamped with who + when, dated notes) and closes the visit:
+
+    - correct: measured complete & correct. Off the route, phase moves to
+      4.1 Pre Walk Complete, and the house leaves phase checks.
+    - incorrect: measured, but something's wrong. A Remeasure is scheduled in
+      2-4 days and carries these notes.
+    - incomplete: couldn't finish. A recheck is scheduled in 2-4 days.
+
+    Returns [this visit, follow-up if any]."""
+    from app.api.fieldmeasure import get_or_create
+    from app.autobot import _latest_phase_map, _phase_num
+    from app.models import FieldMeasureNote
+
+    visit = db.get(Visit, visit_id)
+    if not visit:
+        raise HTTPException(404, "Visit not found")
+    if visit.visit_type != "field_measure" or not visit.job_id:
+        raise HTTPException(422, "Only a house's field measure takes this form")
+    if payload.outcome not in MEASURE_OUTCOMES:
+        raise HTTPException(422, f"outcome must be one of: {', '.join(MEASURE_OUTCOMES)}")
+
+    day = payload.completed_on or date.today()
+    now = datetime.now(timezone.utc)
+    notes = (payload.notes or "").strip() or None
+
+    # The CabinetTron field-measure record — one source of truth with the job page.
+    if payload.outcome in ("correct", "incorrect"):
+        fm = get_or_create(db, visit.job_id)
+        fm.complete_date = day
+        good = payload.outcome == "correct"
+        fm.correct, fm.correct_by, fm.correct_at = good, (user.full_name if good else None), (now if good else None)
+        fm.incorrect, fm.incorrect_by, fm.incorrect_at = (not good), (None if good else user.full_name), (None if good else now)
+    if notes:
+        db.add(FieldMeasureNote(job_id=visit.job_id, body=notes, author=user.full_name))
+
+    # Close this trip. Today's finish keeps the real clock time (waterfall).
+    visit.status = "done"
+    visit.result = {"correct": "complete", "incorrect": "issues", "incomplete": "incomplete"}[payload.outcome]
+    if notes:
+        visit.result_notes = notes
+    visit.completed_at = (
+        now if day == date.today()
+        else datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+    )
+    visit.completed_by = user.full_name
+    out_ids = [visit.id]
+
+    if payload.outcome == "correct":
+        n = _phase_num(_latest_phase_map(db, [visit.job_id]).get(visit.job_id))
+        if n is None or n < 4.1:
+            db.add(PhaseUpdate(job_id=visit.job_id, phase="4.1", source="autobot",
+                               noted_by=f"{user.full_name} — measure complete & correct"))
+    else:
+        follow = Visit(
+            visit_type="field_measure", job_id=visit.job_id, community_id=visit.community_id,
+            assigned_to=visit.assigned_to, lat=visit.lat, lon=visit.lon,
+            open_date=day + timedelta(days=RECHECK_OPEN_DAYS),
+            close_date=day + timedelta(days=RECHECK_CLOSE_DAYS),
+            priority=visit.priority, status="pending",
+            notes=notes or visit.notes,
+            parent_visit_id=visit.id, trip=(visit.trip or 1) + 1,
+            created_by=user.full_name,
+        )
+        db.add(follow)
+        db.flush()
+        out_ids.append(follow.id)
+
+    db.commit()
+    rows = _visit_query(db).filter(Visit.id.in_(out_ids)).all()
+    rows.sort(key=lambda v: out_ids.index(v.id))
+    return [_out(db, v, date.today()) for v in rows]
+
+
 def _live_walk(db: Session, job_id: int, vtype: str) -> Visit | None:
     return (
         db.query(Visit)
