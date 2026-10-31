@@ -8,91 +8,78 @@
 <meta name="theme-color" content="#05080D">
 <style>
   :root {
-    --green: #049AE2;
-    --green-dark: #070D15;
-    --orange: #049AE2;
-    --orange-dark: #0076DA;
+    --green: #0E2133;
+    --green-dark: #0A1826;
+    --orange: #0076DA;
+    --orange-dark: #005BB0;
     --mint: #049AE2;
-    --bg: #0D1218;
-    --card: #151D26;
-    --line: #28333F;
-    --text: #DFE4EA;
-    --muted: #98A6B5;
-    --red: #E68B81;
-    /* CabinetTron dark theme: -fg = as text, -line = as border */
-    --green-dark-fg: #EEF3F6;
-    --green-dark-line: #1F4A6B;
-    --green-fg: #48BEF2;
-    --green-line: #1F4A6B;
-    --mint-fg: #48BEF2;
-    --mint-line: #48BEF2;
-    --orange-dark-fg: #7FD0F7;
-    --orange-dark-line: #0076DA;
-    --orange-fg: #48BEF2;
-    --orange-line: #049AE2;
-    --midnight: #05080D;
-    color-scheme: dark;
+    --bg: #F4F5F7;
+    --card: #ffffff;
+    --line: #DDE1E5;
+    --text: #1C232B;
+    --muted: #647180;
+    --red: #c0392b;
   }
   * { box-sizing: border-box; margin: 0; }
   body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
   header {
-    background: var(--midnight); border-bottom: 1px solid #1F4A6B; box-shadow: 0 1px 14px rgba(4,154,226,.18); color: #FFFFFF; display: flex; align-items: center; gap: 18px;
+    background: #05080D; border-bottom: 1px solid #1F4A6B; color: #fff; display: flex; align-items: center; gap: 18px;
     padding: 0 20px; height: 54px; position: sticky; top: 0; z-index: 50;
   }
   header .brand { font-weight: 700; font-size: 16px; letter-spacing: .3px; white-space: nowrap; }
   header .brand small { display: block; font-size: 10px; font-weight: 400; opacity: .75; letter-spacing: 1px; text-transform: uppercase; }
   nav { display: flex; gap: 4px; flex: 1; }
   nav a {
-    color: #CED8E3; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-weight: 600;
+    color: #CFD8E3; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-weight: 600;
   }
-  nav a:hover { background: rgba(255,255,255,.12); color: #FFFFFF; }
-  nav a.active { background: var(--mint); color: #FFFFFF; }
+  nav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  nav a.active { background: var(--mint); color: #092030; }
   main { max-width: 1240px; margin: 22px auto 60px; padding: 0 20px; }
-  h1 { font-size: 20px; color: var(--green-dark-fg); margin-bottom: 14px; }
-  h2 { font-size: 15px; color: var(--green-dark-fg); }
+  h1 { font-size: 20px; color: var(--green-dark); margin-bottom: 14px; }
+  h2 { font-size: 15px; color: var(--green-dark); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
   .row { display: flex; gap: 14px; flex-wrap: wrap; }
   .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
   .toolbar .spacer, .totals-card .spacer { flex: 1; }
   input, select, textarea {
-    font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #151D26; color: var(--text);
+    font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text);
   }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--mint-line); outline-offset: 0; border-color: var(--mint-line); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--mint); outline-offset: 0; border-color: var(--mint); }
   button {
     font: inherit; font-weight: 600; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer;
-    background: var(--green); color: #FFFFFF;
+    background: var(--green); color: #fff;
   }
   button:hover { background: var(--green-dark); }
   button.orange { background: var(--orange); }
   button.orange:hover { background: var(--orange-dark); }
-  button.ghost { background: transparent; color: var(--green-fg); border: 1px solid var(--line); }
-  button.ghost:hover { background: #1C2733; }
+  button.ghost { background: transparent; color: var(--green); border: 1px solid var(--line); }
+  button.ghost:hover { background: #EEF1F4; }
   button.danger { background: transparent; color: var(--red); border: 1px solid var(--line); }
-  button.danger:hover { background: #431A14; }
+  button.danger:hover { background: #fdf0ee; }
   button.small { padding: 4px 9px; font-size: 12px; }
   /* SKUs always display/enter uppercase (server stores uppercase too) */
   .al-sku, #n_sku, #c_sku, #hsku, #evx_sku, #lm_sel { text-transform: uppercase; }
-  button.neon { background: #39FF14; color: #D6FBDA; }
-  button.neon:hover { background: #2FD410; }
-  button.gray { background: #233140; color: #FFFFFF; }
-  button.gray:hover { background: #1A2430; }
+  button.neon { background: #39ff14; color: #06330b; }
+  button.neon:hover { background: #2fd410; }
+  button.gray { background: #555A5F; color: #fff; }
+  button.gray:hover { background: #3F4347; }
   button:disabled { opacity: .5; cursor: not-allowed; }
   table { width: 100%; border-collapse: collapse; background: var(--card); }
   th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--line); white-space: nowrap; }
   td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   tr.click { cursor: pointer; }
-  tr.click:hover td { background: #1E2B39; }
+  tr.click:hover td { background: #EEF2F7; }
   .num { text-align: center; font-variant-numeric: tabular-nums; }
   th.num { text-align: center; }
   .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-  .chip.Lead     { background: #1E2A37; color: #C1CBD6; }
-  .chip.Design   { background: #142D43; color: #9FCCEE; }
-  .chip.Quoted   { background: #433714; color: #F0DBA2; }
-  .chip.Revision { background: #341443; color: #C299D9; }
-  .chip.Sold     { background: #16412B; color: #B4F3D6; }
-  .chip.Lost     { background: #431914; color: #E69F94; }
-  .chip.exported { background: var(--green); color: #FFFFFF; }
-  .builder-row td { background: #1C2835; font-weight: 700; color: var(--green-dark-fg); font-size: 13px; border-top: 2px solid var(--line); }
+  .chip.Lead     { background: #E3E7EC; color: #3F4D5D; }
+  .chip.Design   { background: #d7ecff; color: #1c5d8f; }
+  .chip.Quoted   { background: #fdf3d7; color: #8a6d1a; }
+  .chip.Revision { background: #f3e2fb; color: #7a3d9c; }
+  .chip.Sold     { background: #d9f2e5; color: #146c43; }
+  .chip.Lost     { background: #fbe3e0; color: #a13a2a; }
+  .chip.exported { background: var(--green); color: #fff; }
+  .builder-row td { background: #EAEEF2; font-weight: 700; color: var(--green-dark); font-size: 13px; border-top: 2px solid var(--line); }
   .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 26px; margin-bottom: 12px; }
   .set-group { min-width: 0; }
   .set-title { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; padding-bottom: 4px; border-bottom: 2px solid var(--line); margin-bottom: 2px; }
@@ -103,11 +90,11 @@
   @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
   .stat { flex: 1; min-width: 160px; }
   .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  .stat .value { font-size: 24px; font-weight: 700; color: var(--green-dark-fg); margin-top: 4px; }
-  .stat .value.orange { color: var(--orange-fg); }
+  .stat .value { font-size: 24px; font-weight: 700; color: var(--green-dark); margin-top: 4px; }
+  .stat .value.orange { color: var(--orange); }
   .funnel-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
   .funnel-row .fl { width: 76px; font-weight: 600; font-size: 12.5px; }
-  .funnel-row .bar-wrap { flex: 1; background: #1D2836; border-radius: 5px; height: 22px; overflow: hidden; }
+  .funnel-row .bar-wrap { flex: 1; background: #E8EBEF; border-radius: 5px; height: 22px; overflow: hidden; }
   .funnel-row .bar { height: 100%; background: var(--mint); border-radius: 5px; min-width: 2px; }
   .funnel-row .fv { width: 200px; font-size: 12.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); }
@@ -117,30 +104,30 @@
   label.f input, label.f select, label.f textarea { font-weight: 400; color: var(--text); }
   dialog {
     border: none; border-radius: 12px; padding: 0; width: min(680px, 94vw);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.448);
+    box-shadow: 0 18px 50px rgba(10,40,35,.28);
   }
-  dialog::backdrop { background: rgba(47, 137, 117, 0.45); }
-  dialog .dhead { background: var(--green); color: #FFFFFF; padding: 12px 18px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  dialog::backdrop { background: rgba(12,35,30,.45); }
+  dialog .dhead { background: var(--green); color: #fff; padding: 12px 18px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
   dialog .dbody { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
   dialog .dfoot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; }
   .room-card { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; overflow: hidden; background: var(--card); }
-  .room-head { background: #1C2835; padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .room-head .rname { font-weight: 700; color: var(--green-dark-fg); font-size: 15px; }
+  .room-head { background: #EAEEF2; padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .room-head .rname { font-weight: 700; color: var(--green-dark); font-size: 15px; }
   .room-head .rspec { color: var(--muted); font-size: 12.5px; }
   .room-head .spacer { flex: 1; }
-  .room-totals { font-weight: 700; color: var(--green-dark-fg); font-variant-numeric: tabular-nums; }
-  .addline { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; align-items: center; background: #0D1218; }
+  .room-totals { font-weight: 700; color: var(--green-dark); font-variant-numeric: tabular-nums; }
+  .addline { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; align-items: center; background: #fafcfb; }
   .addline input { padding: 6px 8px; }
   .totals-card { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
   .totals-card .t { text-align: center; }
   .totals-card .t .label { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: .5px; }
-  .totals-card .t .value { font-size: 20px; font-weight: 700; color: var(--green-dark-fg); font-variant-numeric: tabular-nums; }
-  .totals-card .t .value.orange { color: var(--orange-fg); }
-  .excluded td { color: #9FABB9; text-decoration: line-through; }
+  .totals-card .t .value { font-size: 20px; font-weight: 700; color: var(--green-dark); font-variant-numeric: tabular-nums; }
+  .totals-card .t .value.orange { color: var(--orange); }
+  .excluded td { color: #A3ABB5; text-decoration: line-through; }
   .excluded td.keep { text-decoration: none; }
   #toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200;
-    background: var(--green-dark); color: #FFFFFF; padding: 10px 20px; border-radius: 8px; font-weight: 600;
+    background: var(--green-dark); color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 600;
     opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw;
   }
   #toast.show { opacity: 1; }
@@ -161,26 +148,26 @@
 
   .rhead { display:flex; gap:20px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
   .rexport { display:flex; gap:8px; flex-shrink:0; }
-  .btn.ghost { background:transparent; border:1px solid var(--mint-line); color:var(--mint-fg); }
+  .btn.ghost { background:transparent; border:1px solid var(--mint); color:var(--mint); }
   table.rtable { border-collapse:collapse; width:100%; min-width:900px; }
-  table.rtable th { position:sticky; top:0; background:#151D26; text-align:left; font-size:11px;
-    text-transform:uppercase; letter-spacing:.06em; color:#98A5B4; padding:12px 12px 9px;
-    border-bottom:1px solid #27323D; white-space:nowrap; }
+  table.rtable th { position:sticky; top:0; background:#fff; text-align:left; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; color:#6B727A; padding:12px 12px 9px;
+    border-bottom:1px solid #E3E6E9; white-space:nowrap; }
   table.rtable th.r, table.rtable td.r { text-align:center; font-variant-numeric:tabular-nums; }
-  table.rtable td { padding:9px 12px; border-bottom:1px solid #252F3A; font-size:13.5px; }
+  table.rtable td { padding:9px 12px; border-bottom:1px solid #EEF0F2; font-size:13.5px; }
   table.rtable td:first-child { border-left:3px solid transparent; font-weight:500; }
-  table.rtable tr.r-loss td:first-child { border-left-color:#9E2B25; }
-  table.rtable tr.r-under td:first-child { border-left-color:#B07D21; }
-  table.rtable tr.r-ok td:first-child { border-left-color:#445F7E; }
-  table.rtable td.negv { color:#E99A96; }
+  table.rtable tr.r-loss td:first-child { border-left-color:#9e2b25; }
+  table.rtable tr.r-under td:first-child { border-left-color:#b07d21; }
+  table.rtable tr.r-ok td:first-child { border-left-color:#334D6B; }
+  table.rtable td.negv { color:#9e2b25; }
   .rpill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:20px;
-    background:#1C2734; color:#98A5B4; white-space:nowrap; }
-  .rpill.fixed { background:#3F1C18; color:#E99A96; }
+    background:#EEF0F2; color:#6B727A; white-space:nowrap; }
+  .rpill.fixed { background:#f3e2e0; color:#9e2b25; }
 </style>
 </head>
 <body>
 <header>
-  <a href="#" id="suiteBtn" title="COAST suite" style="color:#FFFFFF; text-decoration:none; font-size:20px; line-height:1">⠿</a>
+  <a href="#" id="suiteBtn" title="COAST suite" style="color:#CFD8E3; text-decoration:none; font-size:20px; line-height:1">⠿</a>
   <div class="brand"><img src="/brand/sterling-header.png" alt="Sterling" style="height:40px;border-radius:6px;display:block"></div>
   <nav id="nav">
     <a href="#/dashboard" data-page="dashboard">Dashboard</a>
@@ -194,8 +181,8 @@
     <a href="#/reports" data-page="reports">Reports</a>
     <a href="#/settings" data-page="settings">Settings</a>
   </nav>
-  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#CED8E3">KSR
-    <select id="ksrSel" style="padding:5px 8px; border-radius:6px; border:none; background:rgba(255,255,255,.15); color:#FFFFFF">
+  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#CFD8E3">KSR
+    <select id="ksrSel" style="padding:5px 8px; border-radius:6px; border:none; background:rgba(255,255,255,.15); color:#fff">
       <option value="">All jobs</option>
     </select>
   </label>
@@ -989,7 +976,7 @@ function breakdownCard(j) {
        <span>${label}</span><span>${value}</span></div>`;
   const rooms = (j.rooms_breakdown || []).map(b => `
     <div style="background:var(--bg); border-radius:6px; padding:7px 9px; margin-bottom:8px; font-size:12.5px">
-      <div style="display:flex; justify-content:space-between; color:var(--green-dark-fg); font-weight:700; margin-bottom:3px">
+      <div style="display:flex; justify-content:space-between; color:var(--green-dark); font-weight:700; margin-bottom:3px">
         <span>${esc(b.name)}${b.zone ? ` <span class="muted" style="font-weight:400">(${esc(b.zone)})</span>` : ""}</span>
         <span class="muted" style="font-weight:400; font-size:11.5px">${b.line_count} line${b.line_count===1?"":"s"}${b.boxes ? ` · ${b.boxes} box${b.boxes===1?"":"es"}` : ""}</span>
       </div>
@@ -1005,7 +992,7 @@ function breakdownCard(j) {
       <div style="border-top:1px solid var(--line); margin-top:4px; padding-top:4px">
         ${row("Cost", `<strong>${money(b.cost)}</strong>`)}
         ${row("Sell", `<strong>${money(b.sell)}</strong>`)}
-        <div style="display:flex; justify-content:space-between; color:var(--orange-fg)">
+        <div style="display:flex; justify-content:space-between; color:var(--orange)">
           <span>Margin</span><span>${money(b.margin_amount)}${b.margin_pct !== null ? ` · ${pct(b.margin_pct)}` : ""}</span></div>
       </div>
     </div>`).join("");
@@ -1022,7 +1009,7 @@ function breakdownCard(j) {
 
   const tops = (j.tops_rows || []).length ? `
     <div style="border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin-bottom:8px; font-size:12.5px">
-      <div style="display:flex; justify-content:space-between; color:var(--green-dark-fg); font-weight:700; margin-bottom:3px">
+      <div style="display:flex; justify-content:space-between; color:var(--green-dark); font-weight:700; margin-bottom:3px">
         <span>Countertops by room</span><span class="muted" style="font-weight:400; font-size:11.5px">added after margin</span></div>
       ${j.tops_rows.map(t => `
         ${Number(t.surface) ? row(`${esc(t.room)} · ${t.sqft} sq ft @ ${money(t.rate)}`, money(t.surface), true) : ""}
@@ -1032,13 +1019,13 @@ function breakdownCard(j) {
     </div>` : "";
 
   return `${rooms}${jobLevel}${tops}
-    <div style="background:var(--green); color:#FFFFFF; border-radius:6px; padding:8px 10px; font-size:13px">
+    <div style="background:var(--green); color:#fff; border-radius:6px; padding:8px 10px; font-size:13px">
       ${row("Cabinets, labor" + (Number(j.lumber_cost) ? ", lumber" : ""), money(Number(j.sell) - Number(j.tops)))}
       ${Number(j.tops) ? row("Countertops", money(j.tops)) : ""}
       <div style="border-top:1px solid rgba(255,255,255,.3); margin-top:4px; padding-top:4px">
         ${row("Total cost", `<strong>${money(j.cost)}</strong>`)}
         ${row("Grand total sell", `<strong>${money(j.sell)}</strong>`)}
-        <div style="display:flex; justify-content:space-between; color:#FFD9C4">
+        <div style="display:flex; justify-content:space-between; color:#ffd9c4">
           <span>Margin</span><span>${money(j.margin_amount)} · ${pct(j.margin_pct_actual)}</span></div>
       </div>
     </div>`;
@@ -1931,7 +1918,7 @@ async function natPlanDialog(division, plan, doorStyle) {
   const t = d.totals, r = d.rates;
   const pc = (v, dp = 1) => (Number(v) * 100).toFixed(dp) + "%";
   const cell = (label, v, big) => `<div class="t"><div class="label">${label}</div>
-    <div class="value" style="font-size:${big ? 24 : 16}px${big ? "; color:var(--orange-fg)" : ""}">${money(v)}</div></div>`;
+    <div class="value" style="font-size:${big ? 24 : 16}px${big ? "; color:var(--orange)" : ""}">${money(v)}</div></div>`;
   const band = `<div class="totals-card" style="margin:6px 0 4px">
     ${cell("List", t.list_total)}${cell("Cabinets", t.cabinets)}${cell("Freight", t.freight)}
     ${cell(`Hdw (${t.hardware_qty} pc)`, t.hardware_material)}${cell("Tax", t.tax)}
@@ -2067,7 +2054,7 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
     const pieces = t.pieces.filter(p => p.kind === kind && (p.area === "Vanity" ? "Vanity" : "Kitchen") === area);
     return `
     <div style="margin:2px 0 8px">
-      <div style="font-weight:700; color:var(--green-dark-fg); font-size:12.5px; margin:4px 0 2px">${area}</div>
+      <div style="font-weight:700; color:var(--green-dark); font-size:12.5px; margin:4px 0 2px">${area}</div>
       <table>
         <thead><tr><th>Qty</th><th>Width</th><th>${dLabel}</th><th class="num">Sq Ft Ea</th>
           <th class="num">Per Sq Ft</th><th class="num">SqFt TTL</th><th class="num">Cost Each</th>
@@ -2086,7 +2073,7 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
         <input id="tp_rate" type="number" min="0" step="0.01" value="${t.rate_sqft ?? ""}" placeholder="26"></label>
       <div class="f" style="text-align:right">
         <span class="muted" style="font-size:11px">TOTAL SQFT / TOTAL COST</span>
-        <div style="font-size:20px; font-weight:800; color:var(--green-dark-fg)">
+        <div style="font-size:20px; font-weight:800; color:var(--green-dark)">
           <span id="tp_sqft">0</span> &nbsp;·&nbsp; <span id="tp_total" style="color:var(--orange)">$0.00</span>
         </div>
       </div>
@@ -2096,10 +2083,10 @@ async function topsDialog(division, plan, jobId = null, onSaved = null, title = 
       <tbody id="tp_summary"></tbody>
     </table>
     ${SECTIONS.map(([kind, label, dLabel]) => `
-      <div class="band" style="background:var(--green); color:#FFFFFF; font-weight:700; padding:4px 10px; margin-top:8px">${label}</div>
+      <div class="band" style="background:var(--green); color:#fff; font-weight:700; padding:4px 10px; margin-top:8px">${label}</div>
       ${areaTable(kind, "Kitchen", dLabel)}
       ${areaTable(kind, "Vanity", dLabel)}`).join("")}
-    <div class="band" style="background:var(--green); color:#FFFFFF; font-weight:700; padding:4px 10px; margin-top:8px">Sinks and Cutouts</div>
+    <div class="band" style="background:var(--green); color:#fff; font-weight:700; padding:4px 10px; margin-top:8px">Sinks and Cutouts</div>
     <div class="grid2" style="margin-top:6px">
       <label class="f">Kitchen sinks <span class="muted">($${K_SINK} ea + $${CUTOUT} cutout)</span>
         <input id="tp_ks" type="number" min="0" step="1" value="${t.k_sinks}"></label>
@@ -2331,7 +2318,7 @@ async function renderEverluxe() {
           <select id="evxDiv" style="width:150px" title="Saved = your own lists. A builder division puts the list on National Pricing.">
             <option value="Saved">Saved lists</option></select></label>
         <label class="f">Plan / job name
-          <input id="evxPlan" style="width:170px; background:#433E14" title="Name this list — the plan or job it prices"></label>
+          <input id="evxPlan" style="width:170px; background:#fff59d" title="Name this list — the plan or job it prices"></label>
         <label class="f">Door style
           <select id="evxStyle"><option value="">Base (Group 1)</option>
             ${styles.map(s => `<option>${esc(s.name)}</option>`).join("")}</select></label>
@@ -2512,7 +2499,7 @@ async function renderEverluxe() {
         : `<div class="t"><div class="label">Hdw (${t.hardware_qty} pc)</div><div class="value" style="font-size:16px">${money(t.hardware_material)}</div></div>
       <div class="t"><div class="label">Tax</div><div class="value" style="font-size:16px">${money(t.tax)}</div></div>
       <div class="t"><div class="label">${t.hardware_kind === "handle" ? "Handle" : "Knob"} Labor (${t.hardware_qty} × $${Math.round(Number(t.hardware_labor_rate))})</div><div class="value" style="font-size:16px">${money(t.hardware_labor)}</div></div>`}
-      <div class="t"><div class="label">${t.install_min_applied ? `Install — ${money(t.install_minimum)} min (${t.install_units} bx = ${money(t.install_raw)})` : `Install (${t.install_units} bx × $25)`}</div><div class="value" style="font-size:16px${t.install_min_applied ? "; color:var(--orange-fg)" : ""}">${money(t.install)}</div></div>
+      <div class="t"><div class="label">${t.install_min_applied ? `Install — ${money(t.install_minimum)} min (${t.install_units} bx = ${money(t.install_raw)})` : `Install (${t.install_units} bx × $25)`}</div><div class="value" style="font-size:16px${t.install_min_applied ? "; color:var(--orange)" : ""}">${money(t.install)}</div></div>
       <div class="t"><div class="label">COGS</div><div class="value">${money(t.cogs)}</div></div>
       <div class="spacer"></div>
       <div class="t"><div class="label">Sale @ ${Math.round(Number(t.margin_pct))}%</div><div class="value" style="color:var(--orange); font-size:24px">${money(t.sale)}</div></div>`;
@@ -2532,7 +2519,7 @@ async function renderEverluxe() {
            <div class="t" style="min-width:120px; text-align:left"><div class="label">Hardware options</div>
              <div class="value" style="font-size:14px">${res.hardware_options[0].qty} pc each</div></div>
            ${res.hardware_options.map(o => `<div class="t"><div class="label">${esc(o.sku)} · ${o.kind === "handle" ? "handle" : "knob"}</div>
-             <div class="value" style="font-size:16px; color:var(--orange-fg)">${money(o.sale)}</div>
+             <div class="value" style="font-size:16px; color:var(--orange)">${money(o.sale)}</div>
              <div class="label" style="font-size:10px">with cabinets ${money(base + Number(o.sale))}</div></div>`).join("")}
          </div>`);
     }
@@ -3101,7 +3088,7 @@ async function renderCoverSheet(id) {
               <td class="num"><input class="cv money" data-k="sale_total_override" id="cvSaleIn"
                 value="${s.sale_total_override !== null && s.sale_total_override !== undefined ? money(s.sale_total_override) : ""}"
                 placeholder="${money(s.totals.sale_sum)}" title="Blank = cabinets + countertops + other. A figure here is the sale the margin is figured on."
-                style="width:120px; text-align:center; font-weight:700${s.sale_total_override !== null && s.sale_total_override !== undefined ? "; background:#433E14" : ""}"></td></tr>
+                style="width:120px; text-align:center; font-weight:700${s.sale_total_override !== null && s.sale_total_override !== undefined ? "; background:#fff59d" : ""}"></td></tr>
           </tbody>
         </table>
       </div>
@@ -3151,7 +3138,7 @@ async function renderCoverSheet(id) {
     const saleSum = (b.sale_cabinets || 0) + (b.sale_countertops || 0) + (b.sale_other || 0);
     const sale = b.sale_total_override !== null && b.sale_total_override !== undefined ? b.sale_total_override : saleSum;
     $("#cvSaleIn").placeholder = money(saleSum);
-    $("#cvSaleIn").style.background = b.sale_total_override !== null && b.sale_total_override !== undefined ? "#433E14" : "";
+    $("#cvSaleIn").style.background = b.sale_total_override !== null && b.sale_total_override !== undefined ? "#fff59d" : "";
     const margin = sale - cogs;
     $("#cvMat").textContent = money(mat); $("#cvLab").textContent = money(lab);
     $("#cvTax").textContent = money(tax);
@@ -3270,7 +3257,7 @@ function printCoverSheet(s) {
       <td>${esc(p.po_number || "")}</td><td>${esc(p.vendor_code ?? "")}</td><td>${esc(p.vendor ?? "")}</td>
       <td>${esc(p.po_type ?? "")}</td><td class="num">${money(p.amount1)}</td>
       <td class="num">${money(p.amount2)}</td><td class="num tot">${money(p.total)}</td></tr>`).join("")
-    || `<tr><td colspan="7" style="color:#8898A9">—</td></tr>`;
+    || `<tr><td colspan="7" style="color:#888">—</td></tr>`;
   const pair = (l, v) => `<tr><td class="lbl">${l}</td><td>${esc(v ?? "")}</td></tr>`;
   w.document.write(`<!DOCTYPE html><html><head><title>Sales Order Cover Sheet ${esc(s.job_code || "")}</title><style>
     @page { size: letter; margin: 0.4in; }
@@ -3492,7 +3479,7 @@ async function renderCatalog() {
     const value = field === "install_group" ? (raw || null) : (raw === "" ? null : Number(raw));
     try {
       await api("/catalog/" + el.dataset.id, {method:"PUT", body: {[field]: value}});
-      el.style.borderColor = "var(--green-line)";
+      el.style.borderColor = "var(--green)";
       setTimeout(() => el.style.borderColor = "", 900);
       toast("Saved — quotes using this SKU reprice on their next open");
     } catch (err) { toast(err.message, true); renderCatalog(); }
@@ -3644,7 +3631,7 @@ async function renderSettings() {
     <div class="card" style="margin-bottom:14px">
       <h2 style="margin-bottom:10px">Excel Database</h2>
       <p style="font-size:13px">The workbook <strong>is</strong> the database — every change auto-saves to
-        <code style="background:#1C2733; padding:2px 6px; border-radius:4px">${esc(xl.path)}</code></p>
+        <code style="background:#EEF1F4; padding:2px 6px; border-radius:4px">${esc(xl.path)}</code></p>
       <p class="muted" style="margin-top:6px; font-size:12.5px" id="xlStatus">
         ${xl.locked ? "⚠️ " + esc(xl.last_error) :
           xl.last_error ? "⚠️ " + esc(xl.last_error) :
@@ -3713,7 +3700,7 @@ async function renderSettings() {
 function openDialog(title, bodyHtml, onSave) {
   const dlg = document.createElement("dialog");
   dlg.innerHTML = `
-    <div class="dhead"><span>${esc(title)}</span><button class="ghost small" style="color:#151D26; border-color:rgba(255,255,255,.4)" id="dx">✕</button></div>
+    <div class="dhead"><span>${esc(title)}</span><button class="ghost small" style="color:#fff; border-color:rgba(255,255,255,.4)" id="dx">✕</button></div>
     <div class="dbody">${bodyHtml}</div>
     <div class="dfoot"><button class="ghost" id="dcancel">Cancel</button><button class="orange" id="dsave">Save</button></div>`;
   document.body.appendChild(dlg);

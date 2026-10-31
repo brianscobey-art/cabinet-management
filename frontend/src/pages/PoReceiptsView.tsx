@@ -77,13 +77,13 @@ export default function PoReceiptsView() {
       <div className="filters">
         <button
           className={tab === "received" ? "" : "ghost-tab"}
-          style={tab === "received" ? undefined : { background: "#1D2936", color: "#48BEF2" }}
+          style={tab === "received" ? undefined : { background: "#E7EBEF", color: "#0E2133" }}
           onClick={() => setTab("received")}
         >
           Received ({rows.length})
         </button>
         <button
-          style={tab === "awaiting" ? undefined : { background: "#1D2936", color: "#48BEF2" }}
+          style={tab === "awaiting" ? undefined : { background: "#E7EBEF", color: "#0E2133" }}
           onClick={() => setTab("awaiting")}
         >
           Awaiting delivery ({out.length})
@@ -128,7 +128,7 @@ export default function PoReceiptsView() {
             </thead>
             <tbody>
               {out.map((r) => (
-                <tr key={r.order_number} style={r.days_overdue ? { background: "#431414" } : undefined}>
+                <tr key={r.order_number} style={r.days_overdue ? { background: "#fdeeee" } : undefined}>
                   <td>{r.job_id ? <a href={`#/jobs/${r.job_id}`}>{r.job_code}</a> : (r.job_code ?? "—")}</td>
                   <td>{r.community_name ?? "—"}</td>
                   <td>{r.address ?? "—"}</td>

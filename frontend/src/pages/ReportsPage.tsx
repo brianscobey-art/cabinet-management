@@ -1291,7 +1291,7 @@ function FieldMeasuresView() {
         {" · "}check the houses you want printed.
       </p>
       {notice && (
-        <p className="ss-alert" style={{ background: "#2E4017", color: "#DAF9C5" }}>
+        <p className="ss-alert" style={{ background: "#eaf3de", color: "#27500a" }}>
           {notice}
           {pdfLink && (
             <>
@@ -1642,7 +1642,7 @@ function PhaseReport() {
                       {r.fm_correct ? (
                         <b title="Field measure verified correct">COMPL</b>
                       ) : r.fm_incorrect ? (
-                        <b style={{ color: "#E68B81" }} title="Measured, but came back incorrect">INCOR</b>
+                        <b style={{ color: "#c0392b" }} title="Measured, but came back incorrect">INCOR</b>
                       ) : r.measure_date ? (
                         fmtDate(r.measure_date)
                       ) : (

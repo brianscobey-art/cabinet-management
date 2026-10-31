@@ -18,7 +18,7 @@ export default defineConfig({
         short_name: "CabinetTron",
         description: "Cabinet job management — CabinetTron",
         theme_color: "#05080D",
-        background_color: "#0D1218",
+        background_color: "#ffffff",
         display: "standalone",
         start_url: "/",
         icons: [

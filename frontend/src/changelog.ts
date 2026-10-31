@@ -9,9 +9,9 @@ export interface ChangeEntry {
 export const CHANGELOG: ChangeEntry[] = [
   {
     date: "10/31/26",
-    title: "New look: CabinetTron dark theme",
+    title: "New look: CabinetTron theme and logos",
     detail:
-      "CabinetTron, Autobot, Sterling and Optimus now share one dark theme with new logos. Everything works the same — printouts, contracts and quotes still come out on white paper.",
+      "CabinetTron, Autobot, Sterling and Optimus now share one look — new logos, a midnight header, navy and blue in place of green and orange. Everything works the same.",
   },
   {
     date: "8/28/26",

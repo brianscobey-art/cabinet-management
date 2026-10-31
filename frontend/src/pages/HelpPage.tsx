@@ -41,7 +41,7 @@ export default function HelpPage({ me }: { me?: User }) {
             gap: 12,
             padding: "12px 16px",
             background: "#0E2133",
-            color: "#FFFFFF",
+            color: "#fff",
             borderRadius: 8,
             marginBottom: 16,
           }}
@@ -54,7 +54,7 @@ export default function HelpPage({ me }: { me?: User }) {
               e.preventDefault();
               window.location.hash = "#";
             }}
-            style={{ marginLeft: "auto", color: "#FFFFFF", fontWeight: 600 }}
+            style={{ marginLeft: "auto", color: "#fff", fontWeight: 600 }}
           >
             ← Back to sign in
           </a>
@@ -103,7 +103,7 @@ export default function HelpPage({ me }: { me?: User }) {
           {sec.topics.map((t, ti) => (
             <div
               key={t.q}
-              style={{ borderTop: ti ? "1px solid #1C2835" : undefined, padding: "8px 0" }}
+              style={{ borderTop: ti ? "1px solid #eee" : undefined, padding: "8px 0" }}
             >
               <button
                 className="link-btn"
