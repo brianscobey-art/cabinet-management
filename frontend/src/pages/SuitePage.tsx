@@ -1,6 +1,6 @@
 /** The COAST suite launcher — lands here after login. Five apps, one operation:
  * CabinetTron (jobs), Optimus (ordering), Autobot (service routing), Sterling
- * (pricing — the standalone Sterling app on :8010), Tailgate (coming). */
+ * (pricing — the standalone Sterling app on :8010), Tailgate (installer portal, coming). */
 
 function CabinetTronIcon() {
   return <img src="/brand/cabinettron-icon.png" alt="CabinetTron" />;
@@ -54,7 +54,7 @@ const APPS = [
   },
   {
     name: "Tailgate",
-    tag: "Installer scheduling",
+    tag: "Installer portal — job info, layouts, walk sheets, pricing, invoices and install photos",
     href: null,
     icon: <TailgateIcon />,
     live: false,
