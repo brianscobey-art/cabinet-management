@@ -14,11 +14,11 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/ordering-platform/, /^\/autobot/, /^\/sterling/, /^\/api\//, /^\/docs/],
       },
       manifest: {
-        name: "Carter Kitchen and Bath",
-        short_name: "Carter K&B",
-        description: "Kitchen & Bath job management — Carter Lumber",
-        theme_color: "#125952",
-        background_color: "#ffffff",
+        name: "CabinetTron",
+        short_name: "CabinetTron",
+        description: "Cabinet job management — CabinetTron",
+        theme_color: "#05080D",
+        background_color: "#0D1218",
         display: "standalone",
         start_url: "/",
         icons: [

@@ -84,7 +84,7 @@ export default function AccountsPage({ canWrite }: { canWrite: boolean }) {
                     <select
                       value={a.ksr ?? ""}
                       onChange={(e) => setAccountKsr(a.id, e.target.value)}
-                      style={!a.ksr ? { color: "#b23" } : undefined}
+                      style={!a.ksr ? { color: "#EC848F" } : undefined}
                     >
                       <option value="">— unassigned —</option>
                       {ksrs.map((k) => (

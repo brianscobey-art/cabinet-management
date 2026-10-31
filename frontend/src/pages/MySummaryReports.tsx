@@ -5,7 +5,7 @@ import { fmtDate } from "../format";
 const money = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
-const MATERIAL_COLOR: Record<string, string> = { received: "#125952", partial: "#b07a00", awaiting: "#DE2020" };
+const MATERIAL_COLOR: Record<string, string> = { received: "#48BEF2", partial: "#FFDB8B", awaiting: "#EE6E6E" };
 
 function JobCell({ j }: { j: MySummaryJob }) {
   return (

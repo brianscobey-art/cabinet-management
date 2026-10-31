@@ -39,8 +39,8 @@ export default function FieldReportsSection({ jobId }: { jobId: number }) {
                 <tr key={i}>
                   <td>{fmtDate(r.install_date)}</td>
                   <td>{r.installer ?? "—"}</td>
-                  <td style={r.complete === false ? { color: "#DE2020", fontWeight: 600 } : undefined}>{yn(r.complete)}</td>
-                  <td style={r.trade_stopping ? { color: "#DE2020", fontWeight: 600 } : undefined}>{yn(r.trade_stopping)}</td>
+                  <td style={r.complete === false ? { color: "#EE6E6E", fontWeight: 600 } : undefined}>{yn(r.complete)}</td>
+                  <td style={r.trade_stopping ? { color: "#EE6E6E", fontWeight: 600 } : undefined}>{yn(r.trade_stopping)}</td>
                   <td>{r.needed_to_finish ?? "—"}</td>
                   <td>{r.damage_parts ? r.damage_detail ?? "Yes" : yn(r.damage_parts)}</td>
                   <td className="num">{r.shoe_sticks ?? "—"}</td>
@@ -55,7 +55,7 @@ export default function FieldReportsSection({ jobId }: { jobId: number }) {
         <div key={i} className="card" style={{ marginTop: "0.5rem" }}>
           <b>QC post walk {fmtDate(q.walked_at)}</b>
           <span className="muted"> · {q.walked_by ?? "—"} · </span>
-          <span style={q.result === "issues" ? { color: "#DE2020", fontWeight: 600 } : undefined}>{q.result}</span>
+          <span style={q.result === "issues" ? { color: "#EE6E6E", fontWeight: 600 } : undefined}>{q.result}</span>
           <p style={{ margin: "0.35rem 0" }}>{q.summary}</p>
           <button className="link-btn" onClick={() => setOpen(open === i ? null : i)}>
             {open === i ? "hide answers" : "all answers"}

@@ -7,68 +7,77 @@
 <link rel="manifest" href="/autobot/manifest.webmanifest" />
 <link rel="apple-touch-icon" href="/autobot/icon-180.png" />
 <link rel="icon" href="/autobot/icon-192.png" />
-<meta name="theme-color" content="#125952" />
+<meta name="theme-color" content="#05080D" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Autobot" />
 <style>
   :root {
-    --green: #125952;      /* Carter green — anchor */
-    --green-dark: #194039;
-    --green-light: #568c8c;
-    --red: #de2020;        /* sparingly */
-    --ink: #1d2b28;
-    --line: #d8e4e2;
-    --wash: #f2f7f6;
+    --green: #049AE2;
+    --green-dark: #070D15;
+    --green-light: #24425C;
+    --red: #EE6E6E;        /* sparingly */
+    --ink: #DFE4EA;
+    --line: #323C48;
+    --wash: #1B2632;
+    /* CabinetTron dark theme: -fg = as text, -line = as border */
+    --green-dark-fg: #EEF3F6;
+    --green-dark-line: #1F4A6B;
+    --green-light-fg: #8FB8CF;
+    --green-light-line: #3A5568;
+    --green-fg: #48BEF2;
+    --green-line: #1F4A6B;
+    --midnight: #05080D;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; } /* .center's flex must not beat the hidden attr */
   body {
     margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: var(--ink); background: #fff;
+    color: var(--ink); background: #151D26;
   }
   button {
-    font: inherit; border: 1px solid var(--green); background: var(--green); color: #fff;
+    font: inherit; border: 1px solid var(--green-line); background: var(--green); color: #FFFFFF;
     border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer;
   }
   button:disabled { opacity: 0.55; cursor: default; }
-  button.ghost { background: #fff; color: var(--green); }
+  button.ghost { background: #151D26; color: var(--green-fg); }
   input, select {
     font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--line); border-radius: 6px;
   }
-  a { color: var(--green); }
-  .muted { color: #62726e; }
+  a { color: var(--green-fg); }
+  .muted { color: #9EABB9; }
   .error { color: var(--red); }
 
   /* header */
   header {
-    background: var(--green); color: #fff; padding: 0.7rem 1rem;
+    background: var(--midnight); border-bottom: 1px solid #1F4A6B; box-shadow: 0 1px 14px rgba(4,154,226,.18); color: #FFFFFF; padding: 0.7rem 1rem;
     padding-top: calc(0.7rem + env(safe-area-inset-top));
     display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   }
-  .suitebtn { flex: none; display: none; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 7px; background: rgba(255,255,255,0.16); color: #fff; text-decoration: none; font-size: 18px; line-height: 1; }
+  .suitebtn { flex: none; display: none; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 7px; background: rgba(255,255,255,0.16); color: #FFFFFF; text-decoration: none; font-size: 18px; line-height: 1; }
   .suitebtn:hover { background: rgba(255,255,255,0.28); }
   .wordmark { display: flex; align-items: center; gap: 0.6rem; }
   .wordmark svg { flex: none; }
   .wordmark b { font-size: 1.25rem; letter-spacing: 0.04em; }
   .wordmark small { display: block; font-size: 0.68rem; opacity: 0.85; letter-spacing: 0.02em; }
   header .who { margin-left: auto; font-size: 0.85rem; display: flex; gap: 0.6rem; align-items: center; }
-  header .who button { background: var(--green-dark); border-color: var(--green-dark); font-size: 0.8rem; }
+  header .who button { background: var(--green-dark); border-color: var(--green-dark-line); font-size: 0.8rem; }
 
   nav.tabs {
     display: flex; background: var(--green-dark); position: sticky; top: 0; z-index: 5;
   }
   nav.tabs button {
-    flex: 1; background: none; border: none; border-radius: 0; color: #cfe0dc;
+    flex: 1; background: none; border: none; border-radius: 0; color: #CFD7E0;
     padding: 0.65rem 0.4rem; font-weight: 600; border-bottom: 3px solid transparent;
   }
-  nav.tabs button.active { color: #fff; border-bottom-color: #fff; }
+  nav.tabs button.active { color: #FFFFFF; border-bottom-color: #48BEF2; }
 
   main { padding: 0.9rem; max-width: 1100px; margin: 0 auto; }
   .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.7rem; }
   .gmaps {
-    background: #fff; color: var(--green); font-weight: 700; text-decoration: none;
-    border: 1px solid var(--green); border-radius: 8px; padding: 0.4rem 0.8rem;
+    background: #151D26; color: var(--green-fg); font-weight: 700; text-decoration: none;
+    border: 1px solid var(--green-line); border-radius: 8px; padding: 0.4rem 0.8rem;
   }
 
   .summary {
@@ -82,33 +91,33 @@
   }
   .start-btn { font-size: 1.05rem; padding: 0.6rem 1.3rem; }
   .overflow {
-    background: #fdecea; border: 1px solid var(--red); color: #8f1717; font-weight: 600;
+    background: #431914; border: 1px solid var(--red); color: #F29E9E; font-weight: 600;
     border-radius: 10px; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem;
   }
 
   .layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
   ol.stops { list-style: none; margin: 0; padding: 0; flex: 1 1 360px; min-width: 290px; }
   .stop {
-    border: 1px solid var(--line); border-left: 5px solid var(--green-light);
-    border-radius: 10px; padding: 0.55rem 0.8rem; margin-bottom: 0.55rem; background: #fff;
+    border: 1px solid var(--line); border-left: 5px solid var(--green-light-line);
+    border-radius: 10px; padding: 0.55rem 0.8rem; margin-bottom: 0.55rem; background: #151D26;
   }
   .stop.anchor { border-left-color: var(--red); }
   .stop-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
   .num {
-    background: var(--green); color: #fff; border-radius: 50%; width: 1.6rem; height: 1.6rem;
+    background: var(--green); color: #FFFFFF; border-radius: 50%; width: 1.6rem; height: 1.6rem;
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 0.85rem; font-weight: 700; flex: none;
   }
   .times { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
   .due {
-    background: var(--red); color: #fff; font-size: 0.68rem; font-weight: 800;
+    background: var(--red); color: #FFFFFF; font-size: 0.68rem; font-weight: 800;
     padding: 0.12rem 0.4rem; border-radius: 4px;
   }
   .stop-body { margin: 0.3rem 0 0.2rem; font-size: 1rem; }
   .stop-foot { font-size: 0.85rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
   .stop-foot button { margin-left: auto; padding: 0.3rem 0.7rem; }
 
-  .stop-open { font-size: 0.8rem; color: var(--green-light); }
+  .stop-open { font-size: 0.8rem; color: var(--green-light-fg); }
   .car-btn { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
   .stop-detail {
     border-top: 1px dashed var(--line); margin-top: 0.5rem; padding-top: 0.45rem;
@@ -119,7 +128,7 @@
   .stop-tasks li { display: flex; gap: 0.5rem; align-items: center; padding: 0.18rem 0; flex-wrap: wrap; }
   .house-row {
     display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;
-    padding: 0.28rem 0; border-top: 1px dashed #eef2f1;
+    padding: 0.28rem 0; border-top: 1px dashed #252F3A;
   }
   .house-lot { font-weight: 700; min-width: 4.2rem; }
   .house-addr { flex: 1 1 10rem; font-size: 0.82rem; }
@@ -127,14 +136,14 @@
   .stop { cursor: pointer; }
   .chip {
     display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 0.14rem 0.5rem;
-    border-radius: 999px; color: #fff; background: var(--green-light); white-space: nowrap;
+    border-radius: 999px; color: #FFFFFF; background: var(--green-light); white-space: nowrap;
   }
-  .t-field-measure { background: #b4461a; }
-  .t-post-walk { background: #8f1717; }
+  .t-field-measure { background: #0076DA; }
+  .t-post-walk { background: #9E1919; }
   .t-punch-out { background: var(--green); }
-  .t-blue-tape { background: #2563a8; }
-  .t-phase-check { background: #2bb99f; }
-  .t-warranty-t1, .t-warranty-t2-eval, .t-warranty-t2-complete { background: #6b4c9a; }
+  .t-blue-tape { background: #2563A8; }
+  .t-phase-check { background: #049AE2; }
+  .t-warranty-t1, .t-warranty-t2-eval, .t-warranty-t2-complete { background: #6B4C9A; }
 
   svg.map {
     flex: 0 1 430px; min-width: 280px; width: 100%; max-width: 470px; height: auto;
@@ -143,15 +152,15 @@
 
   .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
   table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-  th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid #e8efee; }
-  th { background: var(--wash); color: var(--green-dark); white-space: nowrap; }
+  th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid #26303C; }
+  th { background: var(--wash); color: var(--green-dark-fg); white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   .late { color: var(--red); font-weight: 700; }
   .ok-chip, .hold-chip {
     font-size: 0.75rem; font-weight: 800; padding: 0.1rem 0.45rem; border-radius: 4px;
   }
-  .ok-chip { background: #e5f4ee; color: #0f6b45; }
-  .hold-chip { background: #fdecea; color: #8f1717; }
+  .ok-chip { background: #1E2B39; color: #B4F6DB; }
+  .hold-chip { background: #431914; color: #F29E9E; }
 
   .addform {
     display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
@@ -159,50 +168,50 @@
     padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;
   }
   .addform label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; }
-  .finish { background: #f6faf8; border: 1px solid #cfe0da; border-radius: 8px; padding: 0.6rem; margin: 0.4rem 0; display: grid; gap: 0.4rem; }
+  .finish { background: #0D1218; border: 1px solid #8398AF; border-radius: 8px; padding: 0.6rem; margin: 0.4rem 0; display: grid; gap: 0.4rem; }
   .finish .row { flex-wrap: wrap; }
   .finish textarea { width: 100%; min-height: 3.2rem; }
-  .hs { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: #eef2f1; color: #1c2b28; }
-  .hs-red { background: #fdecea; color: #8f1717; }
-  .hs-yellow { background: #fff3c4; color: #7a5a00; }
-  .hs-blue { background: #e3eefb; color: #1d4e89; }
-  .hs-green { background: #e5f4ee; color: #0f6b45; }
-  .house { border: 1px solid #d8e2df; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem; background: #fff; }
+  .hs { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: #1C2734; color: #DFE4EA; }
+  .hs-red { background: #431914; color: #F29E9E; }
+  .hs-yellow { background: #433914; color: #FFE9AC; }
+  .hs-blue { background: #142943; color: #A3C5EE; }
+  .hs-green { background: #1E2B39; color: #B4F6DB; }
+  .house { border: 1px solid #343C46; border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem; background: #151D26; }
   .house-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; cursor: pointer; }
   .house-head b { font-size: 1rem; }
   .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
-  .step { background: #f6faf8; border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.86rem; }
-  .step b { display: block; margin-bottom: 0.2rem; color: var(--green); }
+  .step { background: #0D1218; border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.86rem; }
+  .step b { display: block; margin-bottom: 0.2rem; color: var(--green-fg); }
   .step .muted { display: block; }
   .parts-list { list-style: none; padding: 0; margin: 0.3rem 0 0; font-size: 0.86rem; }
-  .parts-list li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.25rem 0; border-top: 1px dashed #dfe7e4; }
+  .parts-list li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.25rem 0; border-top: 1px dashed #343C46; }
 
   .skipped { margin-top: 1.1rem; }
-  .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #e2e9e8; list-style: none; }
+  .skipped li { padding: 0.3rem 0; border-bottom: 1px dashed #27323E; list-style: none; }
   .skipped ul { padding: 0; margin: 0.4rem 0 0; }
   .measure-choices { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; }
   .measure-choice { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.55rem 0.7rem;
-    border: 1px solid #d5e4e0; border-radius: 10px; cursor: pointer; }
-  .measure-choice:has(input:checked) { border-color: #125952; background: #eef5f3; }
+    border: 1px solid #303D4B; border-radius: 10px; cursor: pointer; }
+  .measure-choice:has(input:checked) { border-color: #1F4A6B; background: #1C2733; }
   .measure-choice input { margin-top: 0.25rem; }
-  .done-today { padding: 0.5rem 0.9rem; margin: 0.6rem 0 0; background: #eef5f3; border: 1px solid #d5e4e0; border-radius: 10px; }
-  .done-today li { list-style: none; padding: 0.22rem 0; color: #3c544e; }
-  .done-today li b { color: #125952; }
+  .done-today { padding: 0.5rem 0.9rem; margin: 0.6rem 0 0; background: #1C2733; border: 1px solid #303D4B; border-radius: 10px; }
+  .done-today li { list-style: none; padding: 0.22rem 0; color: #C6CED7; }
+  .done-today li b { color: #48BEF2; }
 
   /* forecast */
   .fc-day {
     border: 1px solid var(--line); border-radius: 10px; margin-bottom: 0.7rem;
-    padding: 0.55rem 0.8rem; background: #fff;
+    padding: 0.55rem 0.8rem; background: #151D26;
   }
   .fc-day.over { border-color: var(--red); }
   .fc-head { display: flex; gap: 0.9rem; align-items: baseline; flex-wrap: wrap; font-size: 0.92rem; }
-  .fc-head b { color: var(--green-dark); font-size: 1.02rem; }
+  .fc-head b { color: var(--green-dark-fg); font-size: 1.02rem; }
   .fc-body { display: flex; gap: 0.9rem; align-items: flex-start; flex-wrap: wrap; }
   .fc-stops { list-style: none; margin: 0.45rem 0 0; padding: 0; flex: 1 1 300px; min-width: 260px; }
   svg.fc-map { flex: 0 1 260px; min-width: 220px; max-width: 300px; margin-top: 0.45rem; }
   .fc-stops li {
     display: flex; gap: 0.5rem; align-items: center; padding: 0.22rem 0;
-    border-top: 1px dashed #e8efee; font-size: 0.88rem; flex-wrap: wrap;
+    border-top: 1px dashed #26303C; font-size: 0.88rem; flex-wrap: wrap;
   }
   .fc-time { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 4.6rem; }
   .fc-label { flex: 1; min-width: 10rem; }
@@ -215,16 +224,16 @@
     box-shadow: 0 1px 0 var(--line);
   }
   .duty-wrap td:first-child, .duty-wrap th:first-child {
-    position: sticky; left: 0; background: #fff; z-index: 1;
+    position: sticky; left: 0; background: #151D26; z-index: 1;
   }
   .duty-wrap thead th:first-child { z-index: 3; background: var(--wash); }
-  .duty-unset { background: #fff3c4; }  /* light yellow until someone owns it */
+  .duty-unset { background: #433914; }  /* light yellow until someone owns it */
   .duty-name { display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
   .duty-tech-btn { padding: 0.15rem 0.5rem; font-size: 0.78rem; flex: none; }
 
   /* team time-off */
   .team-off-row td {
-    background: #fbf8f2; font-size: 0.85rem; padding-top: 0.35rem; padding-bottom: 0.5rem;
+    background: #423314; font-size: 0.85rem; padding-top: 0.35rem; padding-bottom: 0.5rem;
     border-bottom: 2px solid var(--line);
   }
   /* pinned to the visible edge so it never disappears when the table scrolls sideways */
@@ -235,11 +244,11 @@
   .team-off-add { white-space: nowrap; margin-left: 0.4rem; }
   .team-off-add input[type=date] { padding: 0.2rem 0.3rem; font-size: 0.82rem; }
   .off-chip {
-    display: inline-flex; align-items: center; gap: 0.25rem; background: #fff4e5;
-    border: 1px solid #e0a960; color: #7a4d00; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 0.25rem; background: #432F14;
+    border: 1px solid #DEA354; color: #FFE0AC; border-radius: 999px;
     padding: 0.08rem 0.5rem; font-size: 0.78rem; margin: 0 0.3rem 0.25rem 0; white-space: nowrap;
   }
-  .off-x { background: none; border: none; color: #7a4d00; padding: 0; font-size: 0.8rem; }
+  .off-x { background: none; border: none; color: #FFE0AC; padding: 0; font-size: 0.8rem; }
 
   /* one-page print sheet: hidden on screen, the only thing on paper */
   #print-sheet { display: none; }
@@ -275,10 +284,10 @@
   /* login */
   .center { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--green); }
   form.login {
-    background: #fff; border-radius: 14px; padding: 2rem 1.8rem; width: min(92vw, 24rem);
+    background: #151D26; border-radius: 14px; padding: 2rem 1.8rem; width: min(92vw, 24rem);
     display: flex; flex-direction: column; gap: 0.8rem;
   }
-  form.login h1 { margin: 0; color: var(--green); letter-spacing: 0.04em; }
+  form.login h1 { margin: 0; color: var(--green-fg); letter-spacing: 0.04em; }
   form.login .sub { margin: -0.5rem 0 0.3rem; font-size: 0.8rem; }
   form.login label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
   .loginmark { display: flex; align-items: center; gap: 0.7rem; }
@@ -289,11 +298,8 @@
 <div id="login" class="center" hidden>
   <form class="login" onsubmit="return doLogin(event)">
     <div class="loginmark">
-      <svg width="46" height="46" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#125952"/><path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/><rect x="27" y="40" width="10" height="8" fill="#fff"/><circle cx="14" cy="40" r="4" fill="#568c8c"/><circle cx="50" cy="40" r="4" fill="#568c8c"/><circle cx="32" cy="28" r="4" fill="#568c8c"/></svg>
-      <div>
-        <h1>AUTOBOT</h1>
-        <div class="sub muted">Carter Kitchen and Bath · part of the COAST suite</div>
-      </div>
+      <img src="/brand/autobot-header.png" alt="Autobot" style="height:56px;border-radius:8px">
+      <div class="sub muted">Field routing · part of the CabinetTron suite</div>
     </div>
     <label>Username <input id="email" type="text" autocomplete="username" placeholder="first.last" required /></label>
     <label>Password <input id="password" type="password" autocomplete="current-password" required /></label>
@@ -308,13 +314,9 @@
   <header>
     <a id="suitebtn" class="suitebtn" href="/#/suite" title="COAST suite — all apps" aria-label="All apps">⠿</a>
     <div class="wordmark" id="wordmark" title="Home — all COAST apps">
-      <svg width="34" height="34" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#194039"/><path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/><rect x="27" y="40" width="10" height="8" fill="#fff"/><circle cx="14" cy="40" r="4" fill="#568c8c"/><circle cx="50" cy="40" r="4" fill="#568c8c"/><circle cx="32" cy="28" r="4" fill="#568c8c"/></svg>
-      <div>
-        <b>AUTOBOT</b>
-        <small>Carter Kitchen and Bath</small>
-      </div>
+      <img src="/brand/autobot-header.png" alt="Autobot" style="height:40px;border-radius:6px;display:block">
     </div>
-    <span id="envbadge" hidden style="background:#DE2020;color:#fff;font-weight:700;font-size:12px;letter-spacing:1px;padding:3px 10px;border-radius:999px;margin-left:10px;align-self:center">TEST</span>
+    <span id="envbadge" hidden style="background:#EE6E6E;color:#FFFFFF;font-weight:700;font-size:12px;letter-spacing:1px;padding:3px 10px;border-radius:999px;margin-left:10px;align-self:center">TEST</span>
     <div class="who">
       <span id="who"></span>
       <button onclick="signOut()">Sign out</button>
@@ -559,7 +561,7 @@ function routeHtml(plan, note) {
         <span class="times">${s.arrive} – ${s.depart}</span>
       </div>
       <div class="stop-body">${esc(s.label)}${s.houses ? ` <span class="muted">· ${s.houses} active houses</span>` : ""}</div>
-      ${s.measure_notes ? `<div class="stop-foot" style="color:#9c3b1e">✎ first measure: ${esc(s.measure_notes)}</div>` : ""}
+      ${s.measure_notes ? `<div class="stop-foot" style="color:#EDAB97">✎ first measure: ${esc(s.measure_notes)}</div>` : ""}
       <div class="stop-foot muted">
         ${s.drive_min} min drive · ${s.duration_min} min on-site${s.notes ? " · " + esc(s.notes) : ""}
         <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}" target="_blank" rel="noreferrer">navigate</a>
@@ -569,7 +571,7 @@ function routeHtml(plan, note) {
           title="Standing at the house? Move its pin to where you are — fixes the route in Autobot and CabinetTron">📍 Pin here</button>` : ""}
         <span class="stop-open">▸ tap for details</span>
         ${s.visit_type === "field_measure" && s.job_id && s.remeasure
-          ? `<button class="ghost" style="color:#9c3b1e;border-color:#9c3b1e"
+          ? `<button class="ghost" style="color:#EDAB97;border-color:#A33D1F"
                onclick="event.stopPropagation(); remeasureAnswer(${s.visit_id}, 'not_corrected', this)"
                title="Still wrong — logged now, next remeasure in 2-4 days">✗ Not corrected</button>
              <button onclick="event.stopPropagation(); remeasureAnswer(${s.visit_id}, 'corrected', this)"
@@ -593,7 +595,7 @@ function routeHtml(plan, note) {
       <input type="date" value="${plan.day}" onchange="routeDay=this.value;renderRoute()" />
       ${workerSelect()}
       <button onclick="renderRoute()">Rebuild Route</button>
-      <button class="ghost" ${plan.reversed ? 'style="background:#125952;color:#fff"' : ""}
+      <button class="ghost" ${plan.reversed ? 'style="background:#48BEF2;color:#FFFFFF"' : ""}
         onclick="routeRev=!routeRev;renderRoute()"
         title="Run the same loop in the opposite direction">⇄ ${plan.reversed ? "Reversed" : "Reverse"}</button>
       <button class="ghost" onclick="renderRoute(true)">⟳ Sync from CabinetTron</button>
@@ -682,12 +684,12 @@ function mapSvg(plan, mini = false) {
   const poly = [...pts, pts[0]].map((p) => sx(p.lon).toFixed(1) + "," + sy(p.lat).toFixed(1)).join(" ");
   const r = mini ? 8 : 10, sq = mini ? 5 : 6, fs = mini ? 9 : 10;
   const dots = plan.stops.map((s) => `
-    <circle cx="${sx(s.lon).toFixed(1)}" cy="${sy(s.lat).toFixed(1)}" r="${r}" fill="${s.anchor ? "#de2020" : "#568c8c"}"/>
-    <text x="${sx(s.lon).toFixed(1)}" y="${(sy(s.lat) + fs * 0.36).toFixed(1)}" text-anchor="middle" fill="#fff" font-size="${fs}" font-weight="700">${s.order}</text>`).join("");
+    <circle cx="${sx(s.lon).toFixed(1)}" cy="${sy(s.lat).toFixed(1)}" r="${r}" fill="${s.anchor ? "#EE6E6E" : "#8FB8CF"}"/>
+    <text x="${sx(s.lon).toFixed(1)}" y="${(sy(s.lat) + fs * 0.36).toFixed(1)}" text-anchor="middle" fill="#151D26" font-size="${fs}" font-weight="700">${s.order}</text>`).join("");
   return `<svg class="map ${mini ? "fc-map" : ""}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Route map">
-    <polyline points="${poly}" fill="none" stroke="#568c8c" stroke-width="2" stroke-dasharray="5 4"/>
-    <rect x="${(sx(plan.depot.lon) - sq).toFixed(1)}" y="${(sy(plan.depot.lat) - sq).toFixed(1)}" width="${sq * 2}" height="${sq * 2}" fill="#125952"/>
-    <text x="${(sx(plan.depot.lon) + sq + 3).toFixed(1)}" y="${(sy(plan.depot.lat) + 4).toFixed(1)}" fill="#194039" font-size="${mini ? 10 : 11}" font-weight="600">${plan.worker_id ? "Home" : "Shop"}</text>
+    <polyline points="${poly}" fill="none" stroke="#3A5568" stroke-width="2" stroke-dasharray="5 4"/>
+    <rect x="${(sx(plan.depot.lon) - sq).toFixed(1)}" y="${(sy(plan.depot.lat) - sq).toFixed(1)}" width="${sq * 2}" height="${sq * 2}" fill="#0E2133"/>
+    <text x="${(sx(plan.depot.lon) + sq + 3).toFixed(1)}" y="${(sy(plan.depot.lat) + 4).toFixed(1)}" fill="#070D15" font-size="${mini ? 10 : 11}" font-weight="600">${plan.worker_id ? "Home" : "Shop"}</text>
     ${dots}</svg>`;
 }
 
@@ -1605,7 +1607,7 @@ async function setDuty(communityId, duty, sel) {
       clear: v === "rules",
     })});
     sel.classList.toggle("duty-unset", v === "rules");
-    sel.style.background = "#e5f4ee";
+    sel.style.background = "#1E2B39";
     setTimeout(() => { sel.style.background = ""; }, 900);
     if (result.reassigned) console.log(duty, "reassigned", result.reassigned);
   } catch (ex) {

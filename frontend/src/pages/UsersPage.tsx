@@ -162,7 +162,7 @@ export default function UsersPage({ me }: { me: User }) {
           ? " · They'll get an email to set their own password."
           : " · Email invites aren't set up — you'll set a temporary password and share it."}
       </p>
-      {notice && <p style={{ color: "var(--green, #125952)" }}>{notice}</p>}
+      {notice && <p style={{ color: "var(--green, #48BEF2)" }}>{notice}</p>}
       {error && <p className="error">{error}</p>}
 
       <div className="table-wrap">
@@ -319,7 +319,7 @@ function ActivityLogCard({ users }: { users: ManagedUser[] }) {
                 <td style={{ whiteSpace: "nowrap" }}>{when(r.at)}</td>
                 <td>{r.user_name ?? r.user_email ?? "—"}</td>
                 <td>{r.action}</td>
-                <td style={{ color: r.status_code >= 400 ? "#c0392b" : undefined }}>
+                <td style={{ color: r.status_code >= 400 ? "#E68B81" : undefined }}>
                   {r.status_code >= 400 ? `failed (${r.status_code})` : "ok"}
                 </td>
               </tr>

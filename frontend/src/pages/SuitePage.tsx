@@ -5,61 +5,37 @@
 const TILE = 64; // icon design space
 
 function CabinetTronIcon() {
-  return (
-    <svg viewBox={`0 0 ${TILE} ${TILE}`}>
-      <rect width="64" height="64" rx="14" fill="#125952" />
-      <rect x="14" y="12" width="36" height="40" rx="2" fill="none" stroke="#fff" strokeWidth="3.5" />
-      <line x1="32" y1="12" x2="32" y2="52" stroke="#fff" strokeWidth="3.5" />
-      <circle cx="26.5" cy="32" r="2.6" fill="#568c8c" />
-      <circle cx="37.5" cy="32" r="2.6" fill="#568c8c" />
-    </svg>
-  );
+  return <img src="/brand/cabinettron-icon.png" alt="CabinetTron" />;
 }
 
 function OptimusIcon() {
   return (
     <svg viewBox={`0 0 ${TILE} ${TILE}`}>
-      <rect width="64" height="64" rx="14" fill="#125952" />
+      <rect width="64" height="64" rx="14" fill="#0E2133" />
       <path d="M32 12 L50 21 L50 41 L32 50 L14 41 L14 21 Z" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
       <path d="M14 21 L32 30 L50 21 M32 30 L32 50" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
-      <path d="M37 17.5 L27 12.7" stroke="#568c8c" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M37 17.5 L27 12.7" stroke="#48BEF2" strokeWidth="3.5" strokeLinecap="round" />
     </svg>
   );
 }
 
 function AutobotIcon() {
-  return (
-    <svg viewBox={`0 0 ${TILE} ${TILE}`}>
-      <rect width="64" height="64" rx="14" fill="#125952" />
-      <path d="M14 40 C14 24, 50 24, 50 40" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeDasharray="6 5" />
-      <rect x="27" y="40" width="10" height="8" fill="#fff" />
-      <circle cx="14" cy="40" r="4" fill="#568c8c" />
-      <circle cx="50" cy="40" r="4" fill="#568c8c" />
-      <circle cx="32" cy="28" r="4" fill="#568c8c" />
-    </svg>
-  );
+  return <img src="/brand/autobot-icon.png" alt="Autobot" />;
 }
 
 function SterlingIcon() {
-  return (
-    <svg viewBox={`0 0 ${TILE} ${TILE}`}>
-      <rect width="64" height="64" rx="14" fill="#125952" />
-      <path d="M12 30 L30 12 L50 12 L50 32 L32 50 Z" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
-      <circle cx="42" cy="20" r="3.2" fill="#568c8c" />
-      <path d="M31 27.5 c-4 0 -4 5 0 5 c4 0 4 5 0 5 m0 -12.5 v-2 m0 16.5 v-2" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
+  return <img src="/brand/sterling-icon.png" alt="Sterling" />;
 }
 
 function TailgateIcon() {
   return (
     <svg viewBox={`0 0 ${TILE} ${TILE}`}>
-      <rect width="64" height="64" rx="14" fill="#125952" />
+      <rect width="64" height="64" rx="14" fill="#0E2133" />
       <path d="M12 22 H38 V40 H12 Z" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
       <path d="M38 28 H48 L52 34 V40 H38" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
-      <circle cx="21" cy="43" r="4" fill="#568c8c" />
-      <circle cx="45" cy="43" r="4" fill="#568c8c" />
-      <line x1="38" y1="24" x2="38" y2="18" stroke="#568c8c" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="21" cy="43" r="4" fill="#48BEF2" />
+      <circle cx="45" cy="43" r="4" fill="#48BEF2" />
+      <line x1="38" y1="24" x2="38" y2="18" stroke="#48BEF2" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }

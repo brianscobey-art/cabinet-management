@@ -40,13 +40,13 @@ export default function HelpPage({ me }: { me?: User }) {
             alignItems: "center",
             gap: 12,
             padding: "12px 16px",
-            background: "#125952",
-            color: "#fff",
+            background: "#0E2133",
+            color: "#FFFFFF",
             borderRadius: 8,
             marginBottom: 16,
           }}
         >
-          <img src="/carter-logo.png" alt="Carter Lumber" style={{ height: 26 }} />
+          <img src="/brand/cabinettron-header.png" alt="CabinetTron" style={{ height: 34, borderRadius: 6 }} />
           <b style={{ fontSize: "1.05rem" }}>Help &amp; User Guide</b>
           <a
             href="#"
@@ -54,7 +54,7 @@ export default function HelpPage({ me }: { me?: User }) {
               e.preventDefault();
               window.location.hash = "#";
             }}
-            style={{ marginLeft: "auto", color: "#fff", fontWeight: 600 }}
+            style={{ marginLeft: "auto", color: "#FFFFFF", fontWeight: 600 }}
           >
             ← Back to sign in
           </a>
@@ -103,7 +103,7 @@ export default function HelpPage({ me }: { me?: User }) {
           {sec.topics.map((t, ti) => (
             <div
               key={t.q}
-              style={{ borderTop: ti ? "1px solid #eee" : undefined, padding: "8px 0" }}
+              style={{ borderTop: ti ? "1px solid #1C2835" : undefined, padding: "8px 0" }}
             >
               <button
                 className="link-btn"

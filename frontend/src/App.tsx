@@ -163,9 +163,8 @@ export default function App() {
             ⠿
           </a>
           <a className="logo-home" href="#/suite" title="Home — all COAST apps">
-            <img src="/carter-logo.png" alt="Carter Lumber — home" className="logo" />
+            <img src="/brand/cabinettron-header.png" alt="CabinetTron — home" className="logo" />
           </a>
-          <span>Carter Kitchen and Bath</span>
         </h1>
         {canWrite && (
           <button
@@ -329,9 +328,9 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
     <div className="center">
       <form className="login" onSubmit={submit}>
         <div className="login-brand">
-          <img src="/carter-logo.png" alt="Carter Lumber" />
+          <img src="/brand/cabinettron-header.png" alt="CabinetTron" />
         </div>
-        <h1>Carter Kitchen and Bath</h1>
+        <h1>Sign in</h1>
         <label>
           Username
           <input

@@ -37,7 +37,7 @@ export default function SetPasswordPage() {
   return (
     <div className="center">
       <form className="login" onSubmit={submit}>
-        <img src="/carter-logo.png" alt="Carter Lumber" style={{ height: 34, marginBottom: 8 }} />
+        <img src="/brand/cabinettron-header.png" alt="CabinetTron" style={{ height: 48, marginBottom: 8, borderRadius: 8 }} />
         <h2 style={{ margin: "0 0 4px" }}>Set your password</h2>
         {token ? (
           <>
