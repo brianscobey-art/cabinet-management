@@ -200,7 +200,7 @@ function HouseRows({
       </tr>
       {open && (
         <tr>
-          <td colSpan={9} style={{ background: "var(--bg, #f6faf8)" }}>
+          <td colSpan={9} style={{ background: "var(--bg, #E4E8EC)" }}>
             <HouseDetail r={r} canWrite={canWrite} onChange={onChange} />
           </td>
         </tr>
