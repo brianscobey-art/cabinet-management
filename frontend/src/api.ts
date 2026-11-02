@@ -1200,6 +1200,8 @@ export interface InstallItem {
   status: JobStatus;
   install_date: string;
   salesperson: string | null;
+  cabinets_received: string | null; // last cabinet receipt per DOMO
+  cabinets_in: boolean; // every cabinet PO received -- ready to go
 }
 
 export const getInstalls = (params: Record<string, string>) => {

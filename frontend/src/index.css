@@ -835,7 +835,11 @@ h3.kb-head {
 }
 
 .cal-chip.not-ordered {
-  background: #005BB0; /* burnt orange — cabinets not yet ordered */
+  background: #005BB0; /* blue — cabinets not yet ordered */
+}
+
+.cal-chip.received {
+  background: #1E8E4E; /* green — cabinets received per DOMO, ready to go */
 }
 
 .cal-chip:hover {

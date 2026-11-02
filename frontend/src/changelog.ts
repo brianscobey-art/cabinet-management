@@ -8,6 +8,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "11/2/26",
+    title: "Schedule: green = cabinets received",
+    detail:
+      "An install turns green on the Schedule once DOMO shows every cabinet PO for the job received — it's ready to go. Tops and hardware don't count. Hover a chip (or open the Day view) to see the date the cabinets came in.",
+  },
+  {
     date: "10/31/26",
     title: "New look: CabinetTron theme and logos",
     detail:

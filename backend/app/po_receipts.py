@@ -342,6 +342,41 @@ def _iso(d):
     return d.isoformat() if d else None
 
 
+_NOT_CAB_VENDORS = ("HARDWARE", "STONE", "AMAZON")
+
+
+def is_cabinet_po(line: dict, cabinet_po: str | None = None) -> bool:
+    """A PO line for the cabinets themselves -- DOMO products read "CABINETS
+    EVERLUX", "CABINETS LEGACY SPECIAL ORDER"...; tops, cabinet hardware and
+    the stone / hardware / Amazon vendors don't count. The job's own Cabinet
+    PO # always counts."""
+    if cabinet_po and line["our_po"] == cabinet_po:
+        return True
+    prod, vend = (line["product"] or "").upper(), (line["vendor"] or "").upper()
+    if any(k in vend for k in _NOT_CAB_VENDORS):
+        return False
+    if not prod:  # tracker line typed without a product
+        return "CABINET" in vend or "EVERYTHING BUILDING" in vend or "EVERLUX" in vend
+    return "CABINET" in prod and not any(k in prod for k in ("NON CABINET", "HARDWARE", "TOP"))
+
+
+def cabinets_received(db, jobs: list[Job]) -> dict[int, date | None]:
+    """job id -> date its cabinets came in per DOMO (Brian 11/2/26: the schedule
+    shows these jobs green, ready to go). Every cabinet PO has to be received
+    (a closed PO with no receipt -- cancelled -- doesn't hold it up), and at
+    least one actually was; the date is the last cabinet receipt."""
+    out = {}
+    by_id = {j.id: j for j in jobs}
+    for job_id, lines in po_lines(db, jobs).items():
+        cabs = [p for p in lines if is_cabinet_po(p, by_id[job_id].cabinet_po)]
+        if not cabs or any(not p["receipts"] and (p["status"] or "").lower() != "closed" for p in cabs):
+            continue
+        dates = [r["receipt_date"] for p in cabs for r in p["receipts"]]
+        if dates:
+            out[job_id] = max((d for d in dates if d), default=None)
+    return out
+
+
 def job_purchase_orders(db, job: Job, today: date | None = None) -> dict:
     """Every PO on one job for its Orders section (Brian 10/28/26): our POs
     (DOMO + the tracker's PO Tracking sheet, see po_lines), each with its DOMO

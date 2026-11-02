@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import read_access
 from app.database import get_db
 from app.models import Job, JobStatus
+from app.po_receipts import cabinets_received
 
 router = APIRouter(tags=["schedule"])
 
@@ -21,6 +22,8 @@ class InstallItem(BaseModel):
     status: JobStatus
     install_date: date
     salesperson: str | None  # first name for the calendar chip
+    cabinets_received: date | None = None  # last cabinet receipt per DOMO
+    cabinets_in: bool = False  # every cabinet PO received -- the chip goes green
 
 
 @router.get("/schedule/installs", response_model=list[InstallItem], dependencies=[Depends(read_access)])
@@ -39,6 +42,7 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
     if account_id is not None:
         query = query.filter(Job.account_id == account_id)
     jobs = query.order_by(Job.install_date, Job.job_code).all()
+    received = cabinets_received(db, jobs)
     return [
         InstallItem(
             job_id=j.id,
@@ -50,6 +54,8 @@ def installs(start: date, end: date, account_id: int | None = None, db: Session 
             status=j.status,
             install_date=j.install_date,
             salesperson=(j.salesperson or "").strip().split()[0] or None if j.salesperson else None,
+            cabinets_received=received.get(j.id),
+            cabinets_in=j.id in received,
         )
         for j in jobs
     ]

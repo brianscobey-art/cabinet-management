@@ -99,6 +99,7 @@ export default function SchedulePage() {
           <span className="cal-title">{title}</span>
           <span className="muted">{items.length} install{items.length === 1 ? "" : "s"}</span>
           <span className="cal-legend">
+            <span className="cal-chip received legend-chip">cabinets received</span>
             <span className="cal-chip legend-chip">ordered</span>
             <span className="cal-chip not-ordered legend-chip">not ordered</span>
           </span>
@@ -118,15 +119,23 @@ export default function SchedulePage() {
 const NOT_ORDERED = new Set(["1.0-Track", "1.1-PreOrd", "1.2-NdOrd", "1.3-Ord Prcss", "1.4-OrdSub"]);
 const isOrdered = (item: InstallItem) => !NOT_ORDERED.has(item.status);
 
+// Green once DOMO shows every cabinet PO received -- the job is ready to go.
+function chipState(item: InstallItem) {
+  if (item.cabinets_in) {
+    return { cls: "received", label: `cabinets received${item.cabinets_received ? ` ${fmtDate(item.cabinets_received)}` : ""}` };
+  }
+  return isOrdered(item) ? { cls: "", label: "ordered" } : { cls: "not-ordered", label: "NOT ordered" };
+}
+
 function Chip({ item }: { item: InstallItem }) {
-  const ordered = isOrdered(item);
+  const state = chipState(item);
   return (
     <a
-      className={`cal-chip ${ordered ? "" : "not-ordered"}`}
+      className={`cal-chip ${state.cls}`}
       href={`#/jobs/${item.job_id}`}
       title={`${item.address} — ${item.account_name}${item.community_name ? ` / ${item.community_name}` : ""}${
         item.salesperson ? ` — ${item.salesperson}` : ""
-      } — ${ordered ? "ordered" : "NOT ordered"}`}
+      } — ${state.label}`}
     >
       <span className="cal-chip-code">{item.job_code ?? item.address}</span>
       {item.salesperson && <span className="cal-chip-sales">{item.salesperson}</span>}
@@ -220,6 +229,7 @@ function DayList({ date, items }: { date: Date; items: InstallItem[] }) {
             <th>Community</th>
             <th>Lot</th>
             <th>Status</th>
+            <th>Cabinets</th>
           </tr>
         </thead>
         <tbody>
@@ -235,11 +245,16 @@ function DayList({ date, items }: { date: Date; items: InstallItem[] }) {
               <td>
                 <span className={`badge badge-${statusSlug(i.status)}`}>{i.status}</span>
               </td>
+              <td>
+                <span className={`cal-chip legend-chip ${chipState(i).cls}`} style={{ display: "inline-flex" }}>
+                  {chipState(i).label}
+                </span>
+              </td>
             </tr>
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">
+              <td colSpan={7} className="muted">
                 No installs scheduled for {fmtDate(iso(date))}.
               </td>
             </tr>
