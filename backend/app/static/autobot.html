@@ -570,7 +570,13 @@ function routeHtml(plan, note) {
           : s.visit_type === "field_measure" && s.job_id
           ? `<button class="ghost" onclick="event.stopPropagation(); notReady(${s.visit_id}, this)"
                title="House isn't ready to measure — back on the schedule in 2 days">⏸ Not ready</button>
-             <button onclick="openMeasure(${s.visit_id}, 'finish-${s.visit_id}')">✓ Finish measure</button>`
+             <button class="ghost" style="color:#9c3b1e;border-color:#9c3b1e"
+               onclick="event.stopPropagation(); openIncorrect(${s.visit_id}, 'finish-${s.visit_id}')"
+               title="Measured, but something's wrong — logged in CabinetTron, remeasure in 2-4 days">⚠ Measured incorrect</button>
+             <button onclick="event.stopPropagation(); measuredCorrect(${s.visit_id}, this)"
+               title="Logged in CabinetTron as complete & correct — off the route, phase to 4.1">✓ Measured correct</button>
+             <button class="ghost" onclick="event.stopPropagation(); openMeasure(${s.visit_id}, 'finish-${s.visit_id}')"
+               title="Incomplete, or a measure done on another day">more…</button>`
           : WALK_TYPES.includes(s.visit_type)
           ? `<button onclick="openFinish(${s.visit_id}, '${s.visit_type}', 'finish-${s.visit_id}')">✓ Finish</button>`
           : `<button onclick="doneVisit(${s.visit_id})">✓ Done</button>`}
@@ -941,6 +947,59 @@ async function remeasureAnswer(visitId, outcome, btn) {
     btn.textContent = was;
     alert(ex.message);
   }
+}
+
+// One tap from the stop: measured complete & correct. Writes CabinetTron's
+// field-measure record (date + who/when), moves the phase to 4.1 and takes
+// the house off the route and out of phase checks.
+async function measuredCorrect(visitId, btn) {
+  if (!confirm("Measured complete & correct?\n\nLogged in CabinetTron now, and the house comes off the route.")) return;
+  const row = btn.parentElement;
+  row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  btn.textContent = "…";
+  try {
+    await api("/autobot/visits/" + visitId + "/field-measure", { method: "POST",
+      body: JSON.stringify({ outcome: "correct" }) });
+    btn.textContent = "✓ Logged";
+    setTimeout(renderRoute, 900);
+  } catch (ex) {
+    row.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    btn.textContent = "✓ Measured correct";
+    alert(ex.message);
+  }
+}
+
+// Measured incorrect: say what's wrong (the remeasure carries it), then save.
+function openIncorrect(visitId, slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  if (slot.innerHTML) { slot.innerHTML = ""; return; }
+  slot.innerHTML = `
+    <form class="finish" onsubmit="return submitIncorrect(event, ${visitId}, '${slotId}')" onclick="event.stopPropagation()">
+      <textarea id="inotes-${visitId}" placeholder="What's incorrect? The remeasure in 2-4 days carries this note."></textarea>
+      <div class="row">
+        <button type="submit" style="background:#9c3b1e;border-color:#9c3b1e">⚠ Save — measured incorrect</button>
+        <button type="button" class="ghost" onclick="document.getElementById('${slotId}').innerHTML=''">Cancel</button>
+        <span id="ierr-${visitId}" class="error"></span>
+      </div>
+    </form>`;
+  document.getElementById("inotes-" + visitId).focus();
+}
+
+async function submitIncorrect(e, visitId, slotId) {
+  e.preventDefault();
+  const notes = document.getElementById("inotes-" + visitId).value.trim();
+  const err = document.getElementById("ierr-" + visitId);
+  if (!notes) { err.textContent = "Say what's incorrect"; return false; }
+  const btn = e.target.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    await api("/autobot/visits/" + visitId + "/field-measure", { method: "POST",
+      body: JSON.stringify({ outcome: "incorrect", notes }) });
+    document.getElementById(slotId).innerHTML = "";
+    renderRoute();
+  } catch (ex) { btn.disabled = false; err.textContent = ex.message; }
+  return false;
 }
 
 // One tap from the stop: the house wasn't ready, put it back on in 2 days.
