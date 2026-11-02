@@ -1528,6 +1528,30 @@ def _order_within_communities(route: list[dict], day: date, is_scattered=None) -
     return out
 
 
+def planned_before(
+    db: Session,
+    day: date,
+    real_drive: bool = False,
+    worker_id: int | None = None,
+) -> tuple[set[int], int]:
+    """Every visit routed from today up to (not including) `day`, each workday
+    planned as if the one before it got done — what a future day's route can
+    assume is finished (Brian 11/2/26). Same walk as the forecast, so the Route
+    tab's future day matches that day on the Forecast tab. Returns the visit
+    ids and how many workdays were assumed."""
+    done: set[int] = set()
+    cur, workdays = today_central(), 0
+    while cur < day and workdays < 15:  # the forecast's own reach
+        if cur.weekday() < 5:
+            plan = plan_day(
+                db, cur, real_drive=real_drive, exclude_ids=frozenset(done), worker_id=worker_id
+            )
+            done.update(s["visit_id"] for s in plan["stops"])
+            workdays += 1
+        cur += timedelta(days=1)
+    return done, workdays
+
+
 def plan_horizon(
     db: Session,
     start: date,

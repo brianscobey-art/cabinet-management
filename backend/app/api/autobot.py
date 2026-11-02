@@ -802,8 +802,17 @@ def plan(
     reverse: bool = False,
     db: Session = Depends(get_db),
 ):
-    return plan_day(db, day or today_central(), real_drive=real_drive, worker_id=worker_id,
-                    reverse=reverse)
+    from app.autobot import planned_before
+
+    day = day or today_central()
+    # A future day assumes today (and every workday before it) gets done, so it
+    # shows what's actually left for that day instead of repeating today's stops.
+    done, workdays = (planned_before(db, day, real_drive=real_drive, worker_id=worker_id)
+                      if day > today_central() else (set(), 0))
+    plan = plan_day(db, day, real_drive=real_drive, worker_id=worker_id, reverse=reverse,
+                    exclude_ids=frozenset(done))
+    plan["assumed_done"] = {"stops": len(done), "workdays": workdays} if workdays else None
+    return plan
 
 
 class RouteStartIn(BaseModel):

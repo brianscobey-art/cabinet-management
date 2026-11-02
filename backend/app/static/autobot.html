@@ -596,6 +596,11 @@ function routeHtml(plan, note) {
     <p class="muted">${esc(plan.worker)}'s loop${workerId ? " — starts and ends at their place" : " — starts and ends at the shop"}</p>
     ${note ? `<p class="muted">${esc(note)}</p>` : ""}
     ${startBar(plan)}
+    ${plan.assumed_done ? `<p class="muted">Assumes ${plan.assumed_done.workdays === 1
+      ? "today's " + plan.assumed_done.stops + " stops get done"
+      : "the " + plan.assumed_done.stops + " stops planned for today and the " + (plan.assumed_done.workdays - 1)
+        + " workday" + (plan.assumed_done.workdays > 2 ? "s" : "") + " after it get done"}
+      — this is what's left for ${fmtDate(plan.day)}.</p>` : ""}
     ${plan.overflow ? `<div class="overflow">⚠ This day doesn't fit — it runs past ${plan.workday_end} (back at ${plan.back}). Move something, or it's a two-truck day.</div>` : ""}
     <div class="summary">
       <span><b>${plan.stops.length}</b> stops${(plan.completed || []).length ? ` <span class="muted">+ ${plan.completed.length} done</span>` : ""}</span>
