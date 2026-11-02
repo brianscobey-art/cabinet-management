@@ -904,6 +904,15 @@ def exists_any_for_request(db: Session, service_request_id: int) -> bool:
 
 # ---------------------------------------------------------------- assignment
 
+def pin_day(v: Visit) -> date | None:
+    """The day a pinned stop is owed. A pinned day that passed without the stop
+    getting done rolls to today, instead of the stop dropping off every route
+    (a Not ready pin for Saturday, or a day he didn't get to it)."""
+    if v.scheduled_date is None:
+        return None
+    return max(v.scheduled_date, today_central())
+
+
 def route_start_for(db: Session, worker: Worker | None, day: date) -> RouteStart | None:
     """Today's Start route press for this person (None = not started yet)."""
     q = db.query(RouteStart).filter(RouteStart.day == day)
@@ -1184,7 +1193,7 @@ def plan_day(
         label = visit_label(v)
         if rescued and v.assignee:
             label += f" (covering for {v.assignee.name} — off)"
-        if v.scheduled_date and v.scheduled_date != day:
+        if v.scheduled_date and pin_day(v) != day:
             continue  # pinned to another day
         if v.open_date and v.open_date > day:
             # A measure's open date is the tracker's measure date — but slab
@@ -1256,7 +1265,7 @@ def plan_day(
     # Hard anchors: due/overdue field measures & post-walks, plus anything pinned today.
     def is_anchor(c: dict) -> bool:
         v = c["visit"]
-        if v.scheduled_date == day:
+        if v.scheduled_date and pin_day(v) == day:
             return True
         return (
             v.visit_type in HARD_ANCHOR_TYPES

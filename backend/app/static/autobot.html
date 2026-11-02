@@ -959,9 +959,11 @@ async function notReady(visitId, btn) {
     alert(ex.message);
   }
 }
-function openMeasure(visitId, slotId) {
+const measureAfter = {};  // visitId -> what to redraw once saved (Route or Visit Board)
+function openMeasure(visitId, slotId, after) {
   const slot = document.getElementById(slotId);
   if (!slot) return;
+  measureAfter[visitId] = after || renderRoute;
   if (slot.innerHTML) { slot.innerHTML = ""; return; }
   slot.innerHTML = `
     <form class="finish" onsubmit="return submitMeasure(event, ${visitId}, '${slotId}')" onclick="event.stopPropagation()">
@@ -993,7 +995,7 @@ async function submitMeasure(e, visitId, slotId) {
       completed_on: document.getElementById("mon-" + visitId).value || null,
     })});
     document.getElementById(slotId).innerHTML = "";
-    renderRoute();
+    (measureAfter[visitId] || renderRoute)();
   } catch (ex) { err.textContent = ex.message; }
   return false;
 }
@@ -1347,7 +1349,9 @@ async function renderBoard() {
             `<option value="${w.id}" ${v.assigned_to === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}
         </select></td>
         <td>${v.status === "pending"
-          ? (WALK_TYPES.includes(v.visit_type)
+          ? (v.visit_type === "field_measure" && v.job_id
+              ? `<button onclick="openMeasure(${v.id}, 'bfinish-${v.id}', renderBoard)" title="Finish measure — correct, incorrect, incomplete, or not ready">✓</button>`
+              : WALK_TYPES.includes(v.visit_type)
               ? `<button onclick="openFinish(${v.id}, '${v.visit_type}', 'bfinish-${v.id}', renderBoard)" title="Finish with what you found">✓</button>`
               : `<button onclick="actVisit(${v.id},'done')" title="Mark completed">✓</button>`) +
             `<button class="ghost" onclick="actVisit(${v.id},'canceled')" title="Cancel">✕</button>`

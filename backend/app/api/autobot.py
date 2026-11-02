@@ -392,6 +392,10 @@ def patch_visit(
     if new_status is not None:
         if new_status not in VISIT_STATUSES:
             raise HTTPException(422, f"status must be one of: {', '.join(VISIT_STATUSES)}")
+        if new_status == "done" and visit.visit_type == "field_measure" and visit.job_id:
+            # A bare Done can't say whether the house was measured or just
+            # visited (four Compass Lakes "Dones" on 10/29 were not-ready trips).
+            raise HTTPException(422, "Finish a field measure with Finish measure or Not ready")
         visit.status = new_status
         if new_status == "done":
             visit.completed_at = datetime.now(timezone.utc)
