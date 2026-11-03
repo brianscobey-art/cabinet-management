@@ -8,6 +8,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "11/3/26",
+    title: "Report: Installed, Not Final Billed",
+    detail:
+      "Reports > Accounting has a new list of every house that's installed (tracker Actual Install Date) but has no sales on its G-code in DOMO yet — oldest install first, with days since install and what's been billed on the I-code so far. Filter by install date.",
+  },
+  {
     date: "11/2/26",
     title: "Schedule: green = cabinets received",
     detail:

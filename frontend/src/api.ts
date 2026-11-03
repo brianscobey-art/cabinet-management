@@ -1190,6 +1190,34 @@ export const getRevenueSalesperson = () => api<RevenueGroup[]>("/reports/revenue
 export const getInstallWeek = () => api<InstallWeekRow[]>("/reports/install-week");
 export const getNeedsOrdering = () => api<NeedsOrderRow[]>("/reports/unordered");
 
+export interface NotBilledRow {
+  job_id: number | null;
+  job_code: string;
+  account_name: string | null;
+  community_name: string | null;
+  lot_number: string | null;
+  address: string | null;
+  actual_install: string;
+  days_since_install: number;
+  status: string | null;
+  salesperson: string | null;
+  g_code: string | null;
+  i_code: string | null;
+  i_sales: number | null; // K&B sales on the I-code so far
+  reason: string;
+}
+
+export interface NotBilledReport {
+  rows: NotBilledRow[];
+  installed: number;
+  tracker_file: string | null;
+  tracker_ok: boolean;
+  billing_file: string | null;
+}
+
+export const getNotFinalBilled = (since?: string) =>
+  api<NotBilledReport>(`/reports/not-final-billed${since ? `?since=${since}` : ""}`);
+
 export interface InstallItem {
   job_id: number;
   job_code: string | null;

@@ -177,6 +177,10 @@ REPORTS = [
                description="Department P&L straight from Domo transactions, run by builder, single job, date window, quarter, half-year, YTD, or year-over-year. Click Update to re-pull transactions."),
     ReportInfo(key="other-labor", name="Labor on Non-C9009 Codes", category="Accounting",
                description="Every house carrying install labor billed to a code other than C9009, with the net dollar drag (or gain) on its margin — worst first."),
+    ReportInfo(key="not-final-billed", name="Installed, Not Final Billed", category="Accounting",
+               description="Every house installed (tracker Actual Install Date, today or earlier) whose "
+                           "G-code shows no sales in DOMO yet -- oldest install first. DOMO billing "
+                           "refreshes with the nightly pull."),
     ReportInfo(key="po-status", name="PO Status Summary", category="Accounting",
                description="Count and dollar value of POs grouped by status (open, paid, voided)."),
     ReportInfo(key="phases", name="Phase Report", category="Operations",
@@ -585,6 +589,38 @@ class NeedsOrderRow(BaseModel):
     address: str
     install_date: date
     status: JobStatus
+
+
+class NotBilledRow(BaseModel):
+    job_id: int | None
+    job_code: str
+    account_name: str | None
+    community_name: str | None
+    lot_number: str | None
+    address: str | None
+    actual_install: date
+    days_since_install: int
+    status: str | None
+    salesperson: str | None
+    g_code: str | None
+    i_code: str | None
+    i_sales: float | None
+    reason: str
+
+
+class NotBilledReport(BaseModel):
+    rows: list[NotBilledRow]
+    installed: int
+    tracker_file: str | None
+    tracker_ok: bool
+    billing_file: str | None
+
+
+@router.get("/reports/not-final-billed", response_model=NotBilledReport, dependencies=[Depends(read_access)])
+def not_final_billed(since: date | None = None, db: Session = Depends(get_db)):
+    from app.final_bill import build_report as build_not_billed
+
+    return build_not_billed(db, since=since)
 
 
 @router.get("/reports/unordered", response_model=list[NeedsOrderRow], dependencies=[Depends(read_access)])

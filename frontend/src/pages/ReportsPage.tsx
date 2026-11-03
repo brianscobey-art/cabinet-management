@@ -4,6 +4,7 @@ import {
   InstallWeekRow,
   JobPLReport,
   NeedsOrderRow,
+  NotBilledReport,
   OpenPOReport,
   OpenServiceRow,
   OtherLaborReport,
@@ -16,6 +17,7 @@ import {
   getInstallWeek,
   getJobPL,
   getNeedsOrdering,
+  getNotFinalBilled,
   getOpenPO,
   getOpenService,
   getOtherLabor,
@@ -144,6 +146,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "revenue-salesperson" && <RevenueSalespersonView />}
       {key === "install-week" && <InstallWeekView />}
       {key === "unordered" && <NeedsOrderingView />}
+      {key === "not-final-billed" && <NotFinalBilledView />}
       {key === "open-service" && <OpenServiceView />}
       {key === "job-pl" && <JobPLView />}
       {key === "other-labor" && <OtherLaborView />}
@@ -1049,6 +1052,93 @@ function OpenServiceView() {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+function NotFinalBilledView() {
+  const [since, setSince] = useState("");
+  const [data, setData] = useState<NotBilledReport | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setData(null);
+    getNotFinalBilled(since || undefined).then(setData).catch((e) => setError(e.message));
+  }, [since]);
+  if (error) return <p className="error">{error}</p>;
+  return (
+    <>
+      <div className="filters">
+        <label>
+          Installed on or after{" "}
+          <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
+        </label>
+        {since && <button className="link-btn" onClick={() => setSince("")}>all dates</button>}
+      </div>
+      {!data ? (
+        <p className="muted">Loading…</p>
+      ) : (
+        <>
+          <p className="report-total">
+            {data.rows.length} of {data.installed} installed house{data.installed === 1 ? "" : "s"} not final billed
+          </p>
+          <p className="muted">
+            Installed = tracker Actual Install Date{data.tracker_file ? ` (${data.tracker_file})` : ""}. Billed =
+            sales on the G-code in DOMO
+            {data.billing_file ? ` (${data.billing_file})` : ""}.
+          </p>
+          {!data.billing_file && (
+            <p className="error">
+              No DOMO billing file yet — every house shows as not billed until the nightly DOMO pull writes one.
+            </p>
+          )}
+          {!data.tracker_ok && <p className="error">The 3.0 tracker couldn't be read.</p>}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Installed</th>
+                  <th>Days</th>
+                  <th>Job code</th>
+                  <th>Builder</th>
+                  <th>Community</th>
+                  <th>Lot</th>
+                  <th>Address</th>
+                  <th>Status</th>
+                  <th>Salesperson</th>
+                  <th>G-code</th>
+                  <th>I-code</th>
+                  <th>Billed on I-code</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((r) => (
+                  <tr key={r.job_code}>
+                    <td>{fmtDate(r.actual_install)}</td>
+                    <td>{r.days_since_install}</td>
+                    <td>{r.job_id ? <a href={`#/jobs/${r.job_id}`}>{r.job_code}</a> : r.job_code}</td>
+                    <td>{r.account_name ?? "—"}</td>
+                    <td>{r.community_name ?? "—"}</td>
+                    <td>{r.lot_number ?? "—"}</td>
+                    <td>{r.address ?? "—"}</td>
+                    <td>{r.status ?? "—"}</td>
+                    <td>{r.salesperson ?? "—"}</td>
+                    <td>{r.g_code ?? "—"}</td>
+                    <td>{r.i_code ?? "—"}</td>
+                    <td>{r.i_sales != null ? money(r.i_sales) : "—"}</td>
+                    <td>{r.reason}</td>
+                  </tr>
+                ))}
+                {data.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={13} className="muted">Every installed house has been final billed.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </>
   );
 }

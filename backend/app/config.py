@@ -187,6 +187,15 @@ class Settings(BaseSettings):
 
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-pos")
+
+    @property
+    def domo_billing_folder(self) -> str:
+        """DOMO sales per G/I job account (app.final_bill) -- Downloads on the
+        PC, its own feed-disk folder in the cloud, like domo_pos_folder."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-billing")
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

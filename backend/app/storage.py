@@ -36,6 +36,7 @@ FEED_SOURCES = [
     ("po_receipt_folder", "po-receipts/", "PO Receipt List*.csv", 2),  # DOMO receipts pull
     ("domo_accounts_folder", "domo-accounts/", "DOMO CAB Accounts*.csv", 2),  # same pull: G/I job accounts
     ("domo_pos_folder", "domo-pos/", "DOMO Job POs*.csv", 2),  # same pull: POs per job (ordered + received)
+    ("domo_billing_folder", "domo-billing/", "DOMO Job Billing*.csv", 2),  # same pull: sales per G/I code
     # Smartsheet Tract Builder Management exports. keep=15 because there are
     # eleven builder sheets and each is its own file, not versions of one.
     ("smartsheet_folder", "smartsheet/", "*Tract Builder Management Master*.xlsx", 15),

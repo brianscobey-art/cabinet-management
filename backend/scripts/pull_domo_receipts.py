@@ -210,6 +210,26 @@ def pull_job_pos(ctx, page, folder: Path) -> str:
         return f"job POs: error {type(exc).__name__}: {str(exc)[:120]}"
 
 
+def pull_billing(ctx, page, folder: Path) -> str:
+    """K&B sales per G/I job account from DOMO's Sales Details -> "DOMO Job
+    Billing MMDDYY.csv" (Brian 11/3/26: sales on the G-code = final billed).
+    Own try, like the others."""
+    from app.final_bill import BILLING_SQL, COLS as BILL_COLS
+
+    try:
+        rows, status, route = query(ctx, get_settings().domo_dataset_id.strip(), page, BILLING_SQL)
+        if status != 200 or not rows:
+            return f"billing: DOMO {status}, {len(rows or [])} rows - skipped"
+        out = folder / f"DOMO Job Billing {dt.date.today():%m%d%y}.csv"
+        with out.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(BILL_COLS)
+            w.writerows(rows)
+        return f"billing: {len(rows)} via {route} -> {out.name}"
+    except Exception as exc:  # noqa: BLE001
+        return f"billing: error {type(exc).__name__}: {str(exc)[:120]}"
+
+
 def max_receipt_date(rows) -> str | None:
     i = COLS.index("Receipt Date")
     dates = [str(r[i])[:10] for r in rows if r[i]]
@@ -294,8 +314,10 @@ def run(login: bool, headed: bool, wait_s: int = LOGIN_WAIT_S) -> int:
             print(accounts)
             job_pos = pull_job_pos(ctx, page, folder)
             print(job_pos)
+            billing = pull_billing(ctx, page, folder)
+            print(billing)
             write_status("ok", rows=len(rows), max_receipt_date=as_of, file=str(out), route=route,
-                         accounts=accounts, job_pos=job_pos)
+                         accounts=accounts, job_pos=job_pos, billing=billing)
             return 0
         finally:
             try:

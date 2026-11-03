@@ -915,6 +915,7 @@ def poll_tracker(db: Session) -> dict:
             _pull(settings, "po-receipts/", Path(settings.po_receipt_folder), keep=2)
             _pull(settings, "domo-accounts/", Path(settings.domo_accounts_folder), keep=2)
             _pull(settings, "domo-pos/", Path(settings.domo_pos_folder), keep=2)
+            _pull(settings, "domo-billing/", Path(settings.domo_billing_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
 
