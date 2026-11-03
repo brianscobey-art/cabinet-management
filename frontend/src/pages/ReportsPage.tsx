@@ -18,6 +18,7 @@ import {
   getJobPL,
   getNeedsOrdering,
   getNotFinalBilled,
+  exportNotFinalBilled,
   getOpenPO,
   getOpenService,
   getOtherLabor,
@@ -1058,6 +1059,7 @@ function OpenServiceView() {
 
 function NotFinalBilledView() {
   const [until, setUntil] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [data, setData] = useState<NotBilledReport | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -1073,6 +1075,17 @@ function NotFinalBilledView() {
           <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
         </label>
         {until && <button className="link-btn" onClick={() => setUntil("")}>through today</button>}
+        <button
+          disabled={!data || exporting}
+          onClick={() => {
+            setExporting(true);
+            exportNotFinalBilled(until || undefined)
+              .catch((e) => setError(e.message))
+              .finally(() => setExporting(false));
+          }}
+        >
+          {exporting ? "Exporting…" : "Export to Excel"}
+        </button>
       </div>
       {!data ? (
         <p className="muted">Loading…</p>

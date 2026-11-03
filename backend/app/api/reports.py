@@ -623,6 +623,23 @@ def not_final_billed(until: date | None = None, db: Session = Depends(get_db)):
     return build_not_billed(db, until=until)
 
 
+@router.get("/reports/not-final-billed/export", dependencies=[Depends(read_access)])
+def not_final_billed_export(until: date | None = None, db: Session = Depends(get_db)):
+    from app.final_bill import report_xlsx
+
+    data, n = report_xlsx(db, until=until)
+    stamp = date.today().strftime("%m%d%y")
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="Installed Not Final Billed {stamp}.xlsx"',
+            "X-Rows": str(n),
+            "Access-Control-Expose-Headers": "X-Rows, Content-Disposition",
+        },
+    )
+
+
 @router.get("/reports/unordered", response_model=list[NeedsOrderRow], dependencies=[Depends(read_access)])
 def needs_ordering(db: Session = Depends(get_db)):
     jobs = (

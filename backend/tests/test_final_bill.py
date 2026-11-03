@@ -46,3 +46,12 @@ def test_installed_not_final_billed(client, db, tmp_path, monkeypatch):
     until = (date.today() - timedelta(days=7)).isoformat()
     assert [r["job_code"] for r in client.get(f"/reports/not-final-billed?until={until}",
                                               headers=headers).json()["rows"]] == ["FB-0002"]
+
+    xl = client.get("/reports/not-final-billed/export", headers=headers)
+    assert xl.status_code == 200 and xl.headers["x-rows"] == "2"
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+    ws = load_workbook(BytesIO(xl.content)).active
+    assert [c.value for c in ws[1]][:3] == ["Installed", "Days", "Job Code"]
+    assert ws["C2"].value == "FB-0002" and ws["L2"].value == 1200 and ws["A2"].number_format == "m/d/yy"

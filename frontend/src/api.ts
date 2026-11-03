@@ -1218,6 +1218,22 @@ export interface NotBilledReport {
 export const getNotFinalBilled = (until?: string) =>
   api<NotBilledReport>(`/reports/not-final-billed${until ? `?until=${until}` : ""}`);
 
+/** The same list as an .xlsx download. */
+export async function exportNotFinalBilled(until?: string): Promise<void> {
+  const resp = await fetch(`/api/reports/not-final-billed/export${until ? `?until=${until}` : ""}`, {
+    headers: { ...authHeaders() },
+  });
+  if (!resp.ok) throw new Error("Export failed");
+  const name =
+    /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "Installed Not Final Billed.xlsx";
+  const url = URL.createObjectURL(await resp.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export interface InstallItem {
   job_id: number;
   job_code: string | null;

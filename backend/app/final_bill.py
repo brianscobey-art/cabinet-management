@@ -123,3 +123,45 @@ def build_report(db: Session, today: date | None = None, until: date | None = No
         "tracker_ok": ok,
         "billing_file": billing_name,
     }
+
+
+EXPORT_COLUMNS = [
+    ("Installed", "actual_install", 11), ("Days", "days_since_install", 7), ("Job Code", "job_code", 15),
+    ("Builder", "account_name", 26), ("Community", "community_name", 22), ("Lot", "lot_number", 7),
+    ("Address", "address", 30), ("Status", "status", 12), ("Salesperson", "salesperson", 16),
+    ("G-Code", "g_code", 15), ("I-Code", "i_code", 15), ("Billed on I-Code", "i_sales", 15),
+    ("Why", "reason", 22),
+]
+
+
+def report_xlsx(db: Session, until: date | None = None) -> tuple[bytes, int]:
+    """The same list as an Excel sheet (Brian 11/3/26) -- header row frozen and
+    filterable, dates m/d/yy, dollars $#,##0.00. Returns (bytes, rows)."""
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    data = build_report(db, until=until)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Not Final Billed"
+    ws.append([h for h, _, _ in EXPORT_COLUMNS])
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="0E2133")
+        c.alignment = Alignment(horizontal="center")
+    for r in data["rows"]:
+        ws.append([r[k] for _, k, _ in EXPORT_COLUMNS])
+    for row in ws.iter_rows(min_row=2):
+        row[0].number_format = "m/d/yy"
+        row[11].number_format = "$#,##0.00"
+        for c in (row[0], row[1], row[5]):
+            c.alignment = Alignment(horizontal="center")
+    for i, (_, _, width) in enumerate(EXPORT_COLUMNS):
+        ws.column_dimensions[chr(65 + i)].width = width
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue(), len(data["rows"])
