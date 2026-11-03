@@ -1057,22 +1057,22 @@ function OpenServiceView() {
 }
 
 function NotFinalBilledView() {
-  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
   const [data, setData] = useState<NotBilledReport | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     setData(null);
-    getNotFinalBilled(since || undefined).then(setData).catch((e) => setError(e.message));
-  }, [since]);
+    getNotFinalBilled(until || undefined).then(setData).catch((e) => setError(e.message));
+  }, [until]);
   if (error) return <p className="error">{error}</p>;
   return (
     <>
       <div className="filters">
         <label>
-          Installed on or after{" "}
-          <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
+          Installed on or before{" "}
+          <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
         </label>
-        {since && <button className="link-btn" onClick={() => setSince("")}>all dates</button>}
+        {until && <button className="link-btn" onClick={() => setUntil("")}>through today</button>}
       </div>
       {!data ? (
         <p className="muted">Loading…</p>

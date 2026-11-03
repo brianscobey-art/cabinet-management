@@ -68,9 +68,10 @@ def _code(v) -> str | None:
     return None if s in ("", "NA", "N/A", "0", "NONE") else s
 
 
-def build_report(db: Session, today: date | None = None, since: date | None = None) -> dict:
+def build_report(db: Session, today: date | None = None, until: date | None = None) -> dict:
     """Every house with a tracker Actual Install Date on or before today whose
-    G-code shows no K&B sales in DOMO -- oldest install first."""
+    G-code shows no K&B sales in DOMO -- oldest install first. `until` narrows
+    it to houses installed on or before that date."""
     from app.smartsheet.api import _tracker_rows
     from scripts.import_tracker import as_date
 
@@ -87,7 +88,7 @@ def build_report(db: Session, today: date | None = None, since: date | None = No
     for r in rows:
         code = str(r.get("Job Code") or "").strip()
         actual = as_date(r.get("Actual Install Date"))
-        if not code or actual is None or actual > today or (since and actual < since):
+        if not code or actual is None or actual > min(today, until or today):
             continue
         job = jobs.get(code)
         if job is not None and job.status == JobStatus.void:

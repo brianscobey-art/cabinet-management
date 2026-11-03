@@ -617,10 +617,10 @@ class NotBilledReport(BaseModel):
 
 
 @router.get("/reports/not-final-billed", response_model=NotBilledReport, dependencies=[Depends(read_access)])
-def not_final_billed(since: date | None = None, db: Session = Depends(get_db)):
+def not_final_billed(until: date | None = None, db: Session = Depends(get_db)):
     from app.final_bill import build_report as build_not_billed
 
-    return build_not_billed(db, since=since)
+    return build_not_billed(db, until=until)
 
 
 @router.get("/reports/unordered", response_model=list[NeedsOrderRow], dependencies=[Depends(read_access)])

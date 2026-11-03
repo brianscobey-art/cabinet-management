@@ -43,6 +43,6 @@ def test_installed_not_final_billed(client, db, tmp_path, monkeypatch):
     assert first["i_sales"] == 1200 and first["days_since_install"] == 10
     assert second["job_id"] is None and second["reason"] == "no G-code on file"
 
-    since = (date.today() - timedelta(days=7)).isoformat()
-    assert [r["job_code"] for r in client.get(f"/reports/not-final-billed?since={since}",
-                                              headers=headers).json()["rows"]] == ["FB-0003"]
+    until = (date.today() - timedelta(days=7)).isoformat()
+    assert [r["job_code"] for r in client.get(f"/reports/not-final-billed?until={until}",
+                                              headers=headers).json()["rows"]] == ["FB-0002"]

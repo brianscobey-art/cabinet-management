@@ -1215,8 +1215,8 @@ export interface NotBilledReport {
   billing_file: string | null;
 }
 
-export const getNotFinalBilled = (since?: string) =>
-  api<NotBilledReport>(`/reports/not-final-billed${since ? `?since=${since}` : ""}`);
+export const getNotFinalBilled = (until?: string) =>
+  api<NotBilledReport>(`/reports/not-final-billed${until ? `?until=${until}` : ""}`);
 
 export interface InstallItem {
   job_id: number;
