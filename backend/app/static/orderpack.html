@@ -258,7 +258,7 @@ function renderShell() {
   $("app").innerHTML =
     '<div class="app">' +
       '<div class="topbar">' +
-        '<a class="brand" href="/ordering-platform" title="Back to Optimus">' +
+        '<a class="brand" href="/optimus" title="Back to Optimus">' +
           '<span class="dots">&#9783;</span>' +
           "<span><b>Order Pack</b><small>private mode &middot; Optimus</small></span>" +
         "</a>" +
@@ -557,7 +557,7 @@ function renderLogin() {
 function renderDenied() {
   $("app").innerHTML = '<div class="loginbox"><div class="card"><h2 style="margin-top:0">Not available</h2>' +
     "<p>This page isn't part of your account. Head back to " +
-    '<a href="/ordering-platform">Optimus</a>.</p></div></div>';
+    '<a href="/optimus">Optimus</a>.</p></div></div>';
 }
 async function doLogin() {
   $("loginErr").textContent = "";

@@ -172,7 +172,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
 
       <JobNotes jobId={job.id} />
 
-      {job.job_type === "tract" && <OrderingCard jobId={job.id} canWrite={canWrite} />}
+      {job.job_type === "tract" && <OrderingCard jobId={job.id} />}
 
       <PurchaseOrdersSection jobId={job.id} />
 

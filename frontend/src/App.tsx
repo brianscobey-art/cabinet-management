@@ -10,7 +10,7 @@ import ServiceFormsPage from "./pages/ServiceFormsPage";
 import BlankServiceForm from "./pages/BlankServiceForm";
 import FormsPage from "./pages/FormsPage";
 import JobsPage, { NAV_KEY as JOBS_NAV_KEY } from "./pages/JobsPage";
-import OrderingPage from "./pages/OrderingPage";
+import MovedToOptimus from "./pages/MovedToOptimus";
 import PhasesPage from "./pages/PhasesPage";
 import PunchBoardPage from "./pages/PunchBoardPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -146,7 +146,7 @@ export default function App() {
   else if (hash.startsWith("#/users") && user.role === "admin") page = <UsersPage me={user} />;
   else if (hash.startsWith("#/help")) page = <HelpPage me={user} />;
   else if (hash.startsWith("#/accounts")) page = <AccountsPage canWrite={canWrite} />;
-  else if (hash.startsWith("#/ordering")) page = <OrderingPage canWrite={canWrite} />;
+  else if (hash.startsWith("#/ordering")) page = <MovedToOptimus />;
   else if (hash.startsWith("#/schedule")) page = <SchedulePage />;
   else if (hash.startsWith("#/phases")) page = <PhasesPage canWrite={canWritePhases} />;
   else if (hash.startsWith("#/punch")) page = <PunchBoardPage canWrite={canWritePhases} />;
@@ -186,7 +186,6 @@ export default function App() {
             className={
               !hash.startsWith("#/suite") &&
               !hash.startsWith("#/accounts") &&
-              !hash.startsWith("#/ordering") &&
               !hash.startsWith("#/schedule") &&
               !hash.startsWith("#/phases") &&
               !hash.startsWith("#/punch") &&
@@ -202,10 +201,9 @@ export default function App() {
           >
             Jobs
           </a>
-          <a href="#/ordering" className={hash.startsWith("#/ordering") ? "active" : ""}>
-            Ordering
+          <a href="/optimus" title="All ordering lives in Optimus">
+            Optimus
           </a>
-          <a href="/ordering-platform">Platform</a>
           <a href="#/schedule" className={hash.startsWith("#/schedule") ? "active" : ""}>
             Schedule
           </a>

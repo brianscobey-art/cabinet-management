@@ -33,7 +33,7 @@ const APPS = [
   {
     name: "Optimus",
     tag: "Ordering — trim a priced job to exactly what the house needs",
-    href: "/ordering-platform",
+    href: "/optimus",
     icon: <OptimusIcon />,
     live: true,
   },

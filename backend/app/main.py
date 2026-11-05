@@ -397,6 +397,9 @@ def assistant_widget():
     return FileResponse(_static / "assistant.js", media_type="application/javascript")
 
 
+# Optimus owns all ordering (11/5/26). /optimus is its address; the older
+# /ordering-platform address keeps working for bookmarks and the PC agent.
+@app.get("/optimus", include_in_schema=False)
 @app.get("/ordering-platform", include_in_schema=False)
 def ordering_platform_page():
     from fastapi.responses import FileResponse
@@ -407,6 +410,7 @@ def ordering_platform_page():
 # Order Pack — Brian's private mode inside Optimus. Same login, but the page's
 # endpoints are allowlisted to him (see app/api/pack.py). No COAST tile, no nav
 # link; it's reached by typing the URL.
+@app.get("/optimus/pack", include_in_schema=False)
 @app.get("/ordering-platform/pack", include_in_schema=False)
 def order_pack_page():
     from fastapi.responses import FileResponse

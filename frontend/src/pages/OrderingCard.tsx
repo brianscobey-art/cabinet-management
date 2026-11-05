@@ -1,31 +1,28 @@
 import { useEffect, useState } from "react";
-import { OrderingChecklist, getOrderingChecklist, updateOrderingChecklist } from "../api";
+import { OrderingChecklist, getOrderingChecklist } from "../api";
 import { fmtDate } from "../format";
-import { STAGES } from "./OrderingPage";
 
-export default function OrderingCard({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
+export const STAGES = [
+  { key: "stage1", label: "1. PO's & Selection File" },
+  { key: "stage2", label: "2. Orders & Layouts" },
+  { key: "stage3", label: "3. SO's & Order Comparison" },
+  { key: "stage4", label: "4. POs Attached" },
+] as const;
+
+/** CabinetTron's record of the ordering pipeline. All ordering is done in
+ *  Optimus (COAST suite, 11/5/26); this card only shows what Optimus pushed back. */
+export default function OrderingCard({ jobId }: { jobId: number }) {
   const [checklist, setChecklist] = useState<OrderingChecklist | null>(null);
-  const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     getOrderingChecklist(jobId)
-      .then((c) => {
-        setChecklist(c);
-        setNotes(c.notes ?? "");
-      })
+      .then(setChecklist)
       .catch((e) => setError(e.message));
   }, [jobId]);
 
   if (error) return <p className="error">{error}</p>;
   if (!checklist) return null;
-
-  async function toggle(stageKey: (typeof STAGES)[number]["key"]) {
-    if (!checklist) return;
-    const doneKey = `${stageKey}_done` as const;
-    const updated = await updateOrderingChecklist(jobId, { [doneKey]: !checklist[doneKey] });
-    setChecklist(updated);
-  }
 
   return (
     <>
@@ -37,38 +34,19 @@ export default function OrderingCard({ jobId, canWrite }: { jobId: number; canWr
             const when = checklist[`${s.key}_date`];
             return (
               <li key={s.key}>
-                <button
-                  className={`stage-toggle ${done ? "done" : ""}`}
-                  disabled={!canWrite}
-                  onClick={() => toggle(s.key).catch((e) => setError(e.message))}
-                >
+                <span className={`stage-toggle ${done ? "done" : ""}`} aria-label={done ? "done" : "not done"}>
                   {done ? "✓" : ""}
-                </button>
+                </span>
                 <span>{s.label}</span>
                 {when && <span className="muted"> — {fmtDate(when)}</span>}
               </li>
             );
           })}
         </ul>
-        {canWrite && (
-          <div className="inline-form" style={{ marginBottom: 0 }}>
-            <input
-              placeholder="Ordering notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={{ flex: 1, minWidth: "14rem" }}
-            />
-            <button
-              onClick={async () => {
-                const updated = await updateOrderingChecklist(jobId, { notes });
-                setChecklist(updated);
-              }}
-            >
-              Save notes
-            </button>
-          </div>
-        )}
-        {!canWrite && checklist.notes && <p className="muted">{checklist.notes}</p>}
+        {checklist.notes && <p className="muted">{checklist.notes}</p>}
+        <p style={{ marginBottom: 0 }}>
+          <a href={`/optimus#job=${jobId}`}>Open in Optimus</a> to work the order.
+        </p>
       </div>
     </>
   );

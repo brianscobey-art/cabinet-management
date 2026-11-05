@@ -11,8 +11,15 @@ def setup(client, db):
     return headers, account_id, job
 
 
+def orderer(client, db):
+    """Ordering changes are Optimus work (11/5/26): Optimus full access."""
+    make_user(db, email="orders@example.com", role=Role.ordering)
+    return login(client, "orders@example.com")
+
+
 def test_checklist_starts_empty_and_toggles(client, db):
-    headers, _, job = setup(client, db)
+    _, _, job = setup(client, db)
+    headers = orderer(client, db)
 
     checklist = client.get(f"/jobs/{job['id']}/ordering", headers=headers).json()
     assert checklist["stage1_done"] is False
@@ -80,3 +87,33 @@ def test_field_role_cannot_update_checklist(client, db):
     assert client.get(f"/jobs/{job['id']}/ordering", headers=field).status_code == 200
     resp = client.patch(f"/jobs/{job['id']}/ordering", headers=field, json={"stage1_done": True})
     assert resp.status_code == 403
+
+
+def test_cabinettron_only_records_ordering(client, db):
+    """Sales sees the pipeline in CabinetTron but can't change it; a stage
+    toggle from Optimus checks that stage's steps and moves the status
+    through the same rule as the Optimus page."""
+    sales, _, job = setup(client, db)
+    client.patch(f"/jobs/{job['id']}", headers=sales, json={"status": "1.2-NdOrd"})
+    assert client.patch(f"/jobs/{job['id']}/ordering", headers=sales, json={"stage1_done": True}).status_code == 403
+
+    orders = orderer(client, db)
+    client.patch(f"/jobs/{job['id']}/ordering", headers=orders, json={"stage1_done": True, "stage2_done": True})
+    row = next(r for r in client.get("/ordering-platform/board", headers=orders).json() if r["job_id"] == job["id"])
+    assert {"s1.poRecv", "s1.selFile", "s1.selVer", "s2.layout", "s2.ordCr", "s2.ordSub"} <= set(row["steps"])
+    assert row["status"] == "1.3-Ord Prcss"  # s2.ordSub sent the order
+
+    # sales can read the record; the Optimus page refuses roles with no Optimus access
+    assert client.get(f"/jobs/{job['id']}/ordering", headers=sales).json()["stage2_done"] is True
+    assert client.get("/ordering-platform/board", headers=sales).status_code == 200
+    make_user(db, email="inspector@example.com", role=Role.inspector)
+    inspector = login(client, "inspector@example.com")
+    assert client.get("/ordering-platform/board", headers=inspector).status_code == 403
+
+
+def test_optimus_page_addresses(client):
+    """/optimus is Optimus's address; the old /ordering-platform one still works."""
+    for path in ("/optimus", "/ordering-platform", "/optimus/pack", "/ordering-platform/pack"):
+        resp = client.get(path)
+        assert resp.status_code == 200, path
+        assert "<html" in resp.text.lower()

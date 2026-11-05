@@ -19,7 +19,7 @@ import MySummaryReports from "./MySummaryReports";
 /** The five COAST apps, as a compact strip at the top of the landing page. */
 const APPS = [
   { name: "CabinetTron", href: "#/jobs", blurb: "Jobs & POs" },
-  { name: "Optimus", href: "/ordering-platform", blurb: "Ordering" },
+  { name: "Optimus", href: "/optimus", blurb: "Ordering" },
   { name: "Sterling", href: "/sterling", blurb: "Pricing" },
   { name: "Autobot", href: "/autobot", blurb: "Service routing" },
 ];
@@ -216,7 +216,7 @@ export default function MyStuffPage({ me }: { me: User }) {
           </a>
         ))}
         {packOwner && (
-          <a className="coast-chip coast-private" href="/ordering-platform/pack">
+          <a className="coast-chip coast-private" href="/optimus/pack">
             <b>Bulk Ordering</b>
             <span>Order Pack</span>
           </a>

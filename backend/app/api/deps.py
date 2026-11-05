@@ -7,8 +7,10 @@ office API stays closed to it. Autobot's router carries its own role guards.
 from app.auth.deps import require_roles
 from app.models import Role
 
+# The ordering role reads CabinetTron (its record of jobs, quotes and orders)
+# and does its own work in Optimus (app/suite/access.py).
 read_access = require_roles(
-    Role.sales, Role.field, Role.installer_coordinator, Role.inspector, Role.admin
+    Role.sales, Role.ordering, Role.field, Role.installer_coordinator, Role.inspector, Role.admin
 )
 write_access = require_roles(Role.sales, Role.admin)
 # P&L / margin / cost reporting and the manager sales report are management-only —

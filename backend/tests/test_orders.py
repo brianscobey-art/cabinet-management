@@ -27,7 +27,9 @@ def setup_accepted_quote(client, db):
         json={"sku": "RANGE1.30", "qty": 1, "list_price": "0"},  # appliance placeholder
     )
     client.post(f"/quotes/{quote['id']}/accept", headers=headers)
-    return headers, job, quote
+    # Sales sells the job; making and updating the vendor order is Optimus work.
+    make_user(db, email="orders@example.com", role=Role.ordering)
+    return login(client, "orders@example.com"), job, quote
 
 
 def test_order_requires_accepted_quote(client, db):
@@ -37,7 +39,9 @@ def test_order_requires_accepted_quote(client, db):
     job = make_job(client, headers, account_id, community_id)
     quote = client.post(f"/jobs/{job['id']}/quotes", headers=headers, json={"name": "Draft"}).json()
     client.post(f"/quotes/{quote['id']}/lines", headers=headers, json={"sku": "B18", "list_price": "100"})
-    resp = client.post(f"/jobs/{job['id']}/orders", headers=headers, json={"quote_id": quote["id"]})
+    make_user(db, email="orders@example.com", role=Role.ordering)
+    orderer = login(client, "orders@example.com")
+    resp = client.post(f"/jobs/{job['id']}/orders", headers=orderer, json={"quote_id": quote["id"]})
     assert resp.status_code == 409
 
 
@@ -98,3 +102,25 @@ def test_order_status_updates(client, db, tmp_path):
     listing = client.get(f"/jobs/{job['id']}/orders", headers=headers).json()
     assert len(listing) == 1
     assert listing[0]["po_number"] == "PO-9"
+
+
+def test_ordering_moved_to_optimus(client, db, tmp_path):
+    """CabinetTron only records orders: sales can read them but can't make or
+    change one; Optimus full access can, through the CabinetTron or Optimus door."""
+    get_settings().generated_dir = str(tmp_path)
+    orderer, job, quote = setup_accepted_quote(client, db)
+    sales = login(client, "sales@example.com")
+
+    assert client.post(f"/jobs/{job['id']}/orders", headers=sales, json={"quote_id": quote["id"]}).status_code == 403
+    made = client.post(f"/ordering-platform/jobs/{job['id']}/orders", headers=orderer, json={"quote_id": quote["id"]})
+    assert made.status_code == 201, made.text
+    order = made.json()
+
+    assert client.patch(f"/orders/{order['id']}", headers=sales, json={"ship_status": "shipped"}).status_code == 403
+    upd = client.patch(f"/ordering-platform/orders/{order['id']}", headers=orderer, json={"ship_status": "shipped"})
+    assert upd.status_code == 200 and upd.json()["ship_status"] == "shipped"
+
+    # the record stays readable in CabinetTron
+    listing = client.get(f"/jobs/{job['id']}/orders", headers=sales).json()
+    assert [o["ship_status"] for o in listing] == ["shipped"]
+    assert client.get(f"/orders/{order['id']}/file", headers=sales).status_code == 200

@@ -25,14 +25,13 @@ VIEW = {"width": 1600, "height": 900}
 SHOTS = [
     ("01_suite", "/#/suite", 2.0, []),
     ("02_job_detail", "/#/jobs/221", 2.5, []),
-    ("03_ordering", "/#/ordering", 2.5, []),
     ("04_schedule", "/#/schedule", 2.5, []),
     ("05_phases", "/#/phases", 2.0, []),
     ("06_reports", "/#/reports", 2.5, []),
     ("07_forms", "/#/forms", 2.0, []),
     ("08_users", "/#/users", 2.0, []),
     ("09_help", "/#/help", 2.0, []),
-    ("10_optimus", "/ordering-platform", 3.0, []),
+    ("10_optimus", "/optimus", 3.0, []),
     ("11_autobot", "/autobot", 4.0, []),
 ]
 
