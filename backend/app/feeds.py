@@ -301,11 +301,18 @@ def _set_feed_note(job: Job, tag: str, text: str) -> None:
         job.notes = f"{notes} | {segment}".strip(" |")
 
 
-def _bump_to_ordered(job: Job) -> bool:
-    if job.status in (JobStatus.track, JobStatus.preord, JobStatus.ndord):
-        job.status = JobStatus.ord
-        return True
-    return False
+def _bump_to_ordered(job: Job, source_label: str = "builder feed") -> bool:
+    """The builder's PO is open, so the job is sold and ready to order.
+
+    COAST suite: this used to jump the job to 2.0-Ord, skipping every Optimus
+    check. Now it moves the job only to 1.2-NdOrd; 2.0-Ord comes from Optimus
+    once the Carter PO matches the SO (app/suite/handoff.py).
+    """
+    from sqlalchemy.orm import object_session
+
+    from app.suite.handoff import feed_po_open
+
+    return feed_po_open(object_session(job), job, source_label)
 
 
 def sync_vendorsuite(db: Session, path: Path) -> dict:
@@ -365,7 +372,8 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
                 address=str(row.get("Street Address") or f"{project} Lot {lot4}").title(),
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
-                status=JobStatus.ord if row.get("PO Number") else JobStatus.track,
+                # Builder PO open = sold, ready to order. Optimus moves it on from here.
+                status=JobStatus.ndord if row.get("PO Number") else JobStatus.track,
                 measure_date=measure,
                 install_date=install,
                 warranty_start_date=install,
@@ -393,14 +401,18 @@ def sync_vendorsuite(db: Session, path: Path) -> dict:
             if measure and job.measure_date is None:
                 job.measure_date = measure
                 changed = True
-            # PO facts are builder-authoritative — refresh from the daily VS report
+            # PO facts are builder-authoritative — refresh from the daily VS report,
+            # but a changed PO number goes on the job's timeline first.
+            from app.suite.handoff import feed_po_changed
+
+            feed_po_changed(db, job, po_number, po_amount, "VendorSuite feed")
             for attr, value in (("builder_po", po_number), ("po_amount", po_amount), ("po_status", po_status),
                                 ("po_check_number", po_check), ("po_paid_date", po_paid)):
                 if value is not None and getattr(job, attr) != value:
                     setattr(job, attr, value)
                     changed = True
             if row.get("PO Number") and str(row.get("PO Status")).strip().lower() == "open":
-                changed = _bump_to_ordered(job) or changed
+                changed = _bump_to_ordered(job, "VendorSuite feed") or changed
             before = job.notes
             _set_feed_note(job, "VS:", feed_text)
             counts["updated" if (changed or job.notes != before) else "skipped"] += 1
@@ -553,7 +565,7 @@ def sync_century(db: Session, path: Path) -> dict:
                 address=address,
                 job_type=JobType.tract,
                 plan=plan[:100] or None,
-                status=JobStatus.ord if ordered and ordered <= date.today() else JobStatus.track,
+                status=JobStatus.ndord if ordered and ordered <= date.today() else JobStatus.track,
                 measure_date=measure,
                 builder_po=_po_str(po_number),
                 salesperson=resolve_salesperson(CENTURY_ACCOUNT),
@@ -573,6 +585,9 @@ def sync_century(db: Session, path: Path) -> dict:
                 job.measure_date = measure
                 changed = True
             if po_number and job.builder_po != _po_str(po_number):
+                from app.suite.handoff import feed_po_changed
+
+                feed_po_changed(db, job, _po_str(po_number), None, "Century feed")
                 job.builder_po = _po_str(po_number)
                 changed = True
             if plan and not job.plan:
@@ -584,7 +599,7 @@ def sync_century(db: Session, path: Path) -> dict:
                     job.field_contact_phone = phone
                 changed = True
             if ordered and ordered <= date.today():
-                changed = _bump_to_ordered(job) or changed
+                changed = _bump_to_ordered(job, "Century feed") or changed
             before = job.notes
             _set_feed_note(job, "SP:", feed_text)
             counts["updated" if (changed or job.notes != before) else "skipped"] += 1

@@ -1,12 +1,16 @@
 """Sync jobs from the 3.0 Online Sales Tracker's DATA table (Command Center sheet).
 
-Read-only against the workbook. Jobs are keyed by Job Code (column A). The tracker
-is the source of truth for status (its CONST LVL column) and the install date
-(Actual Install Date, falling back to Requested only when there's no actual yet):
+Read-only against the workbook. Jobs are keyed by Job Code (column A).
 
-  * existing jobs are refreshed — status + install date always re-synced, other
-    fields filled only when blank so richer data isn't clobbered;
-  * new active rows are created;
+CabinetTron sets CONST LVL now, and the tracker is a read-only export of it
+(Brian 11/5/26). So this import never changes an existing job's status, install
+date or measure date. Where the tracker says something different, the job's
+timeline gets one "tracker_disagrees" warning and CabinetTron's value stays:
+
+  * existing jobs: blank fields are filled from the tracker; status and dates
+    that differ are flagged, never overwritten;
+  * new active rows are created, and their CONST LVL seeds the starting status
+    once (the tracker knew about the house before CabinetTron did);
   * new rows that are already closed (6.0-Clsd) or void (8.0-Void) are skipped —
     they'd only ever live on the Archive tab. Existing jobs that turn closed/void
     are updated so they drop off the active views.
@@ -64,8 +68,8 @@ def money_str(value) -> str | None:
 
 
 # The tracker's "CONST LVL" column is Brian's status ladder verbatim — the same
-# strings as JobStatus values (e.g. "6.0-Clsd", "8.0-Void"). It's the authoritative
-# status, so we use it directly rather than guessing from milestone dates.
+# strings as JobStatus values (e.g. "6.0-Clsd", "8.0-Void"). It seeds a new job's
+# status; for a job CabinetTron already has, it is only compared, never applied.
 CONST_LVL_COL = "CONST LVL"
 _CONST_LVL = {st.value: st for st in JobStatus}
 INACTIVE = (JobStatus.closed, JobStatus.void)  # closed/void → Archive only, never active views
@@ -80,6 +84,12 @@ def status_from_row(row: dict) -> JobStatus:
         if member is not None:
             return member
     return derive_status(row)
+
+
+def const_lvl(row: dict) -> JobStatus | None:
+    """The tracker's CONST LVL when it is filled in and on the ladder, else None."""
+    raw = clean(row.get(CONST_LVL_COL))
+    return _CONST_LVL.get(str(raw).strip()) if raw is not None else None
 
 
 def install_from_row(row: dict) -> date | None:
@@ -184,33 +194,45 @@ def get_or_create_community(db, cache: dict, account: Account, name: str, market
     return community
 
 
-def update_existing(db, job: Job, row: dict) -> str:
+def update_existing(db, job: Job, row: dict, caches: dict | None = None) -> str:
     """Refresh an existing job from the latest tracker row.
 
-    The tracker is the source of truth for status (CONST LVL) and the install
-    date (Actual Install Date); those are always synced. Other fields are only
-    filled when blank so richer data (sold-job files, manual edits) isn't lost.
+    CabinetTron owns status (CONST LVL), install date and measure date. The
+    tracker only fills them when CabinetTron has none; anything that differs
+    goes on the job's timeline as one warning. Other fields are only filled
+    when blank so richer data (sold-job files, manual edits) isn't lost.
     """
+    from app.suite.handoff import tracker_disagrees
+
     changed = False
-    status = status_from_row(row)
-    if job.status != status:
-        job.status = status
-        changed = True
+    differs: dict[str, str | None] = {}
+
+    level = const_lvl(row)
+    if level is not None and level != job.status:
+        differs["status"] = level.value
 
     actual = as_date(row.get("Actual Install Date"))
     requested = as_date(row.get("Requested Install Date"))
-    # Actual always wins; Requested only sets a date when the job has none yet.
-    new_install = actual or (requested if job.install_date is None else None)
-    if new_install and job.install_date != new_install:
-        job.install_date = new_install
-        if job.warranty_start_date is None:
-            job.warranty_start_date = new_install
-        changed = True
+    if job.install_date is None:
+        new_install = actual or requested
+        if new_install:
+            job.install_date = new_install
+            if job.warranty_start_date is None:
+                job.warranty_start_date = new_install
+            changed = True
+    elif actual and actual != job.install_date:
+        differs["install_date"] = actual.isoformat()
 
     measure = as_date(row.get("Actual Measure Date"))
-    if measure and job.measure_date != measure:
+    if measure and job.measure_date is None:
         job.measure_date = measure
         changed = True
+    elif measure and measure != job.measure_date:
+        differs["measure_date"] = measure.isoformat()
+
+    tracker_disagrees(db, job, differs)
+    if differs and caches is not None:
+        caches["disagreements"] = caches.get("disagreements", 0) + 1
 
     # Seed the sale date from the Cabinet Order Date, but only when blank — a
     # KSR's manually-set sale date (Laurie/Paula) must never be overwritten.
@@ -249,7 +271,7 @@ def import_row(db, row: dict, caches: dict) -> str:
         return "skipped_blank"
     existing = db.query(Job).filter(Job.job_code == job_code).first()
     if existing is not None:
-        return update_existing(db, existing, row)
+        return update_existing(db, existing, row, caches)
 
     builder = clean(row.get("Full Builder")) or clean(row.get("Builder"))
     community_name = clean(row.get("Community"))
@@ -284,7 +306,7 @@ def import_row(db, row: dict, caches: dict) -> str:
             # team named it. Take the tracker's unless it is already in use.
             if found.job_code != job_code and not db.query(Job).filter(Job.job_code == job_code).first():
                 found.job_code = job_code
-            update_existing(db, found, row)
+            update_existing(db, found, row, caches)
             return "linked"
 
     # Brand-new row: don't create jobs that are already closed or void — they'd
@@ -347,6 +369,9 @@ def import_row(db, row: dict, caches: dict) -> str:
     )
     db.add(job)
     db.flush()
+    from app.suite.handoff import tracker_seeded
+
+    tracker_seeded(db, job)
 
     _apply_selections(db, job, row, create_room=True)
     return "imported"
@@ -426,7 +451,7 @@ def run_sync(db, rows: list[dict], *, on_error=None) -> dict:
     """Upsert every tracker row into the db (caller commits). Returns outcome counts."""
     counts = {"imported": 0, "updated": 0, "unchanged": 0, "linked": 0,
               "skipped_inactive": 0, "skipped_blank": 0, "failed": 0}
-    caches = {"accounts": {}, "communities": {}}
+    caches = {"accounts": {}, "communities": {}, "disagreements": 0}
     for row in rows:
         try:
             counts[import_row(db, row, caches)] += 1
@@ -434,6 +459,9 @@ def run_sync(db, rows: list[dict], *, on_error=None) -> dict:
             counts["failed"] += 1
             if on_error:
                 on_error(clean(row.get("Job Code")), exc)
+    # Jobs where the tracker's CONST LVL or dates differ from CabinetTron's
+    # (logged to each job's timeline, CabinetTron's value kept).
+    counts["disagreements"] = caches["disagreements"]
     return counts
 
 

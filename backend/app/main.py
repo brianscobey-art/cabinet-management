@@ -28,6 +28,7 @@ from app.api.wallpaper import router as wallpaper_router
 from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
 from app.api.service import router as service_router
+from app.api.suite import router as suite_router
 from app.api.sync import router as sync_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
@@ -370,6 +371,7 @@ app.include_router(service_router)
 app.include_router(autobot_router)
 app.include_router(assistant_router)
 app.include_router(smartsheet_router)
+app.include_router(suite_router)  # COAST hand-offs into CabinetTron
 
 # Sterling (COAST pricing) — self-contained app at /sterling, own Excel-backed store
 from app.sterling_app import mount as _mount_sterling  # noqa: E402
@@ -395,6 +397,9 @@ def assistant_widget():
     return FileResponse(_static / "assistant.js", media_type="application/javascript")
 
 
+# Optimus owns all ordering (11/5/26). /optimus is its address; the older
+# /ordering-platform address keeps working for bookmarks and the PC agent.
+@app.get("/optimus", include_in_schema=False)
 @app.get("/ordering-platform", include_in_schema=False)
 def ordering_platform_page():
     from fastapi.responses import FileResponse
@@ -405,6 +410,7 @@ def ordering_platform_page():
 # Order Pack — Brian's private mode inside Optimus. Same login, but the page's
 # endpoints are allowlisted to him (see app/api/pack.py). No COAST tile, no nav
 # link; it's reached by typing the URL.
+@app.get("/optimus/pack", include_in_schema=False)
 @app.get("/ordering-platform/pack", include_in_schema=False)
 def order_pack_page():
     from fastapi.responses import FileResponse

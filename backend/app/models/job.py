@@ -103,6 +103,9 @@ class Job(Base):
     po_check_number: Mapped[str | None] = mapped_column(String(40), default=None)
     po_paid_date: Mapped[date | None] = mapped_column(Date, default=None)  # PO Status Date when paid
 
+    # Tailgate: the installer (or crew) this job is assigned to, matched to a
+    # Tailgate login by full name or email. Blank until the schedule assigns one.
+    installer: Mapped[str | None] = mapped_column(String(120), default=None)
     notes: Mapped[str | None] = mapped_column(Text, default=None)
     # Gate codes, where to stage the boxes, call-ahead -- the Jobsite card (Brian 10/29/26).
     delivery_instructions: Mapped[str | None] = mapped_column(Text, default=None)

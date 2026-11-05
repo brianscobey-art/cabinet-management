@@ -1,5 +1,11 @@
 """National-builder ordering pipeline — Brian's 4-step cabinet ordering process.
 
+COAST suite (11/5/26): all ordering lives in Optimus. CabinetTron keeps the
+record (the GETs here) and shows it read only; every change is an Optimus
+change and needs Optimus full access. A stage toggle sent here is turned into
+that stage's Optimus steps, so the job's status moves through the same rule
+(optimus_move) as a step checked on the Optimus page.
+
 Stage completion is manual (a human confirms each step), but a fresh checklist
 is pre-seeded from the documents already attached to the job:
 PO + Selections files -> stage 1, Order + Layout -> stage 2, an SO -> stage 3.
@@ -12,9 +18,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import read_access, write_access
+from app.api.deps import read_access
 from app.database import get_db
-from app.models import Account, AccountType, Job, JobDocument, JobStatus, OrderingChecklist
+from app.models import (
+    Account,
+    AccountType,
+    Job,
+    JobDocument,
+    JobStatus,
+    OrderingChecklist,
+)
+from app.suite.access import suite_access
 
 router = APIRouter(tags=["ordering"])
 
@@ -108,19 +122,39 @@ def get_checklist(job_id: int, db: Session = Depends(get_db)):
     return get_or_create_checklist(db, job)
 
 
-@router.patch("/jobs/{job_id}/ordering", response_model=ChecklistOut, dependencies=[Depends(write_access)])
+@router.patch(
+    "/jobs/{job_id}/ordering",
+    response_model=ChecklistOut,
+    dependencies=[Depends(suite_access("optimus", "full"))],
+)
 def update_checklist(job_id: int, payload: ChecklistUpdate, db: Session = Depends(get_db)):
+    """Older stage-level edit, kept for anything still calling it. It is an
+    Optimus change: checking a stage checks every Optimus step in it (keeping
+    the dates already there), unchecking clears them, then the stage flags and
+    the job's status follow the steps exactly as they do on the Optimus page."""
+    from app.api.ordering_platform import _STAGE_STEPS, _rollup_stages, _sync_status
+
     job = db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     checklist = get_or_create_checklist(db, job)
     updates = payload.model_dump(exclude_unset=True)
-    for stage in STAGES:
+    steps = dict(checklist.steps or {})
+    touched = False
+    for n, stage in enumerate(STAGES, start=1):
         key = f"{stage}_done"
-        if key in updates and updates[key] is not None and updates[key] != getattr(checklist, key):
-            setattr(checklist, key, updates[key])
-            # stamp when a human marks it done; clear when unchecked
-            setattr(checklist, f"{stage}_date", datetime.now().date() if updates[key] else None)
+        if key not in updates or updates[key] is None:
+            continue
+        touched = True
+        for step_key in _STAGE_STEPS[f"s{n}"]:
+            if updates[key]:
+                steps.setdefault(step_key, datetime.now().date().isoformat())
+            else:
+                steps.pop(step_key, None)
+    if touched:
+        checklist.steps = steps
+        _rollup_stages(checklist)
+        _sync_status(job, checklist)
     if "notes" in updates:
         checklist.notes = updates["notes"]
     db.commit()

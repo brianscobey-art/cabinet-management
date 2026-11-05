@@ -592,10 +592,9 @@ export interface OrderingBoardRow {
   checklist: OrderingChecklist;
 }
 
+// Ordering is changed in Optimus; CabinetTron only reads the checklist.
 export const getOrderingChecklist = (jobId: number) =>
   api<OrderingChecklist>(`/jobs/${jobId}/ordering`);
-export const updateOrderingChecklist = (jobId: number, data: Record<string, unknown>) =>
-  api<OrderingChecklist>(`/jobs/${jobId}/ordering`, { method: "PATCH", body: JSON.stringify(data) });
 export interface PhaseDef {
   code: string;
   label: string;
@@ -1253,11 +1252,6 @@ export const getInstalls = (params: Record<string, string>) => {
   return api<InstallItem[]>(`/schedule/installs?${qs}`);
 };
 
-export const getOrderingBoard = (params: Record<string, string> = {}) => {
-  const qs = new URLSearchParams(params).toString();
-  return api<OrderingBoardRow[]>(`/ordering${qs ? `?${qs}` : ""}`);
-};
-
 export const listQuotes = (jobId: number) => api<Quote[]>(`/jobs/${jobId}/quotes`);
 export const getQuote = (id: number) => api<QuoteDetail>(`/quotes/${id}`);
 export const createQuote = (jobId: number, name: string) =>
@@ -1268,11 +1262,8 @@ export const addQuoteLine = (quoteId: number, data: Record<string, unknown>) =>
   api<QuoteLine>(`/quotes/${quoteId}/lines`, { method: "POST", body: JSON.stringify(data) });
 export const deleteQuoteLine = (id: number) => api<void>(`/quote-lines/${id}`, { method: "DELETE" });
 
+// Orders are made and updated in Optimus (/optimus); CabinetTron only reads them.
 export const listOrders = (jobId: number) => api<Order[]>(`/jobs/${jobId}/orders`);
-export const createOrder = (jobId: number, data: Record<string, unknown>) =>
-  api<Order>(`/jobs/${jobId}/orders`, { method: "POST", body: JSON.stringify(data) });
-export const updateOrder = (id: number, data: Record<string, unknown>) =>
-  api<Order>(`/orders/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 export async function downloadOrderFile(orderId: number): Promise<void> {
   const resp = await fetch(`/api/orders/${orderId}/file`, {

@@ -303,6 +303,22 @@ def phase_live_csv(token: str = Query(...), db: Session = Depends(get_db)):
               headers={"Cache-Control": "no-store"})
 
 
+@router.get("/reports/status/live.csv")
+def status_live_csv(token: str = Query(...), db: Session = Depends(get_db)):
+    """CONST LVL for the 3.0 tracker, which now keeps status as a read-only
+    export of CabinetTron: Job Code | CONST LVL | Install Date | Measure Date |
+    Builder PO | Pulled. Gated by the same token as the phase feed."""
+    from fastapi.responses import Response as _R
+    from app.models import get_setting
+    from app.tracker_export import status_csv
+
+    configured = get_setting(db, TRACKER_EXPORT_KEY)
+    if not configured or not secrets.compare_digest(token, configured):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _R(content=status_csv(db), media_type="text/csv; charset=utf-8",
+              headers={"Cache-Control": "no-store"})
+
+
 @router.get("/reports/tracker-export/token", dependencies=[Depends(finance_access)])
 def tracker_export_token(db: Session = Depends(get_db)):
     from app.models import get_setting

@@ -263,3 +263,33 @@ def deliveries_to_tsv(db) -> str:
     lines = ["\t".join(DELIVERY_COLUMNS)]
     lines.extend("\t".join(str(r[c]) for c in DELIVERY_COLUMNS) for r in rows_)
     return "\n".join(lines)
+
+
+# CONST LVL going OUT to the tracker (Brian 11/5/26: CabinetTron sets CONST LVL,
+# the 3.0 tracker keeps it as a read-only export). A live CSV the tracker's web
+# query can pull, one row per house with a job code.
+STATUS_COLUMNS = ["Job Code", "CONST LVL", "Install Date", "Measure Date", "Builder PO", "Pulled"]
+
+
+def status_rows(db) -> list[list]:
+    out = []
+    for j in sorted(db.query(Job).filter(Job.job_code.isnot(None)).all(), key=lambda x: x.job_code or ""):
+        out.append([
+            j.job_code,
+            j.status.value if hasattr(j.status, "value") else str(j.status or ""),
+            j.install_date,
+            j.measure_date,
+            j.builder_po or "",
+        ])
+    return out
+
+
+def status_csv(db) -> str:
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\r\n")
+    w.writerow(STATUS_COLUMNS)
+    pulled = pulled_at().isoformat(timespec="minutes")
+    for code, lvl, install, measure, po in status_rows(db):
+        w.writerow([code, lvl, install.isoformat() if install else "", measure.isoformat() if measure else "",
+                    po, pulled])
+    return buf.getvalue()

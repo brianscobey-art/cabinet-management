@@ -5,7 +5,6 @@ import {
   QuoteDetail,
   acceptQuote,
   addQuoteLine,
-  createOrder,
   createQuote,
   deleteQuote,
   deleteQuoteLine,
@@ -13,7 +12,6 @@ import {
   getQuote,
   listOrders,
   listQuotes,
-  updateOrder,
 } from "../api";
 
 const money = (v: string) => `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
@@ -24,7 +22,6 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
   const [openQuote, setOpenQuote] = useState<QuoteDetail | null>(null);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   async function refresh(keepOpen = true) {
     const [qs, os] = await Promise.all([listQuotes(jobId), listOrders(jobId)]);
@@ -52,26 +49,12 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
     }
   }
 
-  async function handleGenerateOrder(quote: Quote) {
-    setError("");
-    setNotice("");
-    try {
-      const order = await createOrder(jobId, { quote_id: quote.id });
-      const skipped = order.skipped_skus ?? [];
-      setNotice(
-        `Everluxe order generated${skipped.length ? ` — excluded SKUs left off the form: ${skipped.join(", ")}` : ""}`
-      );
-      refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    }
-  }
+
 
   return (
     <>
       <h3>Quotes</h3>
       {error && <p className="error">{error}</p>}
-      {notice && <p className="notice">{notice}</p>}
       <div className="table-wrap">
         <table>
           <thead>
@@ -122,10 +105,10 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
                       </button>
                     </>
                   )}
-                  {canWrite && q.status === "accepted" && (
-                    <button className="link-btn" onClick={() => handleGenerateOrder(q)}>
-                      generate Everluxe order
-                    </button>
+                  {q.status === "accepted" && (
+                    <a className="link-btn" href={`/optimus#job=${jobId}`}>
+                      order in Optimus
+                    </a>
                   )}
                 </td>
               </tr>
@@ -161,6 +144,10 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
       )}
 
       <h3>Orders</h3>
+      {/* COAST suite: orders are made and updated in Optimus; this is the record. */}
+      <p className="muted">
+        Orders are made and tracked in <a href={`/optimus#job=${jobId}`}>Optimus</a>. This list is the record.
+      </p>
       <div className="table-wrap">
         <table>
           <thead>
@@ -180,39 +167,10 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
                 <td>{o.supplier}</td>
                 <td>{o.po_number ?? "—"}</td>
                 <td>
-                  {canWrite ? (
-                    <select
-                      value={o.confirmation_status}
-                      onChange={async (e) => {
-                        await updateOrder(o.id, { confirmation_status: e.target.value });
-                        refresh();
-                      }}
-                    >
-                      <option value="pending">pending</option>
-                      <option value="confirmed">confirmed</option>
-                      <option value="rejected">rejected</option>
-                    </select>
-                  ) : (
-                    o.confirmation_status
-                  )}
+                  {o.confirmation_status}
                 </td>
                 <td>
-                  {canWrite ? (
-                    <select
-                      value={o.ship_status}
-                      onChange={async (e) => {
-                        await updateOrder(o.id, { ship_status: e.target.value });
-                        refresh();
-                      }}
-                    >
-                      <option value="not_shipped">not shipped</option>
-                      <option value="scheduled">scheduled</option>
-                      <option value="shipped">shipped</option>
-                      <option value="delivered">delivered</option>
-                    </select>
-                  ) : (
-                    o.ship_status.replace(/_/g, " ")
-                  )}
+                  {o.ship_status.replace(/_/g, " ")}
                 </td>
                 <td>
                   {o.has_file ? (
@@ -228,7 +186,7 @@ export default function QuotesSection({ jobId, canWrite }: { jobId: number; canW
             {orders.length === 0 && (
               <tr>
                 <td colSpan={6} className="muted">
-                  No orders yet — accept a quote to generate one.
+                  No orders yet. Accept a quote, then generate the order in Optimus.
                 </td>
               </tr>
             )}

@@ -110,6 +110,13 @@
   .prog span.part { background: linear-gradient(90deg, var(--mint) 50%, #E0E4E8 50%); }
   .prog span.full { background: var(--green); }
 
+  .vorders { margin-top: 16px; border-top: 1px solid #E3E8EE; padding-top: 12px; }
+  .vorders .vhd { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .vorders .vnote { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+  .vtable { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 6px; }
+  .vtable th, .vtable td { border: 1px solid #555; padding: 5px 7px; text-align: left; }
+  .vtable th { background: #125952; color: #fff; font-weight: 600; }
+  .vtable select { padding: 3px 6px; font-size: 13px; }
   .chip { display: inline-block; padding: 3px 9px; border-radius: 11px; font-size: 12px; white-space: nowrap; }
   .chip.stage { background: var(--mint-pale); color: var(--green); border: 1px solid #BECDDF; }
   .chip.done { background: var(--green-pale); color: var(--green); border: 1px solid #B9C6D4; }
@@ -622,7 +629,7 @@ function rowById(id) { return ROWS.find(r => r.job_id === id); }
 
 function renderJobModal() {
   const r = rowById(openJobId);
-  if (!r) { closeModal(); return; }
+  if (!r) { renderOrdersOnlyModal(); return; }
   const ci = currentStageIdx(r);
   const sl = STATUS_LABELS[r.status];
   let h = '<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">' +
@@ -672,9 +679,123 @@ function renderJobModal() {
   h += "</div>";
   h += '<div style="margin-top:14px"><label style="font-size:12px;color:var(--muted)">Notes</label>' +
     '<textarea rows="2" style="width:100%;margin-top:4px" onchange="setField(\'notes\',this.value)">' + esc(r.notes || "") + "</textarea></div>";
+  h += '<div id="vendorOrders" class="vorders"></div>';
   h += "</div></div></div>";
   $("modalRoot").innerHTML = h;
+  lockIfViewOnly();
+  loadVendorOrders(r.job_id);
 }
+
+/* A job that isn't on the national-builder pipeline (retail, local builders)
+   still orders here: the modal shows just its vendor orders. */
+async function renderOrdersOnlyModal() {
+  const id = openJobId;
+  let job = null;
+  try { job = await api("/jobs/" + id); } catch (e) { toast("Couldn't open job: " + e.message, true); closeModal(); return; }
+  if (openJobId !== id) return;
+  const title = job.job_code || job.address || ("Job #" + id);
+  $("modalRoot").innerHTML =
+    '<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">' +
+    '<div class="mhd"><div><h2>' + esc(title) + "</h2>" +
+    '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(job.address || "") + " · " + esc(job.status || "") + "</div></div>" +
+    '<button class="x" onclick="closeModal()" aria-label="Close">✕</button></div>' +
+    '<div class="mbd"><div class="vnote">This job is not on the national-builder pipeline, so only its vendor orders show here.</div>' +
+    '<div id="vendorOrders" class="vorders" style="border-top:0;margin-top:0;padding-top:0"></div></div></div></div>';
+  loadVendorOrders(id);
+}
+
+/* ---------- View only: roles without Optimus full access ---------- */
+let CAN_EDIT = true;   // set from /suite/access at boot; the API refuses either way
+function lockIfViewOnly() {
+  if (CAN_EDIT) return;
+  document.querySelectorAll("#modalRoot .mbd input, #modalRoot .mbd textarea, #modalRoot .mbd select, #modalRoot .mbd button")
+    .forEach(el => { el.disabled = true; });
+  const mbd = document.querySelector("#modalRoot .mbd");
+  if (mbd && !mbd.querySelector(".viewonly")) {
+    mbd.insertAdjacentHTML("afterbegin", '<span class="chip warn viewonly">View only. Your role can see ordering but not change it.</span> ');
+  }
+}
+
+/* ---------- Vendor orders (the Everluxe order file) ---------- */
+const CONFIRM_OPTS = ["pending", "confirmed", "rejected"];
+const SHIP_OPTS = ["not_shipped", "scheduled", "shipped", "delivered"];
+async function loadVendorOrders(jobId) {
+  const box = $("vendorOrders");
+  if (!box) return;
+  box.innerHTML = '<div class="vhd">Vendor orders</div><div class="vnote">Loading…</div>';
+  try {
+    const [quotes, orders] = await Promise.all([
+      api("/jobs/" + jobId + "/quotes"),
+      api("/ordering-platform/jobs/" + jobId + "/orders"),
+    ]);
+    if (openJobId !== jobId || !$("vendorOrders")) return;
+    renderVendorOrders(jobId, quotes, orders);
+  } catch (e) {
+    if ($("vendorOrders")) $("vendorOrders").innerHTML = '<div class="vhd">Vendor orders</div><div class="vnote">Couldn\'t load: ' + esc(e.message) + "</div>";
+  }
+}
+function optList(opts, current) {
+  return opts.map(o => '<option value="' + o + '"' + (o === current ? " selected" : "") + ">" + esc(o.replace(/_/g, " ")) + "</option>").join("");
+}
+function renderVendorOrders(jobId, quotes, orders) {
+  const accepted = quotes.filter(q => q.status === "accepted");
+  let h = '<div class="vhd">Vendor orders</div>';
+  if (accepted.length) {
+    h += '<div class="btnrow">' + accepted.map(q =>
+      '<button class="btn sm"' + (CAN_EDIT ? "" : " disabled") + ' onclick="generateOrder(' + jobId + "," + q.id + ',this)">Generate Everluxe order from ' + esc(q.name) + "</button>").join("") + "</div>";
+  } else {
+    h += '<div class="vnote">No accepted quote yet. Accept one in CabinetTron to generate the order here.</div>';
+  }
+  if (orders.length) {
+    h += '<table class="vtable"><thead><tr><th>#</th><th>Supplier</th><th>PO</th><th>Confirmation</th><th>Shipping</th><th>File</th></tr></thead><tbody>';
+    orders.forEach(o => {
+      const dis = CAN_EDIT ? "" : " disabled";
+      h += "<tr><td>" + o.id + "</td><td>" + esc(o.supplier) + "</td><td>" + esc(o.po_number || "") + "</td>" +
+        '<td><select' + dis + ' onchange="setOrder(' + jobId + "," + o.id + ',\'confirmation_status\',this.value)">' + optList(CONFIRM_OPTS, o.confirmation_status) + "</select></td>" +
+        '<td><select' + dis + ' onchange="setOrder(' + jobId + "," + o.id + ',\'ship_status\',this.value)">' + optList(SHIP_OPTS, o.ship_status) + "</select></td>" +
+        "<td>" + (o.has_file ? '<button class="btn sm ghost" onclick="downloadOrder(' + o.id + ')">Download .xlsx</button>' : "") + "</td></tr>";
+    });
+    h += "</tbody></table>";
+  } else {
+    h += '<div class="vnote">No vendor orders yet.</div>';
+  }
+  $("vendorOrders").innerHTML = h;
+}
+async function generateOrder(jobId, quoteId, btn) {
+  btn.disabled = true;
+  try {
+    const order = await api("/ordering-platform/jobs/" + jobId + "/orders", {
+      method: "POST", body: JSON.stringify({ quote_id: quoteId }),
+    });
+    const skipped = order.skipped_skus || [];
+    toast("Everluxe order generated" + (skipped.length ? ". Left off the form: " + skipped.join(", ") : ""));
+    loadVendorOrders(jobId);
+  } catch (e) { toast("Couldn't generate: " + e.message, true); btn.disabled = false; }
+}
+async function setOrder(jobId, orderId, key, value) {
+  try {
+    await api("/ordering-platform/orders/" + orderId, { method: "PATCH", body: JSON.stringify({ [key]: value }) });
+    toast("Order " + orderId + " saved");
+  } catch (e) { toast("Couldn't save: " + e.message, true); loadVendorOrders(jobId); }
+}
+async function downloadOrder(orderId) {
+  try {
+    const resp = await fetch("/api/orders/" + orderId + "/file", { headers: { Authorization: "Bearer " + token() } });
+    if (!resp.ok) throw new Error("Download failed");
+    const m = (resp.headers.get("content-disposition") || "").match(/filename="?([^";]+)"?/);
+    const url = URL.createObjectURL(await resp.blob());
+    const a = document.createElement("a");
+    a.href = url; a.download = m ? m[1] : "everluxe-order-" + orderId + ".xlsx"; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- Deep link from CabinetTron: /optimus#job=123 ---------- */
+function openFromHash() {
+  const m = location.hash.match(/^#job=(\d+)$/);
+  if (m && openJobId !== Number(m[1])) openJob(Number(m[1]));
+}
+window.addEventListener("hashchange", openFromHash);
 
 async function toggleStep(stepKey, done, el) {
   el.disabled = true;
@@ -704,14 +825,17 @@ async function setField(key, value) {
     render();
   } catch (e) { toast("Couldn't save: " + e.message, true); }
 }
-function closeModal() { $("modalRoot").innerHTML = ""; openJobId = null; }
+function closeModal() {
+  $("modalRoot").innerHTML = ""; openJobId = null;
+  if (location.hash.startsWith("#job=")) history.replaceState(null, "", location.pathname);
+}
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
 /* ================= Login ================= */
 function renderLogin() {
   $("app").innerHTML =
     '<div class="loginbox"><div class="card">' +
-    "<h2>Ordering Platform</h2><p>Sign in with your CabinetTron account.</p>" +
+    "<h2>Optimus</h2><p>Sign in with your CabinetTron account.</p>" +
     '<div class="loginerr" id="loginErr"></div>' +
     '<div class="field"><label for="l_email">Username</label><input id="l_email" type="text" autocomplete="username" placeholder="first.last"></div>' +
     '<div class="field"><label for="l_pw">Password</label><input id="l_pw" type="password" autocomplete="current-password"></div>' +
@@ -737,9 +861,13 @@ async function doLogin() {
 /* ================= Boot ================= */
 async function refresh(manual) {
   try {
-    if (!META) META = await api("/ordering-platform/meta");
+    if (!META) {
+      META = await api("/ordering-platform/meta");
+      try { CAN_EDIT = (await api("/suite/access")).apps.optimus === "full"; } catch (e) { CAN_EDIT = true; }
+    }
     ROWS = await api("/ordering-platform/board?include_ordered=true&include_upcoming=true");
     render();
+    if (openJobId) renderJobModal(); else openFromHash();
     if (manual) toast("Refreshed — " + worklist().length + " jobs in the pipeline");
   } catch (e) {
     if (e.message !== "Not signed in") toast("Load failed: " + e.message, true);

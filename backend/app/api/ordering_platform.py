@@ -12,20 +12,31 @@ job's workflow status as the trigger steps are checked:
 Unchecking a trigger step drops the status back to the highest still-checked
 trigger (floor 1.2-NdOrd). Statuses outside the 1.2→2.0 window are never
 touched — if a job moved on to install/punch, this page won't drag it back.
+
+COAST suite (11/5/26): all ordering lives here in Optimus. Changes need Optimus
+full access, the board needs Optimus view, and vendor orders (the Everluxe order
+file made from an accepted quote) are made and updated through the
+/ordering-platform/... order routes below. CabinetTron keeps the record and
+shows it read only.
 """
 
-from decimal import Decimal
 from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import NATIONAL_BUILDER_PREFIXES, read_access, write_access
+from app.api import orders as vendor_orders
+from app.api.deps import NATIONAL_BUILDER_PREFIXES
 from app.api.ordering import get_or_create_checklist
 from app.database import get_db
 from app.models import Account, AccountType, Job, JobStatus, OrderingChecklist
+from app.suite.access import suite_access
+
+OPTIMUS_VIEW = suite_access("optimus", "view")
+OPTIMUS_FULL = suite_access("optimus", "full")
 
 router = APIRouter(prefix="/ordering-platform", tags=["ordering-platform"])
 
@@ -137,7 +148,13 @@ def _sync_status(job: Job, checklist: OrderingChecklist) -> None:
         if step_key in steps:
             target = trig_status
     if job.status != target:
-        job.status = target
+        # COAST suite: through the status rule and the open holds, with a
+        # timeline row, instead of setting the status directly.
+        from sqlalchemy.orm import object_session
+
+        from app.suite.handoff import optimus_move
+
+        optimus_move(object_session(job), job, target)
 
 
 class PlatformRow(BaseModel):
@@ -196,7 +213,7 @@ def _row(job: Job, checklist: OrderingChecklist) -> PlatformRow:
     )
 
 
-@router.get("/meta", dependencies=[Depends(read_access)])
+@router.get("/meta", dependencies=[Depends(OPTIMUS_VIEW)])
 def platform_meta():
     """Stage/step definitions and trigger map, so the page renders from one source of truth."""
     return {
@@ -209,7 +226,7 @@ def platform_meta():
     }
 
 
-@router.get("/board", response_model=list[PlatformRow], dependencies=[Depends(read_access)])
+@router.get("/board", response_model=list[PlatformRow], dependencies=[Depends(OPTIMUS_VIEW)])
 def platform_board(
     account_id: int | None = None,
     community_id: int | None = None,
@@ -261,7 +278,7 @@ def _get_job(db: Session, job_id: int) -> Job:
     return job
 
 
-@router.post("/jobs/{job_id}/order-now", response_model=PlatformRow, dependencies=[Depends(write_access)])
+@router.post("/jobs/{job_id}/order-now", response_model=PlatformRow, dependencies=[Depends(OPTIMUS_FULL)])
 def order_now(job_id: int, db: Session = Depends(get_db)):
     """Stage an upcoming job (1.0-Track / 1.1-PreOrd) in the ordering queue.
     The job's status doesn't change until the queue is processed."""
@@ -278,7 +295,7 @@ def order_now(job_id: int, db: Session = Depends(get_db)):
     return _row(job, checklist)
 
 
-@router.post("/jobs/{job_id}/dequeue", response_model=PlatformRow, dependencies=[Depends(write_access)])
+@router.post("/jobs/{job_id}/dequeue", response_model=PlatformRow, dependencies=[Depends(OPTIMUS_FULL)])
 def dequeue(job_id: int, db: Session = Depends(get_db)):
     """Take a job back out of the ordering queue (before it's processed)."""
     job = _get_job(db, job_id)
@@ -292,7 +309,7 @@ def dequeue(job_id: int, db: Session = Depends(get_db)):
     return _row(job, checklist)
 
 
-@router.post("/queue/process", response_model=list[PlatformRow], dependencies=[Depends(write_access)])
+@router.post("/queue/process", response_model=list[PlatformRow], dependencies=[Depends(OPTIMUS_FULL)])
 def process_queue(db: Session = Depends(get_db)):
     """Finalize the queue: every queued job enters the pipeline at 1.2-NdOrd,
     starting stage 1 (PO's & Selection File). Returns the processed jobs."""
@@ -317,7 +334,7 @@ def process_queue(db: Session = Depends(get_db)):
     return rows
 
 
-@router.post("/jobs/{job_id}/undo-order", response_model=PlatformRow, dependencies=[Depends(write_access)])
+@router.post("/jobs/{job_id}/undo-order", response_model=PlatformRow, dependencies=[Depends(OPTIMUS_FULL)])
 def undo_order(job_id: int, db: Session = Depends(get_db)):
     """Undo a processed order that hasn't gone out yet: the job returns to its
     pre-queue status (Up Next) and the checklist is deleted outright, so the
@@ -339,7 +356,7 @@ def undo_order(job_id: int, db: Session = Depends(get_db)):
     return _row(job, get_or_create_checklist(db, job))
 
 
-@router.patch("/jobs/{job_id}", response_model=PlatformRow, dependencies=[Depends(write_access)])
+@router.patch("/jobs/{job_id}", response_model=PlatformRow, dependencies=[Depends(OPTIMUS_FULL)])
 def platform_update(job_id: int, payload: PlatformUpdate, db: Session = Depends(get_db)):
     job = (
         db.query(Job)
@@ -373,3 +390,36 @@ def platform_update(job_id: int, payload: PlatformUpdate, db: Session = Depends(
     db.commit()
     db.refresh(checklist)
     return _row(job, checklist)
+
+
+# ---- Vendor orders (the Everluxe order file), owned by Optimus ----
+# Same handlers as /jobs/{id}/orders and /orders/{id}; these are the doors the
+# Optimus page uses. CabinetTron's job page only reads the list and the file.
+
+
+@router.get(
+    "/jobs/{job_id}/orders",
+    response_model=list[vendor_orders.OrderOut],
+    dependencies=[Depends(OPTIMUS_VIEW)],
+)
+def optimus_list_orders(job_id: int, db: Session = Depends(get_db)):
+    return vendor_orders.list_orders(job_id, db)
+
+
+@router.post(
+    "/jobs/{job_id}/orders",
+    response_model=vendor_orders.OrderCreateResult,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(OPTIMUS_FULL)],
+)
+def optimus_create_order(job_id: int, payload: vendor_orders.OrderCreate, db: Session = Depends(get_db)):
+    return vendor_orders.create_order(job_id, payload, db)
+
+
+@router.patch(
+    "/orders/{order_id}",
+    response_model=vendor_orders.OrderOut,
+    dependencies=[Depends(OPTIMUS_FULL)],
+)
+def optimus_update_order(order_id: int, payload: vendor_orders.OrderUpdate, db: Session = Depends(get_db)):
+    return vendor_orders.update_order(order_id, payload, db)

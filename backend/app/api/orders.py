@@ -6,13 +6,18 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.deps import read_access, write_access
+from app.api.deps import read_access
 from app.api.jobs import get_job_or_404
 from app.api.quotes import get_quote_or_404
 from app.config import get_settings
 from app.database import get_db
 from app.integrations.everluxe import OrderFormInfo, write_order_file
 from app.models import ConfirmationStatus, Job, Order, QuoteStatus, ShipStatus, Supplier
+from app.suite.access import suite_access
+
+# COAST suite (11/5/26): making and updating vendor orders is Optimus work.
+# CabinetTron keeps the record, so the reads stay open to read access.
+OPTIMUS_FULL = suite_access("optimus", "full")
 
 router = APIRouter(tags=["orders"])
 
@@ -83,7 +88,7 @@ def list_orders(job_id: int, db: Session = Depends(get_db)):
     "/jobs/{job_id}/orders",
     response_model=OrderCreateResult,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(write_access)],
+    dependencies=[Depends(OPTIMUS_FULL)],
 )
 def create_order(job_id: int, payload: OrderCreate, db: Session = Depends(get_db)):
     job: Job = (
@@ -156,7 +161,7 @@ def download_order_file(order_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.patch("/orders/{order_id}", response_model=OrderOut, dependencies=[Depends(write_access)])
+@router.patch("/orders/{order_id}", response_model=OrderOut, dependencies=[Depends(OPTIMUS_FULL)])
 def update_order(order_id: int, payload: OrderUpdate, db: Session = Depends(get_db)):
     order = db.get(Order, order_id)
     if order is None:

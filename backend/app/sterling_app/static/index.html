@@ -843,7 +843,10 @@ async function renderJobDetail(id) {
     const btn = $("#exportBtn"); btn.disabled = true; btn.textContent = "Sending…";
     try {
       const res = await api(`/jobs/${j.id}/export`, {method:"POST"});
-      toast(`Created CabinetTron job #${res.job_id}`);
+      // The sold hand-off's double checks: a hold or warning comes back with the job.
+      const notes = (res.issues || []).join("; ");
+      toast(res.level === "hold" ? `${res.job_code} is in CabinetTron but on hold: ${notes}`
+        : notes ? `${res.job_code} is in CabinetTron. Note: ${notes}` : `${res.job_code} is in CabinetTron`, res.level === "hold");
       renderJobDetail(id);
     } catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = "Send to CabinetTron"; }
   };

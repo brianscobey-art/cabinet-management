@@ -16,6 +16,10 @@ class Role(str, enum.Enum):
     # Autobot-only: the cabinet service tech. Sees the standalone /autobot app
     # and nothing else — no CabinetTron pages, no office API.
     service_tech = "service_tech"
+    # COAST redesign (11/5/26): Optimus-only ordering desk, and Tailgate-only
+    # installers who see just their own installs. Proposed; Brian assigns people.
+    ordering = "ordering"
+    installer = "installer"
 
 
 class User(Base):

@@ -1920,6 +1920,8 @@ def excel_status():
         "locked": xlsx_store.state["locked"],
         "last_saved": xlsx_store.state["last_saved"],
         "last_error": xlsx_store.state["last_error"],
+        "mode": "shared" if xlsx_store.SHARED else "cache",
+        "startup": xlsx_store.startup_report or None,
     }
 
 
@@ -1935,15 +1937,75 @@ def excel_save():
 
 @router.post("/excel/reload")
 def excel_reload():
+    """Cache mode: replace app data with the workbook's. Shared mode: merge the
+    workbook's edits in row by row; rows changed on both sides are listed, not
+    overwritten."""
     from app.sterling_app import xlsx_store
+    from app.sterling_app.database import SHARED
 
     if not xlsx_store.WORKBOOK_PATH.exists():
         raise HTTPException(status_code=404, detail="Workbook not found")
     try:
+        if SHARED:
+            return {"merged": xlsx_store.merge_workbook()}
         counts = xlsx_store.load_into_db()
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Reload failed: {exc}")
     return {"reloaded": counts}
+
+
+@router.get("/excel/download")
+def excel_download():
+    """The workbook as it stands, to edit in Excel and upload back."""
+    from fastapi.responses import FileResponse
+
+    from app.sterling_app import xlsx_store
+
+    if xlsx_store.state["dirty"]:
+        xlsx_store.save_now()
+    if not xlsx_store.WORKBOOK_PATH.exists():
+        raise HTTPException(status_code=404, detail="Workbook not found")
+    return FileResponse(xlsx_store.WORKBOOK_PATH, filename=xlsx_store.WORKBOOK_PATH.name,
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@router.post("/excel/upload")
+async def excel_upload(file: UploadFile):
+    """A workbook edited in Excel. Shared mode merges it in (the database stays
+    the source of truth); cache mode keeps today's behavior and replaces."""
+    import tempfile
+    from pathlib import Path
+
+    from app.sterling_app import xlsx_store
+    from app.sterling_app.database import SHARED
+
+    body = await file.read()
+    if not body.startswith(b"PK"):
+        raise HTTPException(status_code=422, detail="That isn't an .xlsx workbook")
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp.write(body)
+        up = Path(tmp.name)
+    try:
+        if SHARED:
+            return {"merged": xlsx_store.merge_workbook(up)}
+        up.replace(xlsx_store.WORKBOOK_PATH)
+        return {"reloaded": xlsx_store.load_into_db()}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Upload failed: {exc}")
+    finally:
+        up.unlink(missing_ok=True)
+
+
+@router.get("/excel/verify")
+def excel_verify():
+    """Line-by-line check that the database and the workbook match."""
+    from app.sterling_app import xlsx_store
+
+    if not xlsx_store.WORKBOOK_PATH.exists():
+        raise HTTPException(status_code=404, detail="Workbook not found")
+    return xlsx_store.verify_workbook()
 
 
 # --- Export to CabinetTron ---
@@ -1956,7 +2018,8 @@ def export_to_cabinettron(job_id: int, db: Session = Depends(get_db)):
     try:
         result = export_job(db, job)
     except ExportError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        # A refused hand-off is the job's problem, not a server one.
+        raise HTTPException(status_code=422, detail=str(exc))
     job.exported_job_id = result["job_id"]
     job.exported_at = datetime.now(timezone.utc)
     db.commit()

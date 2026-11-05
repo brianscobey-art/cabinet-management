@@ -706,6 +706,19 @@ def apply_stage4(payload: Stage4Apply, db: Session = Depends(get_db)):
         cl.last_scan_at = now
 
         if item.outcome == "ok" and item.moved_to_sold:
+            # COAST suite double check: the same Carter PO checks as a PO-back
+            # (cancelled, duplicate, SO total to the cent, open holds). A job
+            # that fails is flagged like a dollar-gate failure: no steps, no move.
+            from app.suite.handoff import carter_po_gate, log_agent
+
+            problems = carter_po_gate(db, job, item.carter_po_number or cl.carter_po_number,
+                                      item.carter_po_total, item.so_total if item.so_total is not None else cl.so_total)
+            if problems:
+                cl.exception = "; ".join(problems)
+                log_agent(db, job, "stage4", problems, payload=item.model_dump(mode="json"))
+                flagged += 1
+                continue
+            log_agent(db, job, "stage4", [], payload=item.model_dump(mode="json"))
             cl.moved_to_sold_date = now.date()
             cl.current_folder = "sold"
             # Stage 4's sub-steps all happened: the Carter PO exists (so it was
