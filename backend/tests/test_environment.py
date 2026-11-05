@@ -158,3 +158,49 @@ def test_copy_refuses_on_live_or_same_database(monkeypatch, tmp_path):
                         lambda: Settings(_env_file=None, app_env="test", database_url=url))
     with pytest.raises(SystemExit, match="same database"):
         C.main(["--pick", "1"])
+
+
+def test_bootstrap_does_nothing_on_live(monkeypatch):
+    from app import test_bootstrap
+
+    monkeypatch.setattr(test_bootstrap, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setenv("TEST_ADMIN_EMAIL", "brian@example.com")
+    assert test_bootstrap.run() == {"skipped": "not the test copy"}
+
+
+def test_bootstrap_admin_link_sample_and_copy_once(tmp_path, monkeypatch, caplog):
+    from sqlalchemy.orm import sessionmaker
+
+    from app import test_bootstrap
+    from app.database import Base  # noqa: F401
+    from scripts import copy_jobs_from_live as C
+
+    live_path = tmp_path / "live.db"
+    _fake_live(tmp_path, monkeypatch)
+    target, TSession = _file_db(tmp_path / "test.db")
+    test_url = f"sqlite:///{tmp_path / 'test.db'}"
+    cfg = Settings(_env_file=None, app_env="test", database_url=test_url)
+    monkeypatch.setattr(test_bootstrap, "get_settings", lambda: cfg)
+    monkeypatch.setattr(C, "get_settings", lambda: cfg)
+    import app.database as D
+    monkeypatch.setattr(D, "SessionLocal", sessionmaker(bind=target, expire_on_commit=False))
+    monkeypatch.setattr(D, "engine", target)
+    from scripts import seed_test_data
+    monkeypatch.setattr(seed_test_data, "get_settings", lambda: cfg)
+    monkeypatch.setenv("TEST_ADMIN_EMAIL", "Brian@Example.com")
+    monkeypatch.setenv("TEST_SEED_SAMPLE", "1")
+    monkeypatch.setenv("TEST_COPY_JOBS", "3")
+    monkeypatch.setenv("LIVE_DATABASE_URL", f"sqlite:///{live_path}")
+
+    with caplog.at_level("WARNING"):
+        out = test_bootstrap.run()
+    assert out["admin"] == "created"
+    assert "set-password?token=" in caplog.text
+    assert out["sample"].startswith("{")
+    # Sample codes overlap the fake live codes, so all 3 picks are already there.
+    assert out["copy"] == "0 jobs copied, 3 already in test"
+    again = test_bootstrap.run()
+    assert again["admin"] == "exists" and again["copy"].startswith("already done")
+    with TSession() as s:
+        u = s.query(User).filter(User.email == "brian@example.com").one()
+        assert u.role.value == "admin"

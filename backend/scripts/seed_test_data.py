@@ -49,14 +49,15 @@ SAMPLE_LOTS = [
 ]
 
 
-def seed(db, admin_email: str, admin_name: str, admin_password: str) -> dict:
-    """Create the sample records. Split out from main() so tests can call it."""
+def seed(db, admin_email: str | None, admin_name: str | None, admin_password: str | None) -> dict:
+    """Create the sample records. Split out from main() so tests and the test
+    copy's boot bootstrap can call it. Pass admin_email=None to skip the login."""
     if not get_settings().is_test:
         raise SystemExit("Refusing to seed: APP_ENV is not 'test'. This script never runs on live.")
     if db.query(Job.id).first() is not None:
         raise SystemExit("Refusing to seed: this database already has jobs in it.")
 
-    if not db.query(User).filter(User.email == admin_email).first():
+    if admin_email and not db.query(User).filter(User.email == admin_email).first():
         db.add(User(email=admin_email, full_name=admin_name,
                     hashed_password=hash_password(admin_password), role=Role.admin))
 

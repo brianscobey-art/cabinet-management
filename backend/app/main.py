@@ -207,6 +207,15 @@ def _run_autobot_sync() -> None:
         logger.exception("Autobot auto-sync failed")
 
 
+def _run_test_bootstrap() -> None:
+    from app.test_bootstrap import run
+
+    try:
+        run()
+    except Exception:
+        logger.exception("TEST bootstrap failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -266,6 +275,14 @@ async def lifespan(app: FastAPI):
                 settings.smartsheet_sync_hour,
                 "API" if settings.smartsheet_api_token else "file exports")
 
+    if settings.is_test:
+        # Test copy only: env-driven one-time setup (admin login, sample data,
+        # sold jobs copied read-only from live). Off the boot path so a slow
+        # copy cannot hold up the health check. See app/test_bootstrap.py.
+        jobs.append(lambda s: s.add_job(
+            _run_test_bootstrap, "date",
+            run_date=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=20),
+        ))
     if settings.autobot_sync_minutes > 0:
         jobs.append(lambda s: s.add_job(
             _run_autobot_sync, "interval", minutes=settings.autobot_sync_minutes
