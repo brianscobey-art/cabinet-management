@@ -1074,3 +1074,44 @@ def feed_po_changed(db: Session, job: Job, new_po: str | None, new_amount, sourc
         r.add("warn", "po_changed", f"Builder PO changed from {job.builder_po} to {new_po}; check ordering used the right one")
     _save(db, source="feed", kind="po_changed", r=r, job=job, job_code=job.job_code, actor=source_label,
           payload={"old": job.builder_po, "new": new_po})
+
+
+# --------------------------------------------------------------------------- 3.0 tracker (read-only)
+
+
+def tracker_disagrees(db: Session, job: Job, tracker: dict[str, str | None]) -> bool:
+    """The 3.0 Online Sales Tracker is a read-only export now (Brian 11/5/26):
+    CabinetTron sets CONST LVL, install and measure dates. When a tracker row
+    says something else, log one warning on the job's timeline instead of
+    overwriting it. The same disagreement is logged once, not on every sync.
+
+    `tracker` maps field -> the tracker's value as text, for the fields that
+    differ: "status", "install_date", "measure_date". Empty means they agree.
+    """
+    if not tracker:
+        return False
+    ours = {
+        "status": job.status.value,
+        "install_date": job.install_date.isoformat() if job.install_date else None,
+        "measure_date": job.measure_date.isoformat() if job.measure_date else None,
+    }
+    mine = {k: ours[k] for k in tracker}
+    last = _last_event(db, job, "tracker_disagrees")
+    if last is not None and (last.payload or {}).get("tracker") == tracker \
+            and (last.payload or {}).get("cabinettron") == mine:
+        return False  # same disagreement as last sync
+    labels = {"status": "CONST LVL", "install_date": "install date", "measure_date": "measure date"}
+    r = Result()
+    for k, v in tracker.items():
+        r.add("warn", "tracker_disagrees",
+              f"Tracker {labels[k]} is {v or 'blank'}, CabinetTron has {ours[k] or 'blank'}; CabinetTron kept")
+    _save(db, source="cabinettron", kind="tracker_disagrees", r=r, job=job, job_code=job.job_code,
+          actor="3.0 tracker import", payload={"tracker": tracker, "cabinettron": mine})
+    return True
+
+
+def tracker_seeded(db: Session, job: Job) -> None:
+    """A job the tracker knew about before CabinetTron did. Its CONST LVL seeds
+    the starting status once; after that CabinetTron owns it."""
+    _save(db, source="cabinettron", kind="tracker_seeded", r=Result(), job=job, job_code=job.job_code,
+          actor="3.0 tracker import", moved=("", job.status.value))

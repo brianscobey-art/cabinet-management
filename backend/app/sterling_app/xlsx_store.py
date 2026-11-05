@@ -49,7 +49,7 @@ from app.sterling_app.models import (
     TopPiece,
 )
 
-from app.sterling_app.database import APP_DIR, DATA_DIR
+from app.sterling_app.database import APP_DIR, DATA_DIR, SHARED
 
 WORKBOOK_PATH = DATA_DIR / "CKB Pricing Data.xlsx"
 # The workbook committed with the app seeds a fresh deployment's disk.
@@ -272,6 +272,8 @@ def save_now() -> bool:
             except PermissionError:
                 tmp_path.unlink(missing_ok=True)
                 raise
+            if SHARED:
+                _remember(wb)
             state.update(
                 dirty=False, locked=False, last_error=None,
                 last_saved=datetime.now(timezone.utc).isoformat(),
@@ -287,6 +289,61 @@ def save_now() -> bool:
         except Exception as exc:  # keep serving; surface the error
             state.update(last_error=f"Save failed: {exc}")
             return False
+
+
+def _remember(wb) -> None:
+    """Shared mode: note what each row looked like in the file just written,
+    without the commit setting off another save."""
+    from app.sterling_app.xlsx_sync import remember
+
+    state["suppress"] = True
+    db = SessionLocal()
+    try:
+        remember(db, wb)
+        db.commit()
+    finally:
+        db.close()
+        state["suppress"] = False
+
+
+def merge_workbook(path: Path | None = None) -> dict:
+    """Shared mode: pull edits made in the workbook into the database, then
+    rewrite the workbook so it matches. Returns what moved and any conflicts."""
+    from app.sterling_app.xlsx_sync import merge
+
+    path = path or WORKBOOK_PATH
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    shutil.copyfile(path, tmp_path)  # read a copy so an Excel lock never blocks
+    state["suppress"] = True
+    db = SessionLocal()
+    try:
+        result = merge(db, tmp_path)
+        db.commit()
+    finally:
+        db.close()
+        state["suppress"] = False
+        tmp_path.unlink(missing_ok=True)
+    save_now()
+    return result
+
+
+def verify_workbook() -> dict:
+    from app.sterling_app.xlsx_sync import verify
+
+    db = SessionLocal()
+    try:
+        return verify(db, WORKBOOK_PATH)
+    finally:
+        db.close()
+
+
+def _db_is_empty() -> bool:
+    db = SessionLocal()
+    try:
+        return all(db.query(model).first() is None for _, _, model, _ in SHEETS)
+    finally:
+        db.close()
 
 
 def _schedule(delay: float):
@@ -405,11 +462,28 @@ def load_into_db() -> dict:
         tmp_path.unlink(missing_ok=True)
 
 
+startup_report: dict = {}
+
+
 def startup():
-    """Workbook exists -> it is the source of truth. Otherwise bootstrap it."""
+    """Cache mode: workbook exists -> it is the source of truth, else bootstrap it.
+
+    Shared mode: the database is the source of truth. The first boot on an
+    empty database moves the workbook in and checks it line by line; every
+    later boot merges any edits made in the workbook while the app was down."""
     if not WORKBOOK_PATH.exists() and SEED_PATH != WORKBOOK_PATH and SEED_PATH.exists():
         WORKBOOK_PATH.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SEED_PATH, WORKBOOK_PATH)  # first boot on a fresh disk
+    if SHARED:
+        if not WORKBOOK_PATH.exists():
+            save_now()
+        elif _db_is_empty():
+            startup_report["moved"] = load_into_db()
+            startup_report["verify"] = verify_workbook()
+            save_now()
+        else:
+            startup_report["merged"] = merge_workbook()
+        return
     if WORKBOOK_PATH.exists():
         load_into_db()
     else:

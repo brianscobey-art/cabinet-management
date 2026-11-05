@@ -465,3 +465,18 @@ class CoverSheetPO(Base):
 
     sheet: Mapped[CoverSheet] = relationship(back_populates="pos")
 
+
+
+class SyncRow(Base):
+    """What each workbook row looked like at the last two-way sync (shared mode).
+
+    Comparing the database and the workbook against this tells which side
+    changed a row: only Excel changed it -> take Excel's; only the app changed
+    it -> keep the app's; both changed it -> keep the app's and flag it.
+    """
+
+    __tablename__ = "xlsx_sync_rows"
+
+    sheet: Mapped[str] = mapped_column(String(40), primary_key=True)
+    row_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    digest: Mapped[str] = mapped_column(String(40))

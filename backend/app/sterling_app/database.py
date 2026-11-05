@@ -1,8 +1,15 @@
-"""Sterling's own SQLite cache + Excel workbook, INSIDE CabinetTron.
+"""Sterling's database + Excel workbook, INSIDE CabinetTron.
 
-Sterling keeps its own engine on purpose: the Excel workbook is the source of
-truth (see xlsx_store) and this SQLite file is a disposable runtime cache —
-none of it touches CabinetTron's Postgres.
+Two modes:
+
+* Cache (default, live today): the Excel workbook is the source of truth (see
+  xlsx_store) and this SQLite file is a disposable runtime cache.
+* Shared (STERLING_DATABASE_URL set): Sterling's tables live in the shared
+  database, in their own "sterling" schema on Postgres so names like jobs and
+  settings never collide with CabinetTron's. The database is the source of
+  truth and the workbook is linked both ways (Brian 11/5/26): every app change
+  is written to the workbook, and edits made in the workbook are merged back
+  row by row, with a row changed on both sides flagged instead of overwritten.
 
 Data lives on STERLING_DATA_DIR when set, else Render's /data disk, else a
 sterling-data folder under backend/ for local dev.
@@ -20,11 +27,36 @@ DATA_DIR = Path(os.environ.get("STERLING_DATA_DIR", str(_default)))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "ckb_pricing.db"
 
+
+def _normalize(url: str) -> str:
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
+SHARED_URL = os.environ.get("STERLING_DATABASE_URL") or None
+SHARED = SHARED_URL is not None
+_url = _normalize(SHARED_URL) if SHARED else f"sqlite:///{DB_PATH}"
+# Postgres keeps Sterling in its own schema; SQLite has no schemas.
+SCHEMA = "sterling" if _url.startswith("postgresql") else None
+
 engine = create_engine(
-    f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
+    _url,
+    connect_args={"check_same_thread": False} if _url.startswith("sqlite") else {},
 )
+if SCHEMA:
+    from sqlalchemy import text as _text
+
+    with engine.begin() as _conn:
+        _conn.execute(_text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
+    engine = engine.execution_options(schema_translate_map={None: SCHEMA})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def qualified(table: str) -> str:
+    """A table name ready for raw DDL in either mode."""
+    return f'"{SCHEMA}"."{table}"' if SCHEMA else f'"{table}"'
 
 
 class Base(DeclarativeBase):
@@ -52,16 +84,16 @@ def ensure_columns() -> list[str]:
 
     added: list[str] = []
     insp = inspect(engine)
-    tables = set(insp.get_table_names())
+    tables = set(insp.get_table_names(schema=SCHEMA))
     with engine.begin() as conn:
         for table in Base.metadata.sorted_tables:
             if table.name not in tables:
                 continue
-            have = {c["name"] for c in insp.get_columns(table.name)}
+            have = {c["name"] for c in insp.get_columns(table.name, schema=SCHEMA)}
             for col in table.columns:
                 if col.name in have:
                     continue
                 ddl = col.type.compile(engine.dialect)
-                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
+                conn.execute(text(f'ALTER TABLE {qualified(table.name)} ADD COLUMN "{col.name}" {ddl}'))
                 added.append(f"{table.name}.{col.name}")
     return added

@@ -33,15 +33,17 @@ def _ensure_columns(engine) -> None:
             ("v_cutout_rate", "NUMERIC(8, 2)"),
         ],
     }
+    from app.sterling_app.database import SCHEMA, qualified
+
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in wanted.items():
-            if not insp.has_table(table):
+            if not insp.has_table(table, schema=SCHEMA):
                 continue
-            have = {c["name"] for c in insp.get_columns(table)}
+            have = {c["name"] for c in insp.get_columns(table, schema=SCHEMA)}
             for name, ddl in cols:
                 if name not in have:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+                    conn.execute(text(f"ALTER TABLE {qualified(table)} ADD COLUMN {name} {ddl}"))
 
 
 def _seed_cover_refs(SessionLocal) -> None:
