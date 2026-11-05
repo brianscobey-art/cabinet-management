@@ -27,7 +27,7 @@ services:
       - key: GENERATED_DIR
         value: /data/generated
       - key: APP_BASE_URL
-        value: https://cabinettron-test.onrender.com
+        value: https://cabinettron-test-vjcp.onrender.com
       # No OneDrive or R2 here, so the feed polls have nothing to read.
       - key: FEED_SYNC_ENABLED
         value: "false"

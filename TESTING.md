@@ -13,7 +13,7 @@ change live directly.
 | Deploys from | `main` (auto-deploy) | `staging` (auto-deploy) |
 | Database | `carter-kb-db` | `cabinettron-test-db` |
 | Disk (`/data`: Sterling workbook, generated files) | `kb-files` | `cabinettron-test-files` |
-| Address | cabinettron.com | cabinettron-test.onrender.com |
+| Address | cabinettron.com | cabinettron-test-vjcp.onrender.com |
 | `SECRET_KEY` | its own | its own (live logins do not work on test) |
 | `APP_ENV` | unset = `production` | `test` |
 
@@ -56,7 +56,7 @@ The test database starts empty.
 
 1. Work on a feature branch, open a PR into `staging`.
 2. Merge it: Render deploys it to the test service only.
-3. Check it on cabinettron-test.onrender.com.
+3. Check it on cabinettron-test-vjcp.onrender.com.
 4. When it is right, open a PR `staging` -> `main`. Merging that is the only
    step that changes the live site.
 
