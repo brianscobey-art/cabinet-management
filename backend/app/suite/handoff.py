@@ -197,7 +197,7 @@ def _save(
     r: Result,
     job: Job | None,
     job_code: str | None,
-    actor: User | None,
+    actor: User | str | None,
     payload: dict | None = None,
     moved: tuple[str, str] | None = None,
     note: str | None = None,
@@ -214,7 +214,7 @@ def _save(
         status_to=moved[1] if moved else None,
         payload=payload,
         note=note,
-        actor=actor.email if actor else None,
+        actor=actor if isinstance(actor, str) else (actor.email if actor else None),
     )
     db.add(ev)
     db.flush()
@@ -678,8 +678,9 @@ def optimus_po_back(db: Session, data: PoBackIn, actor: User | None) -> dict:
         moved = _move(r, job, JobStatus.ord)
     ev = _save(db, source="optimus", kind="po_back", r=r, job=job, job_code=job.job_code, actor=actor, payload=payload, moved=moved)
     if not r.rejected and r.level in ("ok", "warn"):
+        # The Carter PO total stays on the timeline row: checklist.po_total is the
+        # builder's PO total and must not be overwritten.
         cl.carter_po_number = po
-        cl.po_total = money(data.carter_po_total)
         cl.carter_po_date = data.carter_po_date
         job.cabinet_po = po
         _resolve(db, job, {"po_before_so", "po_so_number", "po_total_mismatch"}, ev)
@@ -954,3 +955,122 @@ def timeline(db: Session, job: Job) -> list[dict]:
     rows = db.query(JobEvent).filter(JobEvent.job_id == job.id).order_by(JobEvent.id).all()
     return [_row(e) for e in rows]
 
+
+# --------------------------------------------------------------------------- in-app callers
+# The Optimus board, the Order Pack agent and the builder feeds run inside
+# CabinetTron, so they call these directly instead of the HTTP hand-offs. Same
+# ladder, same holds, same timeline; they commit with their own transaction.
+
+ORDERING_GATE = {"measure_discrepancy", "selections_incomplete", "quote_total_mismatch", "po_mismatch",
+                 "gi_conflict", "builder_po_cancelled"}
+OPTIMUS_WINDOW = (JobStatus.ndord, JobStatus.ordprcss, JobStatus.ordsub, JobStatus.ordpo, JobStatus.ord)
+
+
+def optimus_move(db: Session, job: Job, target: JobStatus, actor: str = "Optimus") -> bool:
+    """A ticked or unticked Optimus step wants the job at `target`.
+
+    Forward moves wait while a hold is open (ordering holds from 1.3 on, money
+    holds from 1.5 on). Moving back inside the Optimus window is allowed, because
+    unticking a step there is the office correcting itself, and it is logged.
+    Returns True when the status changed.
+    """
+    if job.status == target or job.status not in OPTIMUS_WINDOW or target not in OPTIMUS_WINDOW:
+        return False
+    r = Result()
+    back = ladder.rank(target) < ladder.rank(job.status)
+    if not back:
+        blockers = set()
+        if ladder.rank(target) >= ladder.rank(JobStatus.ordprcss):
+            blockers |= ORDERING_GATE
+        if ladder.rank(target) >= ladder.rank(JobStatus.ordpo):
+            blockers |= PO_BLOCKERS
+        for h in open_holds(db, job):
+            if h.hold_code in blockers:
+                r.add("hold", h.hold_code, f"Optimus step waits on an open {h.source} hold: {'; '.join(h.issues or [])}")
+        if r.level == "hold":
+            # Not a new hold of its own: record it, but the original hold is what clears it.
+            _save(db, source="optimus", kind="step_blocked", r=Result([("warn", "step_blocked", t) for _, _, t in r.findings]),
+                       job=job, job_code=job.job_code, actor=actor, payload={"wanted": target.value})
+            return False
+    before = job.status.value
+    try:
+        ladder.check_move(job.status, target, reopen=back)
+    except ladder.LadderError as exc:
+        _save(db, source="optimus", kind="step_blocked", r=Result([("warn", "ladder", str(exc))]), job=job,
+              job_code=job.job_code, actor=actor, payload={"wanted": target.value})
+        return False
+    job.status = target
+    if back:
+        r.add("warn", "moved_back", f"Step unticked in Optimus: {before} back to {target.value}")
+    _save(db, source="optimus", kind="step", r=r, job=job, job_code=job.job_code, actor=actor,
+          moved=(before, target.value), payload={"wanted": target.value})
+    return True
+
+
+def carter_po_gate(db: Session, job: Job, po_number: str | None, po_total, so_total) -> list[str]:
+    """The Order Pack agent's stage 4 result, checked the same way as a PO-back."""
+    problems = []
+    po = norm_po(po_number)
+    if job.status is JobStatus.void:
+        problems.append(f"{job.job_code} is 8.0-Void; never order or bill a void job")
+    if not po:
+        problems.append("No Carter PO number in the stage 4 result")
+    elif po in CANCELLED_CARTER_POS:
+        problems.append(f"Carter PO {po_number} was cancelled; cut a new one")
+    else:
+        dup = (
+            db.query(OrderingChecklist)
+            .filter(OrderingChecklist.carter_po_number.isnot(None), OrderingChecklist.job_id != job.id)
+            .all()
+        )
+        other = next((c for c in dup if norm_po(c.carter_po_number) == po), None)
+        if other is not None:
+            problems.append(f"Carter PO {po_number} is already on job {other.job.job_code}")
+    if po_total is None or so_total is None:
+        problems.append("Stage 4 result is missing the SO total or the Carter PO total, so they can't be matched")
+    elif money(po_total) != money(so_total):
+        problems.append(f"Carter PO ${money(po_total):,} vs SO ${money(so_total):,}; must match to the cent")
+    for h in open_holds(db, job):
+        if h.hold_code in PO_BLOCKERS:
+            problems.append(f"Open {h.source} hold: {'; '.join(h.issues or [])}")
+    return problems
+
+
+def log_agent(db: Session, job: Job, kind: str, problems: list[str], payload: dict | None = None,
+              moved: tuple[str, str] | None = None) -> JobEvent:
+    r = Result([("hold", "agent_" + kind, p) for p in problems])
+    ev = _save(db, source="optimus", kind=kind, r=r, job=job, job_code=job.job_code, actor="Order Pack agent",
+               payload=payload, moved=moved)
+    if not problems:
+        _resolve(db, job, {"agent_" + kind}, ev)
+    return ev
+
+
+def feed_po_open(db: Session, job: Job, source_label: str) -> bool:
+    """The builder's PO is open: the job is sold and ready to order (1.2-NdOrd).
+
+    Only Optimus moves it further. The feeds used to jump it to 2.0-Ord, which
+    skipped every ordering check.
+    """
+    if job.status not in (JobStatus.track, JobStatus.preord):
+        return False
+    before = job.status.value
+    job.status = JobStatus.ndord
+    _save(db, source="feed", kind="builder_po_open", r=Result(), job=job, job_code=job.job_code, actor=source_label,
+          moved=(before, job.status.value), payload={"builder_po": job.builder_po})
+    return True
+
+
+def feed_po_changed(db: Session, job: Job, new_po: str | None, new_amount, source_label: str) -> None:
+    """The builder feed carries a different PO than the job has. Same rule as the
+    schedule hand-off: same dollars = likely typo (warn), else a hold."""
+    if not new_po or not job.builder_po or norm_po(new_po) == norm_po(job.builder_po):
+        return
+    same_money = new_amount is not None and job.po_amount is not None and money(new_amount) == money(job.po_amount)
+    r = Result()
+    if same_money:
+        r.add("warn", "po_typo", f"Feed PO {new_po} vs job PO {job.builder_po}, same ${money(job.po_amount):,}; likely a typo")
+    else:
+        r.add("warn", "po_changed", f"Builder PO changed from {job.builder_po} to {new_po}; check ordering used the right one")
+    _save(db, source="feed", kind="po_changed", r=r, job=job, job_code=job.job_code, actor=source_label,
+          payload={"old": job.builder_po, "new": new_po})

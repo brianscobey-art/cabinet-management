@@ -137,7 +137,13 @@ def _sync_status(job: Job, checklist: OrderingChecklist) -> None:
         if step_key in steps:
             target = trig_status
     if job.status != target:
-        job.status = target
+        # COAST suite: through the status rule and the open holds, with a
+        # timeline row, instead of setting the status directly.
+        from sqlalchemy.orm import object_session
+
+        from app.suite.handoff import optimus_move
+
+        optimus_move(object_session(job), job, target)
 
 
 class PlatformRow(BaseModel):

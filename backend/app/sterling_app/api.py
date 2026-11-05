@@ -1956,7 +1956,8 @@ def export_to_cabinettron(job_id: int, db: Session = Depends(get_db)):
     try:
         result = export_job(db, job)
     except ExportError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        # A refused hand-off is the job's problem, not a server one.
+        raise HTTPException(status_code=422, detail=str(exc))
     job.exported_job_id = result["job_id"]
     job.exported_at = datetime.now(timezone.utc)
     db.commit()
