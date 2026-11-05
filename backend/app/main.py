@@ -281,7 +281,7 @@ async def lifespan(app: FastAPI):
         # copy cannot hold up the health check. See app/test_bootstrap.py.
         jobs.append(lambda s: s.add_job(
             _run_test_bootstrap, "date",
-            run_date=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=20),
+            run_date=_dt.datetime.now(_dt.UTC) + _dt.timedelta(seconds=20),
         ))
     if settings.autobot_sync_minutes > 0:
         jobs.append(lambda s: s.add_job(
