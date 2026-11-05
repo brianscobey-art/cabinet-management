@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -10,6 +11,38 @@ class Settings(BaseSettings):
     """App configuration. Everything secret comes from env vars / .env (see .env.example)."""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # Which copy of the app this is. "production" is the live site and the
+    # default, so nothing changes there. "test" is the separate test copy
+    # (render.test.yaml, see TESTING.md): it shows a TEST banner on every page
+    # and the guard below switches off everything that writes outside the app.
+    app_env: str = "production"
+
+    @property
+    def is_test(self) -> bool:
+        return self.app_env.strip().lower() != "production"
+
+    @model_validator(mode="after")
+    def _test_copy_never_writes_outside(self):
+        """The test copy must never touch anything the live site uses.
+
+        Enforced here, not left to whoever fills in the env vars: even if a
+        live key gets pasted into the test service by mistake, the test copy
+        still cannot push to the CabinetTron Smartsheets, send invite emails,
+        or read the live feed files out of R2.
+        """
+        if self.is_test:
+            self.smartsheet_push_enabled = False
+            self.smartsheet_job_sheet_id = 0
+            self.smartsheet_po_sheet_id = 0
+            self.smartsheet_api_token = ""
+            self.sendgrid_api_key = ""
+            self.r2_endpoint = ""
+            self.r2_access_key_id = ""
+            self.r2_secret_access_key = ""
+            self.domo_access_token = ""
+            self.orderpack_auto_stage4 = False
+        return self
 
     # Local no-Docker fallback (anchored to backend/ regardless of cwd); Postgres in docker/prod.
     database_url: str = f"sqlite:///{(_BACKEND_DIR / 'dev.db').as_posix()}"

@@ -382,6 +382,14 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/env", tags=["system"])
+def environment():
+    """Which copy of the app this is. Public on purpose: every page reads it
+    to decide whether to show the TEST banner, including the sign-in page."""
+    s = get_settings()
+    return {"env": "test" if s.is_test else "production"}
+
+
 # The Ordering Platform is a self-contained page (not part of the React bundle);
 # registered as a route so it wins over the frontend static mount.
 _static = Path(__file__).resolve().parent / "static"

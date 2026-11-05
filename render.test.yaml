@@ -1,0 +1,47 @@
+# Render blueprint for the TEST copy of the app. Separate from render.yaml
+# (the live site) on purpose: its own web service, its own Postgres, its own
+# disk, its own SECRET_KEY, and it deploys from the `staging` branch, never
+# from `main`. See TESTING.md.
+#
+# In Render: New + > Blueprint > this repo > Blueprint path: render.test.yaml
+# > branch: staging. Nothing here touches the live service or database.
+services:
+  - type: web
+    name: cabinettron-test
+    runtime: docker
+    plan: starter
+    branch: staging
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: cabinettron-test-files
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # Switches on the TEST banner and the guard in app/config.py that turns
+      # off Smartsheet pushes, invite emails, R2 and Domo, whatever else is set.
+      - key: APP_ENV
+        value: test
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GENERATED_DIR
+        value: /data/generated
+      - key: APP_BASE_URL
+        value: https://cabinettron-test.onrender.com
+      # No OneDrive or R2 here, so the feed polls have nothing to read.
+      - key: FEED_SYNC_ENABLED
+        value: "false"
+      # Own key, so Brian's PC agent (which holds the live key) can never be
+      # mistaken for a test agent or the other way round.
+      - key: ORDERPACK_AGENT_KEY
+        generateValue: true
+      - key: WALLPAPER_FEED_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cabinettron-test-db
+          property: connectionString
+
+databases:
+  - name: cabinettron-test-db
+    plan: basic-256mb
