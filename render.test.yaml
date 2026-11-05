@@ -45,3 +45,5 @@ services:
 databases:
   - name: cabinettron-test-db
     plan: basic-256mb
+    # Test data is small; 1 GB keeps the storage charge down (live uses 15).
+    diskSizeGB: 1
