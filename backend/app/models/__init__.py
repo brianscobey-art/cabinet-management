@@ -7,6 +7,7 @@ from app.models.domotxn import DomoTxn
 from app.models.field_report import InstallReport, QcReport
 from app.models.fieldmeasure import FieldMeasure, FieldMeasureNote
 from app.models.job import Job, JobStatus, JobType
+from app.models.job_event import EVENT_LEVELS, EVENT_SOURCES, JobEvent
 from app.models.jobcost import JobCost
 from app.models.note import JobNote
 from app.models.notes import NOTE_TYPE_LABELS, NOTE_TYPES, Note, NoteRead, NoteTag
@@ -25,6 +26,9 @@ from app.models.visit import RETURN_RESULTS, VISIT_RESULTS, VISIT_STATUSES, VISI
 from app.models.worker import DutyAssignment, RouteStart, Worker, WorkerTimeOff
 
 __all__ = [
+    "EVENT_LEVELS",
+    "EVENT_SOURCES",
+    "JobEvent",
     "Account",
     "AccountType",
     "ActivityLog",

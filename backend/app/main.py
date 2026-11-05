@@ -28,6 +28,7 @@ from app.api.wallpaper import router as wallpaper_router
 from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
 from app.api.service import router as service_router
+from app.api.suite import router as suite_router
 from app.api.sync import router as sync_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
@@ -370,6 +371,7 @@ app.include_router(service_router)
 app.include_router(autobot_router)
 app.include_router(assistant_router)
 app.include_router(smartsheet_router)
+app.include_router(suite_router)  # COAST hand-offs into CabinetTron
 
 # Sterling (COAST pricing) — self-contained app at /sterling, own Excel-backed store
 from app.sterling_app import mount as _mount_sterling  # noqa: E402
