@@ -33,7 +33,69 @@ CUT_STOCK_RE = re.compile(r"^F(\d)(30|36)$")
 
 
 # Counted from the callout list only; a drawn copy anywhere else is disregarded.
-CALLOUT_ONLY_RE = re.compile(r"^(F[36]\d{2}|DWR3)$")
+# Older 2020 catalogs draw fillers as BF3 / VF6 / WF3 (base, vanity, wall filler);
+# those are fillers too, so the drawn label never becomes a quote line.
+CALLOUT_ONLY_RE = re.compile(r"^(F[36]\d{2}|[BVW]F\d{1,3}|DWR\d)$")
+
+# Room tags drawn on a layout ("Ba1", "Ba2", "Bath 2") are not cabinets.
+ROOM_TAG_RE = re.compile(r"^(?:[A-Z][a-z]+\s?#?\d{1,2}|BA\d)$")
+# Panel pieces drawn on an island or peninsula (FBP3636, PBP72) are cut from the
+# back panel sheet in the callout list, so with a BP9636 callout they are not
+# extra lines.
+PANEL_PIECE_RE = re.compile(r"^[FP]BP\d{2,4}$")
+# The lot code printed in the title block under the BUID ("DRPF40-0185",
+# "DROP-0093") names the house, not a cabinet. Found on all 15 sold jobs (11/6/26).
+LOT_CODE_RE = re.compile(r"^[A-Z]{2,}[A-Z0-9]*-\d{4}$")
+# Header values that only say where the hardware is written down; the title
+# block ("Hardware | 3910PC") carries the real style.
+GENERIC_HARDWARE = {"SEE SPECS", "KNOBS", "PULLS", "KNOB", "PULL", "PER COLOR SHEET"}
+TITLE_LABELS = ("Door Style", "Color", "Hardware")
+
+# Hardware: a callout ("33-Black Knobs", "26-3910-SN", "50-Knobs") is the piece
+# count; a drawn or header label ("Hardware: 3910-SN") only names the style.
+HARDWARE_SKU_RE = re.compile(r"^(3910|156)[A-Z0-9-]*$|^(STD)?-?(KNOB|PULL)S?(-[A-Z]+)?$")
+HARDWARE_WORDS_RE = re.compile(r"(?i)\b(knobs?|pulls?|hardware|per color sheet)\b|^(3910|156)")
+
+# 2020 Design catalog names -> the Everluxe catalog name Sterling quotes. Only
+# applied when the drawn name is NOT already a catalog SKU, so a current layout
+# is untouched. Each rule came out of the 15-layout check (11/5/26).
+ALIAS_EXACT = {
+    "S3/4": "SCR", "SCRIBE": "SCR", "SM8": "SCR",
+    "SHOE": "SHM", "SHOE8": "SHM", "SHMO8": "SHM", "SM10": "SHM",
+    "BTK8": "TKC", "TK8": "TKC", "TOEKICK": "TKC", "TOE": "TKC",
+    "OCM8": "OCM", "90OCM": "OCM", "90DOCM": "OCM",
+    "BEP3": "DWR3",
+    "36X96BACKPANEL": "BP9636", "PANEL36X96": "BP9636",
+    "OMC3396": "O339624", "REP2496": "REPV2496",
+}
+ALIAS_RE = [
+    (re.compile(r"^VSB(\d\d)$"), r"VS\1"),                 # vanity sink base
+    (re.compile(r"^V(\d\d)21$"), r"VS\1"),                 # V3021 = 30" vanity sink, 21 deep
+    (re.compile(r"^(?:FD)?B0?9$"), r"BT9"),                 # no 9" base in Everluxe: it is the tray base
+    (re.compile(r"^VDB(\d\d)(?:-3|\d{4})?$"), r"3VDB\1"),   # vanity drawer base
+    (re.compile(r"^W(\d{4})-(\d\d)D?$"), r"W\1\2"),         # W3018-15 -> W301815
+    (re.compile(r"^(?:RW|WR-)(\d{4})$"), r"W\g<1>24"),       # refrigerator wall, 24 deep
+    (re.compile(r"^B(\d\d)-2$"), r"B\1"),                   # two-door base
+    (re.compile(r"^LS(\d\d)(?:-?[LR])?$"), r"LSB\1"),        # lazy susan base
+    (re.compile(r"^WDC?(\d{4})$"), r"DCW\1"),                # diagonal corner wall
+    (re.compile(r"^BT0(\d)$"), r"BT\1"),                     # tray base BT09 -> BT9
+    (re.compile(r"^U(\d{4})$"), r"U\g<1>24"),                # utility, 24 deep
+]
+# Crown by lineal feet: Everluxe stocks 8' crown (CM8); a 10' callout is
+# re-counted to cover the same footage (3 x CM10 = 30' -> 4 x CM8).
+CROWN_FEET = {"CM10": 10, "CROWN": 8, "CM2-1/2": 8, "CM2-1/2\"": 8}
+
+
+def catalog_name(sku: str, known: set[str]) -> str:
+    """Drawn/called-out name -> the catalog SKU it orders as."""
+    if known and (sku in known or base_sku(sku) in known):
+        return sku
+    if sku in ALIAS_EXACT:
+        return ALIAS_EXACT[sku]
+    for pat, rep in ALIAS_RE:
+        if pat.match(sku):
+            return pat.sub(rep, sku)
+    return sku
 
 
 def filler_stock(sku: str) -> str:
@@ -136,19 +198,75 @@ def _glue_runs(runs: list[tuple[float, float, str]]) -> list[str]:
     return [t for _, _, t in out]
 
 
+def _join_split_callouts(tokens: list[str]) -> list[str]:
+    """Callouts the PDF hands back in pieces: "1-F63 6" -> "1-F636",
+    "4-S" + "3/4" -> "4-S3/4", "1-90 OCM" / "1-36x96 Back Panel" -> one word."""
+    out: list[str] = []
+    for tok in tokens:
+        # "1-2x4-8" arrives as "1-2" then "x4-8"
+        if out and re.fullmatch(r"[xX]\d.*", tok) and re.fullmatch(r"\d{1,3}\s*-\s*\d", out[-1]):
+            out[-1] = out[-1] + tok.lower()
+            continue
+        if out and tok == "3/4" and re.fullmatch(r"\d{1,3}\s*-\s*S", out[-1]):
+            out[-1] = out[-1] + "3/4"
+            continue
+        m = re.fullmatch(r"(\d{1,3})\s*-\s*(.+)", tok)
+        if m and " " in m.group(2):
+            word = re.sub(r"\s+", "", m.group(2)).upper()
+            if (re.fullmatch(r"F\d{2}\d", word) or word in ALIAS_EXACT
+                    or re.fullmatch(r"[A-Z0-9./-]{2,20}", word) and word.endswith(("OCM", "PANEL"))):
+                tok = f"{m.group(1)}-{word}"
+        out.append(tok)
+    return out
+
+
 def text_tokens(text: str) -> list[str]:
     """Tokens off pasted text — one per line, plus the words of a line that is a
     run of SKUs. A label line ("Plan: DRH4 Camden STD") is left whole, or "DRH4"
     would read as a cabinet.
     """
     out: list[str] = []
+    in_title = False   # the title block after "BUID:" is labels, never SKUs
     for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
         out.append(line)
-        if ":" not in line:
+        if line.startswith("BUID:"):
+            in_title = True
+        if in_title:
+            continue
+        # one callout with words after it ("1-36x96 Back Panel", "34-Black Knobs")
+        # is read whole; its words alone would read as callouts of their own
+        one_callout = re.match(r"\d{1,3}\s*-\s*\S", line) and not re.search(r"\s\d{1,3}\s*-", line)
+        if ":" not in line and not one_callout:
             out.extend(p for p in line.split() if p != line)
+    return out
+
+
+def _title_block(tokens: list[str]) -> dict:
+    """The title block after the address: "Door Style | Shaker | Color | White |
+    Hardware | 3910PC", or the three labels first and the three values after."""
+    out: dict = {}
+    for i, tok in enumerate(tokens):
+        if tok.startswith("BUID:"):
+            out["buid"] = tok.split(":", 1)[1].strip()
+            if i + 1 < len(tokens) and LOT_CODE_RE.match(tokens[i + 1].strip()):
+                out["lot"] = tokens[i + 1].strip()
+            rest = [t.strip() for t in tokens[i + 1:i + 12]]
+            # labels come in title case or all caps ("DOOR STYLE", "HARDWARE")
+            label = {lab.upper(): lab for lab in TITLE_LABELS}
+            rest = [label.get(t.upper(), t) for t in rest]
+            idx = [k for k, t in enumerate(rest) if t in TITLE_LABELS]
+            if len(idx) == 3 and idx == [idx[0], idx[0] + 1, idx[0] + 2]:
+                vals = rest[idx[0] + 3:idx[0] + 6]
+                for lab, v in zip(TITLE_LABELS, vals):
+                    out[lab] = v
+            else:
+                for k in idx:
+                    if k + 1 < len(rest) and rest[k + 1] not in TITLE_LABELS:
+                        out[rest[k]] = rest[k + 1]
+            break
     return out
 
 
@@ -185,14 +303,40 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
     excluded: dict[str, int] = {}
     cut_stock: dict[str, int] = {}
 
+    hardware_style = None
+    crown_feet = 0
+    vendors = re.findall(r"Vendor:[ \t]*([^\n]{1,40}?)[ \t]*(?:Door Style:|Color:|\n|$)", source)
+    tokens = _join_split_callouts([t.strip().strip(",;") for t in tokens])
+    title = _title_block(tokens)
+    lot = title.get("lot")
+
     for tok in tokens:
-        tok = tok.strip().strip(",;")
-        if not tok or " " in tok:
+        if not tok:
+            continue
+
+        # a hardware callout carries words ("33-Black Knobs", "37-Per Color Sheet")
+        hw = re.match(r"^(\d{1,3})\s*-\s*(.+)$", tok)
+        if hw and HARDWARE_WORDS_RE.search(hw.group(2)):
+            hardware_pieces += int(hw.group(1))
+            if HARDWARE_SKU_RE.match(hw.group(2).replace(" ", "").upper()):
+                hardware_style = hw.group(2).upper()
+            continue
+        if " " in tok:
+            if tok.upper().startswith("HARDWARE:"):
+                hardware_style = tok.split(":", 1)[1].strip().upper() or hardware_style
             continue
 
         call = CALLOUT_RE.match(tok)
         if call:
-            qty, sku = int(call.group(1)), base_sku(call.group(2).upper())
+            qty = int(call.group(1))
+            sku = base_sku(catalog_name(call.group(2).upper(), known))
+            if sku in CROWN_FEET:
+                crown_feet += CROWN_FEET[sku] * qty
+                continue
+            if HARDWARE_SKU_RE.match(sku):
+                hardware_pieces += qty
+                hardware_style = sku
+                continue
             if sku in LUMBER:
                 lumber[LUMBER[sku]] = lumber.get(LUMBER[sku], 0) + qty
             elif sku == "HARDWARE":
@@ -206,9 +350,18 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
                 called[stock] = called.get(stock, 0) + qty
             continue
 
+        if ROOM_TAG_RE.match(tok):
+            continue
+        if LOT_CODE_RE.match(tok.upper()):
+            lot = lot or tok.upper()
+            continue
         sku = base_sku(tok.upper())
         if not _looks_like_sku(sku):
             continue
+        if HARDWARE_SKU_RE.match(sku):      # "3910-SN" drawn = the style, not a count
+            hardware_style = hardware_style or sku
+            continue
+        sku = base_sku(catalog_name(sku, known))
         if sku.startswith(APPLIANCE_PREFIXES):
             excluded[sku] = excluded.get(sku, 0) + 1
         else:
@@ -233,6 +386,9 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         if CALLOUT_ONLY_RE.match(stock):
             ignored.append({"sku": sku, "qty": qty, "why": "counts only from the accessories list"})
             continue
+        if PANEL_PIECE_RE.match(stock) and "BP9636" in called:
+            ignored.append({"sku": sku, "qty": qty, "why": "cut from the back panel in the callouts"})
+            continue
         lines.append({"sku": sku, "qty": qty, "notes": "drawn on the layout",
                       "in_catalog": _known(sku, known)})
     for sku, qty in called.items():
@@ -241,9 +397,29 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         lines.append({"sku": sku, "qty": qty, "notes": note,
                       "in_catalog": _known(sku, known)})
 
+    if crown_feet:
+        called["CM8"] = called.get("CM8", 0) + -(-crown_feet // 8)
+        lines.append({"sku": "CM8", "qty": -(-crown_feet // 8),
+                      "notes": f"callout list · {crown_feet}' of crown as 8' sticks",
+                      "in_catalog": _known("CM8", known)})
+    title_hw = title.get("Hardware")
+    if title_hw and (not hardware_style or hardware_style in GENERIC_HARDWARE):
+        hardware_style = title_hw.upper()
+    warnings = []
+    distinct_vendors = sorted({v.strip() for v in vendors if v.strip()})
+    if len(distinct_vendors) > 1:
+        warnings.append("This layout lists more than one vendor (" + ", ".join(distinct_vendors)
+                        + "). Split the takeoff by vendor before ordering.")
+
     return {
         "plan": plan,
-        "door_style": door_style,
+        "hardware_style": hardware_style,
+        "vendors": distinct_vendors,
+        "warnings": warnings,
+        "door_style": door_style or title.get("Door Style"),
+        "color": title.get("Color"),
+        "lot": lot,
+        "buid": title.get("buid"),
         "lines": lines,
         "cut_stock": [{"sku": s, "qty": q, "as": filler_stock(s)}
                       for s, q in sorted(cut_stock.items())],
