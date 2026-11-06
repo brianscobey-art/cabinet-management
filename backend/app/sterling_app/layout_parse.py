@@ -43,6 +43,13 @@ ROOM_TAG_RE = re.compile(r"^(?:[A-Z][a-z]+\s?#?\d{1,2}|BA\d)$")
 # back panel sheet in the callout list, so with a BP9636 callout they are not
 # extra lines.
 PANEL_PIECE_RE = re.compile(r"^[FP]BP\d{2,4}$")
+# The lot code printed in the title block under the BUID ("DRPF40-0185",
+# "DROP-0093") names the house, not a cabinet. Found on all 15 sold jobs (11/6/26).
+LOT_CODE_RE = re.compile(r"^[A-Z]{2,}[A-Z0-9]*-\d{4}$")
+# Header values that only say where the hardware is written down; the title
+# block ("Hardware | 3910PC") carries the real style.
+GENERIC_HARDWARE = {"SEE SPECS", "KNOBS", "PULLS", "KNOB", "PULL", "PER COLOR SHEET"}
+TITLE_LABELS = ("Door Style", "Color", "Hardware")
 
 # Hardware: a callout ("33-Black Knobs", "26-3910-SN", "50-Knobs") is the piece
 # count; a drawn or header label ("Hardware: 3910-SN") only names the style.
@@ -196,6 +203,10 @@ def _join_split_callouts(tokens: list[str]) -> list[str]:
     "4-S" + "3/4" -> "4-S3/4", "1-90 OCM" / "1-36x96 Back Panel" -> one word."""
     out: list[str] = []
     for tok in tokens:
+        # "1-2x4-8" arrives as "1-2" then "x4-8"
+        if out and re.fullmatch(r"[xX]\d.*", tok) and re.fullmatch(r"\d{1,3}\s*-\s*\d", out[-1]):
+            out[-1] = out[-1] + tok.lower()
+            continue
         if out and tok == "3/4" and re.fullmatch(r"\d{1,3}\s*-\s*S", out[-1]):
             out[-1] = out[-1] + "3/4"
             continue
@@ -215,16 +226,47 @@ def text_tokens(text: str) -> list[str]:
     would read as a cabinet.
     """
     out: list[str] = []
+    in_title = False   # the title block after "BUID:" is labels, never SKUs
     for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
         out.append(line)
+        if line.startswith("BUID:"):
+            in_title = True
+        if in_title:
+            continue
         # one callout with words after it ("1-36x96 Back Panel", "34-Black Knobs")
         # is read whole; its words alone would read as callouts of their own
         one_callout = re.match(r"\d{1,3}\s*-\s*\S", line) and not re.search(r"\s\d{1,3}\s*-", line)
         if ":" not in line and not one_callout:
             out.extend(p for p in line.split() if p != line)
+    return out
+
+
+def _title_block(tokens: list[str]) -> dict:
+    """The title block after the address: "Door Style | Shaker | Color | White |
+    Hardware | 3910PC", or the three labels first and the three values after."""
+    out: dict = {}
+    for i, tok in enumerate(tokens):
+        if tok.startswith("BUID:"):
+            out["buid"] = tok.split(":", 1)[1].strip()
+            if i + 1 < len(tokens) and LOT_CODE_RE.match(tokens[i + 1].strip()):
+                out["lot"] = tokens[i + 1].strip()
+            rest = [t.strip() for t in tokens[i + 1:i + 12]]
+            # labels come in title case or all caps ("DOOR STYLE", "HARDWARE")
+            label = {lab.upper(): lab for lab in TITLE_LABELS}
+            rest = [label.get(t.upper(), t) for t in rest]
+            idx = [k for k, t in enumerate(rest) if t in TITLE_LABELS]
+            if len(idx) == 3 and idx == [idx[0], idx[0] + 1, idx[0] + 2]:
+                vals = rest[idx[0] + 3:idx[0] + 6]
+                for lab, v in zip(TITLE_LABELS, vals):
+                    out[lab] = v
+            else:
+                for k in idx:
+                    if k + 1 < len(rest) and rest[k + 1] not in TITLE_LABELS:
+                        out[rest[k]] = rest[k + 1]
+            break
     return out
 
 
@@ -265,6 +307,8 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
     crown_feet = 0
     vendors = re.findall(r"Vendor:[ \t]*([^\n]{1,40}?)[ \t]*(?:Door Style:|Color:|\n|$)", source)
     tokens = _join_split_callouts([t.strip().strip(",;") for t in tokens])
+    title = _title_block(tokens)
+    lot = title.get("lot")
 
     for tok in tokens:
         if not tok:
@@ -307,6 +351,9 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
             continue
 
         if ROOM_TAG_RE.match(tok):
+            continue
+        if LOT_CODE_RE.match(tok.upper()):
+            lot = lot or tok.upper()
             continue
         sku = base_sku(tok.upper())
         if not _looks_like_sku(sku):
@@ -355,6 +402,9 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         lines.append({"sku": "CM8", "qty": -(-crown_feet // 8),
                       "notes": f"callout list · {crown_feet}' of crown as 8' sticks",
                       "in_catalog": _known("CM8", known)})
+    title_hw = title.get("Hardware")
+    if title_hw and (not hardware_style or hardware_style in GENERIC_HARDWARE):
+        hardware_style = title_hw.upper()
     warnings = []
     distinct_vendors = sorted({v.strip() for v in vendors if v.strip()})
     if len(distinct_vendors) > 1:
@@ -366,7 +416,10 @@ def parse_layout(*, raw: bytes | None = None, text: str | None = None,
         "hardware_style": hardware_style,
         "vendors": distinct_vendors,
         "warnings": warnings,
-        "door_style": door_style,
+        "door_style": door_style or title.get("Door Style"),
+        "color": title.get("Color"),
+        "lot": lot,
+        "buid": title.get("buid"),
         "lines": lines,
         "cut_stock": [{"sku": s, "qty": q, "as": filler_stock(s)}
                       for s, q in sorted(cut_stock.items())],

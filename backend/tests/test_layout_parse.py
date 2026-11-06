@@ -68,3 +68,31 @@ def test_more_than_one_vendor_is_flagged():
     text = "Vendor: Ridgewood\nB15\nVendor: Everluxe\nB24\n"
     r = parse_layout(text=text, known_skus=KNOWN)
     assert any("more than one vendor" in w for w in r["warnings"])
+
+
+# Rules found by checking 15 sold DR Horton jobs against their orders (11/6/26).
+
+def test_lot_code_in_title_block_is_not_a_cabinet():
+    text = "B24\nBUID: 268200185\nDRPF40-0185\nDRH2 Ole Southside STD\n"
+    r = parse_layout(text=text, known_skus=KNOWN)
+    assert _lines(r) == {"B24": 1}
+    assert r["lot"] == "DRPF40-0185" and r["buid"] == "268200185"
+
+
+def test_split_lumber_callout_is_lumber_not_lines():
+    r = parse_layout(text="B24\nOther\n1-2\nx4-8\n1-1x4-8\n", known_skus=KNOWN)
+    assert _lines(r) == {"B24": 1}
+    assert r["lumber"] == {"2x4 (8')": 1, "1x4 (8')": 1}
+
+
+def test_title_block_names_hardware_when_header_says_see_specs():
+    paired = ("Hardware: See Specs\nB24\nBUID: 1\nDRLICR-0117\nEX2 Ozark STD\n"
+              "Door Style\nShaker\nColor\nWhite\nHardware\n3910PC\n")
+    r = parse_layout(text=paired, known_skus=KNOWN)
+    assert r["hardware_style"] == "3910PC" and r["color"] == "White"
+    grouped = ("Hardware: Pulls\nB24\nBUID: 1\nDRPF40-0185\nDRH2 Ole\n"
+               "Door Style\nColor\nHardware\nShaker\nDove Gray\nMatte Black Pulls\n")
+    r = parse_layout(text=grouped, known_skus=KNOWN)
+    assert r["hardware_style"] == "MATTE BLACK PULLS" and r["color"] == "Dove Gray"
+    caps = "B24\nBUID: 1\nDRWC-0008\nEX2 Lakeside STD\nDOOR STYLE\nShaker\nCOLOR\nWhite\nHARDWARE\n3910PC\n"
+    assert parse_layout(text=caps, known_skus=KNOWN)["hardware_style"] == "3910PC"
