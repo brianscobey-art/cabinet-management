@@ -1,5 +1,5 @@
-"""Read a 2020 Design cabinet layout (the printed .pdf, or its text pasted in)
-and turn it into a quote-ready SKU list.
+"""Read a cabinet layout (a 2020 Design or Cabinet Draft print, or its text
+pasted in) and turn it into a quote-ready SKU list.
 
 Two things are on a layout and both count:
 
@@ -34,6 +34,9 @@ CUT_STOCK_RE = re.compile(r"^F(\d)(30|36)$")
 
 # Counted from the callout list only; a drawn copy anywhere else is disregarded.
 CALLOUT_ONLY_RE = re.compile(r"^(F[36]\d{2}|DWR3)$")
+
+# Headings of the sheets that follow the drawing in a Cabinet Draft print.
+CABINET_DRAFT_SHEETS = ("Elevations", "Cabinet List", "Countertop", "Whole House", "Floor Plan Areas")
 
 
 def filler_stock(sku: str) -> str:
@@ -81,14 +84,24 @@ def pdf_tokens(raw: bytes) -> list[str]:
 
     runs: list[tuple[float, float, str]] = []
 
-    def visit(text, cm, tm, font_dict, font_size):
-        t = (text or "").strip()
-        if t:
-            runs.append((tm[4], tm[5], t))
-
     reader = PdfReader(io.BytesIO(raw))
     for page in reader.pages:
-        page.extract_text(visitor_text=visit)
+        page_runs: list[tuple[float, float, str]] = []
+
+        def visit(text, cm, tm, font_dict, font_size):
+            t = (text or "").strip()
+            if t:
+                page_runs.append((tm[4], tm[5], t))
+
+        text = page.extract_text(visitor_text=visit) or ""
+        # A Cabinet Draft print is one drawing sheet, then elevations, the
+        # Cabinet List, countertops and house plan copies. Those repeat every
+        # SKU and name the tops K1, B1..., so the count is the drawing alone.
+        if text.lstrip().startswith(CABINET_DRAFT_SHEETS):
+            break
+        runs.extend(page_runs)
+        if ".cabd" in text:
+            break
     return _glue_runs(runs)
 
 

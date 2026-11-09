@@ -1477,6 +1477,34 @@ async def import_quote2020(
     return compute.job_detail(db, job)
 
 
+def _layout_as_quote(db: Session, raw: bytes, door_style: str | None) -> dict:
+    """A layout PDF has no prices on it, so its SKUs and counts are priced off
+    the catalog — and come back in the same shape as a 2020 quote."""
+    from app.sterling_app.layout_parse import parse_layout
+
+    catalog = compute.catalog_by_sku(db)
+    try:
+        layout = parse_layout(raw=raw, known_skus=set(catalog))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read this layout: {exc}")
+    group = compute.resolve_price_group(db, door_style or layout["door_style"])
+    items = []
+    for ln in layout["lines"]:
+        match = compute.catalog_lookup(catalog, ln["sku"])
+        each = Decimal(compute.group_price(match, group)) if match else Decimal("0")
+        items.append({
+            "line_no": "",
+            "section": "Cabinets" if ln["notes"].startswith("drawn") else "Accessories",
+            "sku": ln["sku"],
+            "qty": ln["qty"],
+            "ext_list": each * ln["qty"],
+            "list_each": each,
+            "non_plan": False,
+            "sub_item": False,
+        })
+    return {"items": items, "net_total": None, "file_name": None, "list_sum": sum(i["ext_list"] for i in items)}
+
+
 @router.post("/jobs/{job_id}/import-2020", response_model=schemas.JobDetail)
 async def import_2020_into_job(
     job_id: int,
@@ -1511,10 +1539,12 @@ async def import_2020_into_job(
         raise
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not read 2020 file: {exc}")
+    if not parsed["items"] and name.endswith(".pdf"):
+        parsed = _layout_as_quote(db, raw, door_style)
     if not parsed["items"]:
         raise HTTPException(
             status_code=422,
-            detail="No item lines found — if this is a scanned/drawing PDF, use the 2020 quote report",
+            detail="No item lines found — this PDF has no quote lines or cabinet SKUs to read",
         )
 
     cab_room_name = (room or "").strip() or "Cabinets"
