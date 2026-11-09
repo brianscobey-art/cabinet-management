@@ -1269,6 +1269,10 @@ def everluxe_list_xlsx(payload: EvxExportIn):
 
 # --- Layout -> quote (drop in the 2020 Design layout, get the SKU list) ---
 
+NO_TEXT_PDF = ("This PDF has no readable text. Microsoft Print to PDF and scanners save the words as "
+               "pictures. Print it again with Save as PDF as the destination and upload that, or paste the SKU list.")
+
+
 @router.post("/everluxe/parse-layout")
 async def everluxe_parse_layout(
     file: UploadFile | None = None,
@@ -1294,7 +1298,7 @@ async def everluxe_parse_layout(
     if not parsed["lines"]:
         raise HTTPException(
             status_code=422,
-            detail="No cabinet SKUs found. If the layout is a scanned image, paste the SKU list instead.",
+            detail=NO_TEXT_PDF if raw and not parsed["token_count"] else "No cabinet SKUs found on this layout.",
         )
 
     from app.sterling_app.layout_parse import base_sku
@@ -1487,6 +1491,8 @@ def _layout_as_quote(db: Session, raw: bytes, door_style: str | None) -> dict:
         layout = parse_layout(raw=raw, known_skus=set(catalog))
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not read this layout: {exc}")
+    if not layout["token_count"]:
+        raise HTTPException(status_code=422, detail=NO_TEXT_PDF)
     group = compute.resolve_price_group(db, door_style or layout["door_style"])
     items = []
     for ln in layout["lines"]:
