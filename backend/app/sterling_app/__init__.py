@@ -120,6 +120,10 @@ DATA_FIXES = [
     ("data_fix_2026_10_23_vsd48_hardware", {
         "catalog": {"VSD48": {"doors": 4, "drawers": 2}},
     }),
+    # REPV2496 is a panel, not an assembled box — no assembly charge (Brian, 11/9/26).
+    ("data_fix_2026_11_09_repv2496_no_assembly", {
+        "catalog": {"REPV2496": {"assemble_value": 0}},
+    }),
 ]
 
 
