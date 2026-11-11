@@ -8,6 +8,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "11/11/26",
+    title: "Field Measure Notes: send to Alex",
+    detail:
+      "Reports > Operations > Field Measure Notes lists every note on an active house, grouped by house. Check the ones to send (or a whole house, or Select all), click Compile email, then Open in Outlook. After it's sent, Mark sent — those notes leave the list so nothing goes twice. 'show sent' brings them back.",
+  },
+  {
     date: "11/3/26",
     title: "Report: Installed, Not Final Billed",
     detail:

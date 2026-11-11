@@ -1636,6 +1636,25 @@ td.fm-col input[type="checkbox"] {
 .fm-note-line .fm-note-meta {
   padding-top: 0.1rem;
 }
+/* Reports > Field Measure Notes */
+.fmn-view label.check {
+  flex-direction: row;
+  align-items: center;
+}
+.fmn-view input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+.fmn-view .fm-note-lot input[type="checkbox"] {
+  vertical-align: -2px;
+  margin-right: 0.3rem;
+}
+/* a checkbox column ahead of date + note */
+.fm-note-line.pick {
+  grid-template-columns: 1.4rem 6.2rem 1fr;
+  align-items: start;
+}
 
 /* Phase report: notes under a house whose field measure is Incorrect. */
 .phase-table tr.has-fm-notes td {

@@ -47,6 +47,7 @@ import { getFieldMeasures, printFieldMeasures, undoLastPrintRun, type FieldMeasu
 import ManagerReportView from "./ManagerReport";
 import { initials } from "./PhasesPage";
 import JobAccountsView from "./JobAccountsView";
+import FieldMeasureNotesView from "./FieldMeasureNotesView";
 import PoReceiptsView from "./PoReceiptsView";
 
 const money = (v: number) =>
@@ -155,6 +156,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "manager" && <ManagerReportView />}
       {key === "po-receipts" && <PoReceiptsView />}
       {key === "job-accounts" && <JobAccountsView />}
+      {key === "field-measure-notes" && <FieldMeasureNotesView />}
     </div>
   );
 }

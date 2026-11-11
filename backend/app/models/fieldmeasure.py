@@ -48,5 +48,9 @@ class FieldMeasureNote(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )
+    # Compiled and sent to Alex from Reports > Field Measure Notes (11/11/26)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    sent_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    sent_to: Mapped[str | None] = mapped_column(String(255), default=None)
 
     job: Mapped["Job"] = relationship()  # noqa: F821

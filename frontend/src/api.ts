@@ -272,6 +272,28 @@ export interface JobAccountsReport {
 export const getJobAccounts = () => api<JobAccountsReport>("/reports/job-accounts");
 export const runJobAccounts = () => api<JobAccountsReport>("/reports/job-accounts/run", { method: "POST" });
 
+// Reports > Field Measure Notes: compile + send to Alex (11/11/26)
+export interface FMNoteReportRow {
+  id: number;
+  job_id: number;
+  job_code: string | null;
+  account_name: string | null;
+  community_name: string | null;
+  lot_number: string | null;
+  address: string;
+  plan: string | null;
+  body: string;
+  author: string | null;
+  created_at: string;
+  sent_at: string | null;
+  sent_by: string | null;
+  sent_to: string | null;
+}
+export const getFieldMeasureNotes = (includeSent: boolean) =>
+  api<FMNoteReportRow[]>(`/reports/field-measure-notes${includeSent ? "?include_sent=true" : ""}`);
+export const markFieldMeasureNotesSent = (ids: number[], to: string | null, sent = true) =>
+  api<unknown>("/field-measure-notes/mark-sent", { method: "POST", body: JSON.stringify({ ids, to, sent }) });
+
 export interface JobDetail extends Job {
   account_name: string;
   community_name: string | null;

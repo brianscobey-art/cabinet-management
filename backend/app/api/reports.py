@@ -189,6 +189,10 @@ REPORTS = [
                description="Houses coming up for a field measure, the plan layout each one prints "
                            "from, and what has already gone to the printer. Prints only new or "
                            "revised layouts, stamped with community, lot, job code and plan."),
+    ReportInfo(key="field-measure-notes", name="Field Measure Notes", category="Operations",
+               description="Every field measure note on an active house, grouped by house. Check the "
+                           "ones to send, compile them into an Outlook email to Alex, then mark them "
+                           "sent so they don't go twice."),
     ReportInfo(key="job-accounts", name="Job Accounts (DOMO)", category="Operations",
                description="G and I job accounts from DOMO matched to houses by Ashley's Code. "
                            "Blank codes are filled automatically; codes that disagree and accounts "
