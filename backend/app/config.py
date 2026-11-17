@@ -229,6 +229,11 @@ class Settings(BaseSettings):
     # Off for now (Brian's call 8/16/26): nothing fires unless he presses Run.
     orderpack_auto_stage4: bool = False
 
+    # Who gets a job's "Submit for Review" link on My Stuff (first active login wins).
+    job_review_emails: str = (
+        "brian.scobey@carterlumber.com,brian.scobey@townsendbuildingsupply.com"
+    )
+
     @property
     def orderpack_owner_list(self) -> list[str]:
         return [e.strip().lower() for e in self.orderpack_owner_emails.split(",") if e.strip()]

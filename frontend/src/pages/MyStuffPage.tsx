@@ -6,6 +6,7 @@ import {
   User,
   completeNote,
   createNote,
+  decideReview,
   deleteNote,
   isOrderPackOwner,
   listJobs,
@@ -24,7 +25,14 @@ const APPS = [
   { name: "Autobot", href: "/autobot", blurb: "Service routing" },
 ];
 
-const typeLabel = (v: string) => NOTE_TYPES.find((t) => t.value === v)?.label ?? v;
+const typeLabel = (v: string) =>
+  v === "review" ? "Review" : NOTE_TYPES.find((t) => t.value === v)?.label ?? v;
+
+const REVIEW_WORDS: Record<string, string> = {
+  pending: "Waiting on you",
+  approved: "Approved",
+  hold: "Held for review",
+};
 
 function TypeBadge({ type }: { type: string }) {
   return <span className={`note-type note-type-${type}`}>{typeLabel(type)}</span>;
@@ -61,11 +69,14 @@ function NoteCard({
   }
 
   const done = !!note.completed_at;
+  const isReview = note.note_type === "review";
+  const canDecide = isReview && (note.assignee_email === me.email || me.role === "admin");
+  const decide = (d: "approve" | "hold") => decideReview(note.id, d).then(onChange);
   return (
     <div className={`note-card${note.unread ? " note-unread" : ""}${done ? " note-done" : ""}`}>
       <div className="note-head">
         <TypeBadge type={note.note_type} />
-        {note.is_task && (
+        {note.is_task && !isReview && (
           <span className="note-task">
             {done ? "✓ Done" : "Task"} · {note.assignee_name ?? note.assignee_email}
           </span>
@@ -86,10 +97,36 @@ function NoteCard({
 
       <div className="note-body">{note.body}</div>
 
+      {isReview && (
+        <div className="review-actions">
+          {note.job_id && (
+            <a className="review-open" href={`#/jobs/${note.job_id}`}>
+              Open job to review →
+            </a>
+          )}
+          <span className={`review-status review-${note.review_status}`}>
+            {REVIEW_WORDS[note.review_status ?? ""] ?? note.review_status}
+            {note.review_status === "approved" && note.completed_by ? ` by ${note.completed_by}` : ""}
+          </span>
+          {canDecide && note.review_status !== "approved" && (
+            <>
+              <button className="btn-approve" onClick={() => decide("approve")}>
+                Approve
+              </button>
+              {note.review_status !== "hold" && (
+                <button className="btn-hold" onClick={() => decide("hold")}>
+                  Hold for Review
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="note-foot">
         <span className="muted">{note.author_name ?? note.author_email}</span>
         {note.tags.length > 0 && <span className="muted"> · tagged {note.tags.length}</span>}
-        {note.is_task && (
+        {note.is_task && !isReview && (
           <button className="link-btn" onClick={() => completeNote(note.id, !done).then(onChange)}>
             {done ? "reopen" : "mark complete"}
           </button>

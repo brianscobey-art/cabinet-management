@@ -4,14 +4,17 @@ import {
   statusSlug,
   JobDetail,
   JobSite,
+  NoteRow,
   addHardware,
   addRoom,
   deleteHardware,
   deleteRoom,
   getJob,
+  getJobReview,
   getJobSite,
   listKsrs,
   pinJobHere,
+  submitJobReview,
   updateJob,
 } from "../api";
 import DocumentsSection from "./DocumentsSection";
@@ -25,6 +28,52 @@ import PurchaseOrdersSection from "./PurchaseOrdersSection";
 import QuotesSection from "./QuotesSection";
 import ServiceRequestsSection from "./ServiceRequestsSection";
 import WalksSection from "./WalksSection";
+
+const REVIEW_WORDS: Record<string, string> = {
+  pending: "Waiting on review",
+  approved: "Approved",
+  hold: "Held for review",
+};
+
+/** The red Submit for Review button (Brian 11/17/26): sends the reviewer a link
+ *  on My Stuff. Greyed out while one is waiting; a held job can be resubmitted. */
+function SubmitForReview({ jobId }: { jobId: number }) {
+  const [review, setReview] = useState<NoteRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    getJobReview(jobId).then(setReview).catch(() => {});
+  }, [jobId]);
+
+  const status = review?.review_status ?? "";
+  const pending = status === "pending";
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      setReview(await submitJobReview(jobId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not submit");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="review-wrap">
+      {status && (
+        <span className={`review-status review-${status}`}>
+          {REVIEW_WORDS[status] ?? status}
+          {status === "approved" && review?.completed_by ? ` by ${review.completed_by}` : ""}
+          {status === "approved" && review?.completed_at ? ` ${fmtDate(review.completed_at)}` : ""}
+        </span>
+      )}
+      <button className="btn-review" onClick={submit} disabled={busy || pending}>
+        {busy ? "Submitting…" : pending ? "Submitted for Review" : "Submit for Review"}
+      </button>
+      {error && <span className="error">{error}</span>}
+    </span>
+  );
+}
 
 export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canWrite: boolean }) {
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -72,6 +121,7 @@ export default function JobDetailPage({ jobId, canWrite }: { jobId: number; canW
         ) : (
           <span className={`badge badge-${statusSlug(job.status)}`}>{statusLabel(job.status)}</span>
         )}
+        {canWrite && <SubmitForReview jobId={job.id} />}
       </div>
 
       <div className="card-row">

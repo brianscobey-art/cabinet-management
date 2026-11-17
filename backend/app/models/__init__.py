@@ -9,7 +9,7 @@ from app.models.fieldmeasure import FieldMeasure, FieldMeasureNote
 from app.models.job import Job, JobStatus, JobType
 from app.models.jobcost import JobCost
 from app.models.note import JobNote
-from app.models.notes import NOTE_TYPE_LABELS, NOTE_TYPES, Note, NoteRead, NoteTag
+from app.models.notes import NOTE_TYPE_LABELS, NOTE_TYPES, REVIEW, Note, NoteRead, NoteTag
 from app.models.order import ConfirmationStatus, Order, ShipStatus, Supplier
 from app.models.ordering import OrderingChecklist
 from app.models.pack import RUN_KINDS, RUN_STATUSES, PackRun
@@ -46,6 +46,7 @@ __all__ = [
     "NoteRead",
     "NOTE_TYPES",
     "NOTE_TYPE_LABELS",
+    "REVIEW",
     "JobStatus",
     "JobType",
     "Order",

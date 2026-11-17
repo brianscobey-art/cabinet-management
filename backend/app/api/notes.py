@@ -9,12 +9,14 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import read_access
+from app.api.deps import read_access, write_access
 from app.auth.deps import get_current_user
+from app.config import get_settings
 from app.database import get_db
-from app.models import NOTE_TYPES, Job, Note, NoteRead, NoteTag, User
+from app.models import NOTE_TYPES, REVIEW, Job, Note, NoteRead, NoteTag, User
 
 router = APIRouter(tags=["notes"])
 
@@ -49,6 +51,7 @@ class NoteOut(BaseModel):
     is_task: bool
     is_overdue: bool
     unread: bool
+    review_status: str | None = None
     replies: list["NoteOut"] = Field(default_factory=list)
 
 
@@ -82,6 +85,7 @@ def _out(n: Note, names: dict, unread_ids: set[int], today: date) -> NoteOut:
             n.assignee_email and n.due_date and not n.completed_at and n.due_date < today
         ),
         unread=n.id in unread_ids,
+        review_status=n.review_status,
     )
 
 
@@ -151,9 +155,12 @@ def list_notes(
         out.unread = out.unread or any(r.unread for r in out.replies)
         rows.append(out)
 
-    # newest first, but anything overdue or urgent floats to the top
+    # newest first, but anything overdue, urgent or waiting on a review floats to the top
     rows.sort(key=lambda r: r.created_at, reverse=True)
-    rows.sort(key=lambda r: (r.is_overdue, r.note_type == "urgent"), reverse=True)
+    rows.sort(
+        key=lambda r: (r.is_overdue, r.note_type == "urgent" or r.review_status in ("pending", "hold")),
+        reverse=True,
+    )
     return rows
 
 
@@ -265,3 +272,116 @@ def delete_note(
     db.query(NoteRead).filter(NoteRead.note_id == note_id).delete()
     db.delete(note)
     db.commit()
+
+
+# --- Submit for Review (Brian 11/17/26) ---
+# The red button on a job sends the reviewer a review on My Stuff that links to
+# the job; the reviewer answers Approve or Hold for Review.
+
+
+class ReviewIn(BaseModel):
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class ReviewDecision(BaseModel):
+    decision: str = Field(pattern="^(approve|hold)$")
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+def _reviewer(db: Session) -> str:
+    for email in get_settings().job_review_emails.split(","):
+        email = email.strip().lower()
+        if not email:
+            continue
+        u = (
+            db.query(User)
+            .filter(func.lower(User.email) == email, User.is_active.is_(True))
+            .first()
+        )
+        if u:
+            return u.email
+    raise HTTPException(409, "No reviewer login is set up for Submit for Review")
+
+
+def _latest_review(db: Session, job_id: int) -> Note | None:
+    return (
+        db.query(Note)
+        .filter(Note.job_id == job_id, Note.note_type == REVIEW, Note.parent_id.is_(None))
+        .order_by(Note.created_at.desc(), Note.id.desc())
+        .first()
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/review", response_model=NoteOut | None, dependencies=[Depends(read_access)]
+)
+def job_review(job_id: int, db: Session = Depends(get_db)):
+    """The job's latest review, so the button can show where it stands."""
+    note = _latest_review(db, job_id)
+    return _out(note, _names(db), set(), date.today()) if note else None
+
+
+@router.post("/jobs/{job_id}/review", response_model=NoteOut, dependencies=[Depends(write_access)])
+def submit_for_review(
+    job_id: int,
+    payload: ReviewIn | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Send the job up for review. One open review per job: a job already
+    waiting is left alone, and a held one goes back to pending."""
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    comment = ((payload.comment if payload else None) or "").strip()
+    note = _latest_review(db, job_id)
+    if note and note.review_status == "pending":
+        return _out(note, _names(db), set(), date.today())
+    if note and note.review_status == "hold":
+        note.review_status = "pending"
+        db.add(Note(
+            body="Resubmitted for review" + (f": {comment}" if comment else ""),
+            note_type="fyi", job_id=job_id, parent_id=note.id,
+            author_email=user.email, author_name=user.full_name,
+        ))
+    else:
+        label = " — ".join(x for x in (job.job_code, job.address) if x) or f"job {job.id}"
+        note = Note(
+            body=f"Submitted for review: {label}" + (f"\n{comment}" if comment else ""),
+            note_type=REVIEW, job_id=job_id,
+            author_email=user.email, author_name=user.full_name,
+            assignee_email=_reviewer(db), review_status="pending",
+        )
+        db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _out(note, _names(db), set(), date.today())
+
+
+@router.post("/notes/{note_id}/review", response_model=NoteOut, dependencies=[Depends(read_access)])
+def decide_review(
+    note_id: int,
+    payload: ReviewDecision,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Approve (closes it) or Hold for Review (stays open). The answer lands as
+    a reply, so whoever submitted it sees it on their My Stuff."""
+    note = db.get(Note, note_id)
+    if note is None or note.note_type != REVIEW:
+        raise HTTPException(404, "Review not found")
+    if note.assignee_email != user.email and user.role.value != "admin":
+        raise HTTPException(403, "Only the reviewer can answer this review")
+    approve = payload.decision == "approve"
+    note.review_status = "approved" if approve else "hold"
+    note.completed_at = datetime.now(timezone.utc) if approve else None
+    note.completed_by = user.full_name if approve else None
+    comment = (payload.comment or "").strip()
+    db.add(Note(
+        body=("Approved" if approve else "Held for review") + (f": {comment}" if comment else ""),
+        note_type="fyi", job_id=note.job_id, parent_id=note.id,
+        author_email=user.email, author_name=user.full_name,
+    ))
+    db.commit()
+    db.refresh(note)
+    return _out(note, _names(db), set(), date.today())

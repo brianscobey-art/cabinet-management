@@ -1471,6 +1471,8 @@ export interface NoteRow {
   is_task: boolean;
   is_overdue: boolean;
   unread: boolean;
+  // review requests only: pending, approved or hold
+  review_status: string | null;
   replies: NoteRow[];
 }
 
@@ -1500,6 +1502,13 @@ export const deleteNote = (id: number) => api<void>(`/notes/${id}`, { method: "D
 export const markNotesRead = (ids: number[]) =>
   api<{ marked: number }>("/notes/read", { method: "POST", body: JSON.stringify(ids) });
 export const noteUnreadCount = () => api<{ count: number }>("/notes/unread-count");
+
+// Submit for Review: the red button on a job sends the reviewer a review on My Stuff.
+export const getJobReview = (jobId: number) => api<NoteRow | null>(`/jobs/${jobId}/review`);
+export const submitJobReview = (jobId: number) =>
+  api<NoteRow>(`/jobs/${jobId}/review`, { method: "POST", body: JSON.stringify({}) });
+export const decideReview = (id: number, decision: "approve" | "hold") =>
+  api<NoteRow>(`/notes/${id}/review`, { method: "POST", body: JSON.stringify({ decision }) });
 
 /** True only for the Order Pack allowlist — /pack/meta 403s for everyone else.
  *  Used to decide whether the private "Bulk Ordering" button is shown. */

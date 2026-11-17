@@ -14,6 +14,10 @@ NOTE_TYPE_LABELS = {
     "question": "Question",
     "blocker": "Blocker",
 }
+# A job sent up with "Submit for Review" (Brian 11/17/26). Not on the compose
+# dropdown: it is only made by the button, and carries a review_status.
+REVIEW = "review"
+REVIEW_STATUSES = ("pending", "approved", "hold")
 
 
 class Note(Base):
@@ -37,6 +41,8 @@ class Note(Base):
     due_date: Mapped[date | None] = mapped_column(Date, default=None)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     completed_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Review requests only: pending -> approved, or hold (stays open).
+    review_status: Mapped[str | None] = mapped_column(String(16), default=None)
 
     # Threaded replies hang off their parent.
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("notes.id"), index=True, default=None)
