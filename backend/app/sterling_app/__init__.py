@@ -124,6 +124,19 @@ DATA_FIXES = [
     ("data_fix_2026_11_09_repv2496_no_assembly", {
         "catalog": {"REPV2496": {"assemble_value": 0}},
     }),
+    # Shaker Dove prices with Shaker White in group 1 (Brian, 11/18/26). It used
+    # to share the group-2 row with Antique / Charcoal / Greystone, so Dove gets
+    # its own row and the old row drops it. Rooms on the old name move to the
+    # new rows by their finish; their line prices are left as quoted.
+    ("data_fix_2026_11_18_shaker_dove_group1", {
+        "door_styles": {
+            "rename": {"Shaker Antique Charcoal Dove Greystone":
+                       {"name": "Shaker Antique Charcoal Greystone", "code": "SA/SC/SG"}},
+            "add": [{"name": "Shaker Dove", "code": "SD", "price_group": 1, "vendor": "Everluxe"}],
+            "rooms": {"Shaker Antique Charcoal Dove Greystone":
+                      ("Shaker Dove", "Shaker Antique Charcoal Greystone")},
+        },
+    }),
 ]
 
 
@@ -148,7 +161,8 @@ def _load_plan_file(rel: str) -> dict[tuple[str, str], list[dict]]:
 def _apply_data_fixes(db) -> None:
     from sqlalchemy import func
 
-    from app.sterling_app.models import CatalogItem, CoverVendor, PlanTemplateItem, Setting
+    from app.sterling_app.models import (CatalogItem, CoverVendor, DoorStyle, PlanTemplateItem,
+                                         Room, Setting)
 
     for key, fix in DATA_FIXES:
         if db.get(Setting, key):
@@ -190,6 +204,18 @@ def _apply_data_fixes(db) -> None:
             for v in db.query(CoverVendor).filter(CoverVendor.po_type == po_type).all():
                 for field, value in fields.items():
                     setattr(v, field, value)
+        styles = fix.get("door_styles", {})
+        for old_name, fields in styles.get("rename", {}).items():
+            for st in db.query(DoorStyle).filter(func.lower(DoorStyle.name) == old_name.lower()).all():
+                for field, value in fields.items():
+                    setattr(st, field, value)
+        for row in styles.get("add", []):
+            if not db.query(DoorStyle).filter(func.lower(DoorStyle.name) == row["name"].lower()).first():
+                next_id = (db.query(func.max(DoorStyle.id)).scalar() or 0) + 1
+                db.add(DoorStyle(id=next_id, **row))
+        for old_name, (dove, rest) in styles.get("rooms", {}).items():
+            for room in db.query(Room).filter(func.lower(Room.door_style) == old_name.lower()).all():
+                room.door_style = dove if "dove" in (room.finish or "").lower() else rest
         db.add(Setting(key=key, value="1"))
         db.commit()
         print(f"Sterling: applied {key}")
