@@ -532,8 +532,7 @@ async function import2020Dialog(file, url, after) {
       <label class="f">Room name *<input id="i20_room" list="i20rooms">
         <datalist id="i20rooms">${["Kitchen","Kitchen Perimeter","Kitchen Island","Master Bath","Bath 2","Laundry","Butler's Pantry"].map(n=>`<option>${n}</option>`).join("")}</datalist></label>
       <label class="f">Brand<input id="i20_brand"></label>
-      <label class="f">Door style<input id="i20_door" list="i20styles">
-        <datalist id="i20styles">${styles.map(s=>`<option>${esc(s.name)}</option>`).join("")}</datalist></label>
+      <label class="f">Door style${doorStyleSelect("i20_door", styles, "")}</label>
       <label class="f">Finish / color<input id="i20_finish"></label>
       <label class="f">Series<input id="i20_series"></label>
       <label class="f">Wood species<input id="i20_species"></label>
@@ -1171,6 +1170,18 @@ async function doorStyleOptions() {
   return _doorStyles;
 }
 
+// A real dropdown, not a typed list: a typed list only suggests styles that
+// match what is already in the box, so a room on Shaker White showed nothing else.
+function doorStyleSelect(id, styles, current) {
+  const cur = (current || "").trim();
+  const known = styles.some(s => s.name.toLowerCase() === cur.toLowerCase());
+  return `<select id="${id}">
+    <option value="">— none —</option>
+    ${styles.map(s => `<option value="${esc(s.name)}"${s.name.toLowerCase() === cur.toLowerCase() ? " selected" : ""}>${esc(s.name)} — Group ${s.price_group}${s.code ? " · " + esc(s.code) : ""}</option>`).join("")}
+    ${cur && !known ? `<option value="${esc(cur)}" selected>${esc(cur)} (not on the list)</option>` : ""}
+  </select>`;
+}
+
 async function roomFormDialog(jobId, room) {
   const isNew = !room;
   const r = room || {};
@@ -1184,9 +1195,7 @@ async function roomFormDialog(jobId, room) {
       <label class="f">Brand<input id="r_brand" value="${esc(r.cabinet_brand??"")}"></label>
       <label class="f">Series<input id="r_series" value="${esc(r.series??"")}"></label>
       <label class="f">Door style / color <span class="muted">(sets price group)</span>
-        <input id="r_door" value="${esc(r.door_style??"")}" list="doorStyleList">
-        <datalist id="doorStyleList">${styles.map(s =>
-          `<option value="${esc(s.name)}">Group ${s.price_group}${s.code ? " · " + esc(s.code) : ""}</option>`).join("")}</datalist></label>
+        ${doorStyleSelect("r_door", styles, r.door_style)}</label>
       <label class="f">Finish / color<input id="r_finish" value="${esc(r.finish??"")}"></label>
       <label class="f">Wood species<input id="r_species" value="${esc(r.wood_species??"")}"></label>
       <label class="f">Notes<input id="r_notes" value="${esc(r.notes??"")}"></label>
