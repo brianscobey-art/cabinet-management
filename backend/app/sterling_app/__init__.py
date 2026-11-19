@@ -137,6 +137,12 @@ DATA_FIXES = [
                       ("Shaker Dove", "Shaker Antique Charcoal Greystone")},
         },
     }),
+    # F630 / F636 are the 30" and 36" high fillers on a layout. Everluxe sells no
+    # such SKU: each is cut from one F642 (6" x 42"), so it prices as an F642
+    # (Brian, 11/19/26). Without the rows a retail list priced them at $0.
+    ("data_fix_2026_11_19_f630_f636_price_as_f642", {
+        "catalog_copy": {"F630": "F642", "F636": "F642"},
+    }),
 ]
 
 
@@ -176,6 +182,22 @@ def _apply_data_fixes(db) -> None:
                 continue
             for field, value in fields.items():
                 setattr(item, field, value)
+        # new SKU -> the catalog SKU it prices as. The new row copies that SKU's
+        # prices and labor values as they stand on this disk; an existing row is left alone.
+        for sku, src_sku in fix.get("catalog_copy", {}).items():
+            def _row(s):
+                return (db.query(CatalogItem)
+                        .filter(CatalogItem.vendor == "Everluxe",
+                                func.upper(CatalogItem.sku) == s.upper())
+                        .first())
+            src = _row(src_sku)
+            if src is None or _row(sku) is not None:
+                continue
+            db.add(CatalogItem(sku=sku, vendor="Everluxe", **{
+                f: getattr(src, f) for f in (
+                    "description", "category", "list_price", "multiplier", "price_g1", "price_g2",
+                    "price_g3", "price_g4", "price_g5", "doors", "drawers", "install_group",
+                    "assemble_value", "install_value")}))
         for (division, plan), skus in fix.get("plan_templates", {}).items():
             existing = (db.query(PlanTemplateItem)
                         .filter(PlanTemplateItem.division == division,
