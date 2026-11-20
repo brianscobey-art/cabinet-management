@@ -129,6 +129,7 @@ export interface JobListItem {
   job_type: JobType;
   status: JobStatus;
   install_date: string | null;
+  ksr?: string | null; // the job's KSR, else its account's default
   phase?: string | null; // latest logged construction phase code
   phase_label?: string | null;
 }

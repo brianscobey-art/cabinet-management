@@ -235,6 +235,8 @@ class JobListItem(BaseModel):
     job_type: JobType
     status: JobStatus
     install_date: date | None
+    # The KSR credited for the job: its own override, else the account default.
+    ksr: str | None = None
     # Latest logged construction phase -- the Jobs tab's Construction / Close Out
     # buttons split on it like the phase report (Brian 10/30/26).
     phase: str | None = None

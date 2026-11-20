@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import NATIONAL_BUILDER_PREFIXES, read_access, write_access
@@ -9,6 +9,7 @@ from app.auth.deps import require_roles
 from app.database import get_db
 from app.models import Account, Community, Job, JobStatus, PhaseUpdate, Role, User
 from app.phases import PHASE_LABELS
+from app.sales import canonical_ksr, effective_ksr, ksr_spellings
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -72,6 +73,7 @@ def _to_list_item(job: Job, phase: str | None = None) -> JobListItem:
         job_type=job.job_type,
         status=job.status,
         install_date=job.install_date,
+        ksr=canonical_ksr(effective_ksr(job)),
         phase=phase,
         phase_label=PHASE_LABELS.get(phase) if phase else None,
     )
@@ -87,9 +89,22 @@ def list_jobs(
     archived: bool = False,
     category: str | None = None,  # national | local | dr_horton | century | national_other
     q: str | None = None,
+    ksr: str | None = None,       # a KSR's name, or "none" for jobs with no KSR
     db: Session = Depends(get_db),
 ):
     query = db.query(Job).options(joinedload(Job.account), joinedload(Job.community))
+    if ksr:
+        # Same credit rule as effective_ksr: the job's own KSR, else its account's.
+        if ksr.lower() == "none":
+            no_acct = select(Account.id).where(or_(Account.ksr.is_(None), Account.ksr == ""))
+            query = query.filter(or_(Job.ksr.is_(None), Job.ksr == ""), Job.account_id.in_(no_acct))
+        else:
+            names = ksr_spellings(ksr)
+            acct = select(Account.id).where(func.lower(func.trim(Account.ksr)).in_(names))
+            query = query.filter(or_(
+                func.lower(func.trim(Job.ksr)).in_(names),
+                and_(or_(Job.ksr.is_(None), Job.ksr == ""), Job.account_id.in_(acct)),
+            ))
     if category:
         national = or_(*[Account.name.like(f"{p}%") for p in NATIONAL_BUILDER_PREFIXES])
         drh = Account.name.like("DR Horton%")

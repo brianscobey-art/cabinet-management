@@ -10,6 +10,7 @@ import {
   listAllCommunities,
   listCommunities,
   listJobs,
+  listKsrs,
 } from "../api";
 import { fmtDate } from "../format";
 
@@ -119,6 +120,50 @@ const isCloseout = (j: { phase?: string | null; status: string }) =>
   j.phase ? CLOSEOUT_PHASES.has(j.phase) : CLOSEOUT_STATUSES.has(j.status);
 type PhaseGroup = "all" | "construction" | "closeout";
 
+// The KSR pick sticks across visits (per browser), unlike the other filters.
+const KSR_KEY = "jobsKsr";
+function savedKsr(): string {
+  try {
+    return localStorage.getItem(KSR_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+// Click a column header to sort by it; click again to flip the order.
+type SortKey = "job_code" | "address" | "account_name" | "community_name" | "lot_number" | "ksr"
+  | "job_type" | "status" | "phase" | "install_date";
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "job_code", label: "Job code" },
+  { key: "address", label: "Address" },
+  { key: "account_name", label: "Account" },
+  { key: "community_name", label: "Community" },
+  { key: "lot_number", label: "Lot" },
+  { key: "ksr", label: "KSR" },
+  { key: "job_type", label: "Type" },
+  { key: "status", label: "Status" },
+  { key: "phase", label: "Phase" },
+  { key: "install_date", label: "Install" },
+];
+function sortJobs(rows: JobListItem[], key: SortKey | null, dir: 1 | -1): JobListItem[] {
+  if (!key) return rows;
+  const val = (j: JobListItem): string | number | null => {
+    const v = key === "phase" ? (j.phase ? Number(j.phase) : null) : j[key];
+    return v === null || v === undefined || v === "" ? null : v;
+  };
+  return rows.slice().sort((a, b) => {
+    const x = val(a);
+    const y = val(b);
+    if (x === null) return y === null ? 0 : 1; // blanks always last
+    if (y === null) return -1;
+    const c =
+      typeof x === "number" && typeof y === "number"
+        ? x - y
+        : String(x).localeCompare(String(y), undefined, { numeric: true });
+    return c * dir;
+  });
+}
+
 export default function JobsPage({ archived = false }: { archived?: boolean }) {
   const nav = archived ? {} : savedNav();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
@@ -137,6 +182,10 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
   );
   const [search, setSearch] = useState((nav.search as string) || "");
   const [group, setGroup] = useState<PhaseGroup>((nav.group as PhaseGroup) || "all");
+  const [ksrFilter, setKsrFilter] = useState(savedKsr);
+  const [ksrs, setKsrs] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState<SortKey | null>((nav.sortKey as SortKey) || null);
+  const [sortDir, setSortDir] = useState<1 | -1>(nav.sortDir === "desc" ? -1 : 1);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
@@ -145,9 +194,20 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (archived) return;
     sessionStorage.setItem(
       NAV_KEY,
-      JSON.stringify({ category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group })
+      JSON.stringify({
+        category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group,
+        sortKey, sortDir: sortDir === -1 ? "desc" : "asc",
+      })
     );
-  }, [archived, category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group]);
+  }, [archived, category, nationalStep, communityChosen, divisionChosen, statusFilter, accountFilter, communityIds, search, group, sortKey, sortDir]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KSR_KEY, ksrFilter);
+    } catch {
+      /* private window: the pick just won't stick */
+    }
+  }, [ksrFilter]);
 
   async function refresh() {
     const params: Record<string, string | string[]> = {};
@@ -157,6 +217,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (accountFilter) params.account_id = accountFilter;
     if (communityIds.length) params.community_ids = communityIds;
     if (search) params.q = search;
+    if (ksrFilter) params.ksr = ksrFilter;
     setJobs(await listJobs(params));
   }
 
@@ -165,7 +226,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
     if (!archived && category !== "local" && !communityChosen) return; // waiting on community choice
     refresh().catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, accountFilter, communityIds, search, archived, category, communityChosen]);
+  }, [statusFilter, accountFilter, communityIds, search, archived, category, communityChosen, ksrFilter]);
 
   useEffect(() => {
     if (!archived) listAllCommunities().then(setAllCommunities).catch(() => {});
@@ -173,6 +234,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
 
   useEffect(() => {
     listAccounts().then(setAccounts).catch(() => {});
+    listKsrs().then(setKsrs).catch(() => {});
   }, []);
 
 
@@ -362,10 +424,18 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
 
   const closeoutCount = jobs.filter(isCloseout).length;
   const constructionCount = jobs.length - closeoutCount;
-  const shownJobs =
+  const groupJobs =
     archived || group === "all" ? jobs
     : group === "closeout" ? jobs.filter(isCloseout)
     : jobs.filter((j) => !isCloseout(j));
+  const shownJobs = sortJobs(groupJobs, sortKey, sortDir);
+  const sortBy = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortKey(k);
+      setSortDir(1);
+    }
+  };
   // Clicking the active button turns the filter off again (as on the Phases tab).
   const pick = (g: PhaseGroup) => setGroup((cur) => (cur === g ? "all" : g));
 
@@ -445,6 +515,20 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
             options={communityOptions.map((c) => ({ value: String(c.id), label: c.name }))}
           />
         )}
+        <select
+          value={ksrFilter}
+          onChange={(e) => setKsrFilter(e.target.value)}
+          className={ksrFilter ? "filter-on" : undefined}
+          title="Show one KSR's jobs (the job's KSR, else its account's)"
+        >
+          <option value="">All KSRs</option>
+          {ksrs.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+          <option value="none">No KSR</option>
+        </select>
         {!archived && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
@@ -496,15 +580,12 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
         <table>
           <thead>
             <tr>
-              <th>Job code</th>
-              <th>Address</th>
-              <th>Account</th>
-              <th>Community</th>
-              <th>Lot</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Phase</th>
-              <th>Install</th>
+              {COLUMNS.map((c) => (
+                <th key={c.key} className="sortable" onClick={() => sortBy(c.key)} title={`Sort by ${c.label}`}>
+                  {c.label}
+                  <span className="sort-arrow">{sortKey === c.key ? (sortDir === 1 ? " ▲" : " ▼") : ""}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -519,6 +600,7 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
                 <td>{j.account_name}</td>
                 <td>{j.community_name ?? "—"}</td>
                 <td>{j.lot_number ?? "—"}</td>
+                <td>{j.ksr ?? <span className="muted">—</span>}</td>
                 <td>{j.job_type}</td>
                 <td>
                   <span className={`badge badge-${statusSlug(j.status)}`}>{statusLabel(j.status)}</span>
@@ -529,8 +611,8 @@ export default function JobsPage({ archived = false }: { archived?: boolean }) {
             ))}
             {shownJobs.length === 0 && (
               <tr>
-                <td colSpan={9} className="muted">
-                  {jobs.length ? "No jobs in this group." : "No jobs yet."}
+                <td colSpan={COLUMNS.length} className="muted">
+                  {jobs.length ? "No jobs in this group." : ksrFilter ? "No jobs for this KSR here." : "No jobs yet."}
                 </td>
               </tr>
             )}

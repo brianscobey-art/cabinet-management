@@ -50,6 +50,12 @@ def canonical_ksr(raw: str | None) -> str | None:
     return _KSR_CANON.get(raw.strip().lower(), raw.strip())
 
 
+def ksr_spellings(name: str) -> set[str]:
+    """Every lower-case spelling that canonicalizes to this KSR ("alex t.", "alex"...)."""
+    canon = canonical_ksr(name) or name
+    return {canon.lower()} | {k for k, v in _KSR_CANON.items() if v == canon}
+
+
 # Phones the user table doesn't carry. Emails come from the KSR's login.
 KSR_PHONES = {"Brian Scobey": "850-890-0482"}
 
