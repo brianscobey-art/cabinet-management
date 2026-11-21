@@ -12,6 +12,12 @@ columns the uploader / cloud importers expect:
     PO Receipt List.csv                         -> PO Receipt List MMDDYY.csv
     Job Account.csv                             -> DOMO CAB Accounts MMDDYY.csv
     ALL Purchase Orders by Customer and ...csv  -> DOMO Job POs MMDDYY.csv
+    ...G-Account Billed.csv                     -> DOMO Job Billing MMDDYY.csv
+
+The fourth ("CabinetTron feed - G-Account Billed", added 11/21/26) is the
+"Townsend Installed Sales | G-Account Billed" card, report filter All Time:
+one row per G-account with sales -- what "final billed" means for the
+Installed, Not Final Billed report.
 
 The direct pull is richer (PO status, due date, SO #, receipt per PO, I->G
 links), so a target it already wrote today is left alone; the email copy only
@@ -34,6 +40,7 @@ sys.path.insert(0, str(BACKEND))
 
 from app.config import get_settings  # noqa: E402
 from app.domo_pos import COLS as PO_COLS  # noqa: E402
+from app.final_bill import COLS as BILL_COLS  # noqa: E402
 from app.job_accounts import COLS as ACCT_COLS  # noqa: E402
 from app.po_receipts import COLS as RECEIPT_COLS  # noqa: E402
 
@@ -114,6 +121,17 @@ def job_pos(src: Path) -> list[list]:
     return out
 
 
+def billing(src: Path) -> list[list]:
+    """G-Account Billed card -> one row per G-account: "G7550042-238: CAB GL
+    34A" keeps just the account; Lines isn't on the card (1)."""
+    out = []
+    for r in _read(src):
+        acct = _pick(r, "Job Final Bill", "job - final bill").split(":")[0].strip()
+        if acct.upper().startswith("G"):
+            out.append([acct, _num(_pick(r, "Sales")), 1])
+    return out
+
+
 def main() -> int:
     stamp = f"{dt.date.today():%m%d%y}"
     dest = Path(get_settings().po_receipt_dir)
@@ -121,6 +139,7 @@ def main() -> int:
         ("PO Receipt List*.csv", f"PO Receipt List {stamp}.csv", RECEIPT_COLS, receipts),
         ("Job Account*.csv", f"DOMO CAB Accounts {stamp}.csv", ACCT_COLS, accounts),
         ("ALL Purchase Orders*.csv", f"DOMO Job POs {stamp}.csv", PO_COLS, job_pos),
+        ("*G-Account Billed*.csv", f"DOMO Job Billing {stamp}.csv", BILL_COLS, billing),
     ]
     today = dt.date.today()
     result = {}

@@ -41,6 +41,29 @@ def test_po_card_to_job_pos(tmp_path):
     assert rows["750005436"]["Status"] == "Closed"  # $1 special-order placeholder
 
 
+def test_g_account_billed_card_to_billing_file(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app import final_bill
+
+    src = _csv(tmp_path / "Townsend Installed Sales _ G-Account Billed.csv",
+               ["Master Account", "Job Final Bill", "I-Account Link", "Status", "Cost", "Sales", "MGN $", "MGN %"], [
+        ["G750-000: Quick Installed Sales-Townsend Dothan", "G750-000-014: CAB BRAN6801", "View I-Account Details",
+         "Open", "$9,249", "$13,424", "$4,175", "31.10%"],
+        ["G7500042: JUBILEE BUILDERS LLC", "G7500042-0120: CAB JBLE0162", "View I-Account Details", "Closed",
+         "5926", "7876", "1950", "24.76%"],
+        ["", "Total", "", "", "1", "2", "", ""],  # not an account
+    ])
+    rows = feed.billing(src)
+    assert rows == [["G750-000-014", 13424.0, 1], ["G7500042-0120", 7876.0, 1]]
+    _csv(tmp_path / "DOMO Job Billing 112226.csv", feed.BILL_COLS, rows)
+    monkeypatch.setattr(final_bill, "get_settings", lambda: SimpleNamespace(domo_billing_folder=str(tmp_path)))
+    final_bill._CACHE["key"] = None
+    sales, name = final_bill.load_sales()
+    assert name == "DOMO Job Billing 112226.csv"
+    assert sales["G750--014"] == 13424.0 and sales["G7500042-120"] == 7876.0
+
+
 def test_receipts_merge_not_replace(db):
     db.add(PoReceipt(receipt_number="OLD", receipt_date=date(2025, 12, 30), order_number="1"))
     db.commit()

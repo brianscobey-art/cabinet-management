@@ -112,7 +112,8 @@ def build_report(db: Session, today: date | None = None, until: date | None = No
             "salesperson": (job.salesperson if job else None) or (r.get("Salesperson") or None),
             "g_code": g,
             "i_code": i,
-            "i_sales": round(sales.get(code_key(i), 0.0), 2) if i else None,
+            # the emailed card only carries G-accounts -- no I figure then
+            "i_sales": round(sales[code_key(i)], 2) if i and code_key(i) in sales else None,
             "reason": "no G-code on file" if not g else "no sales on the G-code",
         })
     out.sort(key=lambda x: (x["actual_install"], x["job_code"]))
