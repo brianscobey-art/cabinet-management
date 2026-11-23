@@ -2,8 +2,13 @@
 
 Server-side REST client against CabinetTron's API (default http://127.0.0.1:8000):
 login -> find/create account + community -> create job -> room selections ->
-quote named "CKB Pricing Import" with every line item. Credentials live in this
-app's settings table (set them on the Settings page once).
+quote named "CKB Pricing Import" with every line item.
+
+Sterling runs inside CabinetTron, so the push normally goes in-process as the
+person who pressed Send to CabinetTron, on their own login: nobody sets up
+anything, and a new rep's first sold job just works. A login saved on the
+Settings page (or a different CABINETTRON_URL) is still honored when present,
+for a Sterling that runs on its own.
 """
 
 import httpx
@@ -19,16 +24,27 @@ class ExportError(Exception):
     pass
 
 
-def _client(db: Session) -> tuple[httpx.Client, str]:
+def _client(db: Session, app=None, auth: str | None = None,
+            public_url: str | None = None) -> tuple[httpx.Client, str]:
     import os
+
+    email = get_setting(db, "cabinettron_email", "")
+    password = get_setting(db, "cabinettron_password", "")
+    if (not email or not password) and app is not None and auth:
+        # Same app, same login: call CabinetTron's routes in-process with the
+        # caller's own token, so it runs with their name and permissions.
+        from starlette.testclient import TestClient
+
+        base = (public_url or "http://cabinettron").rstrip("/")
+        client = TestClient(app, base_url=base, raise_server_exceptions=False)
+        client.headers["Authorization"] = auth
+        return client, base
 
     base = get_setting(
         db, "cabinettron_url", os.environ.get("CABINETTRON_URL", "http://127.0.0.1:8000")
     ).rstrip("/")
-    email = get_setting(db, "cabinettron_email", "")
-    password = get_setting(db, "cabinettron_password", "")
     if not email or not password:
-        raise ExportError("CabinetTron login not configured — set it on the Settings page")
+        raise ExportError("Sign in to CabinetTron, then press Send to CabinetTron again")
     client = httpx.Client(base_url=base, timeout=TIMEOUT)
     try:
         resp = client.post("/auth/token", data={"username": email, "password": password})
@@ -43,6 +59,10 @@ def _client(db: Session) -> tuple[httpx.Client, str]:
 
 
 def _ok(resp: httpx.Response, doing: str) -> dict:
+    if resp.status_code == 401:
+        raise ExportError("Your CabinetTron sign-in has expired: sign in again, then resend")
+    if resp.status_code == 403:
+        raise ExportError(f"Your CabinetTron login isn't allowed to create jobs ({doing}): ask Brian for a sales role")
     if resp.status_code not in (200, 201):
         raise ExportError(f"CabinetTron rejected {doing} ({resp.status_code}): {resp.text[:300]}")
     return resp.json()
@@ -70,13 +90,14 @@ def _find_or_create_community(client: httpx.Client, account_id: int, name: str) 
     )
 
 
-def export_job(db: Session, job: Job) -> dict:
+def export_job(db: Session, job: Job, app=None, auth: str | None = None,
+               public_url: str | None = None) -> dict:
     """Returns {"job_id": ..., "url": ...} of the created CabinetTron job."""
     if job.exported_job_id:
         raise ExportError(f"Already exported as CabinetTron job #{job.exported_job_id}")
     account_name = (job.builder or "").strip() or job.name.strip()
 
-    client, base = _client(db)
+    client, base = _client(db, app, auth, public_url)
     try:
         account = _find_or_create_account(client, account_name, job.job_type.value)
         community_id = None
@@ -144,6 +165,6 @@ def export_job(db: Session, job: Job) -> dict:
                     ),
                     f"quote line {line.sku}",
                 )
-        return {"job_id": ct_job_id, "url": f"{base}/jobs/{ct_job_id}"}
+        return {"job_id": ct_job_id, "url": f"{base}/#/jobs/{ct_job_id}"}
     finally:
         client.close()

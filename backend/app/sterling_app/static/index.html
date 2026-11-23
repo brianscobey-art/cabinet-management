@@ -490,7 +490,7 @@ function jobFormDialog(job) {
       plan: $("#f_plan").value.trim() || null,
       job_type: $("#f_type").value,
       stage: $("#f_stage").value,
-      ksr: $("#f_ksr").value || (isNew ? currentKsr() || null : null),
+      ksr: $("#f_ksr").value || (isNew ? creditKsr() || null : null),
       margin_pct: $("#f_margin").value === "" ? null : Number($("#f_margin").value),
       sales_contact_name: $("#f_scn").value.trim() || null,
       sales_contact_phone: $("#f_scp").value.trim() || null,
@@ -2240,7 +2240,7 @@ function printPriceSheet(data, filt) {
     ${hwSep ? `<div class="foot" style="margin-top:10px; border:none; padding:0">Hardware = knobs/pulls for every door and drawer on the plan, priced separately. Cabinets + Hardware is the price with hardware supplied and installed.</div>` : ""}
     ${hwOpts ? `<div class="foot" style="margin-top:10px; border:none; padding:0">Cabinets Only is priced without knobs or pulls. The 3910 (knob) and 156 (pull) columns are hardware options — supplied and installed on every door and drawer — added to the Cabinets Only price. Pick one.</div>` : ""}
     <div class="foot">Pricing valid (14) calendar days from the effective date; subject to change with tariff, freight, or material cost changes thereafter.
-      Prepared by ${esc(currentKsr() || "Carter Kitchen & Bath")} · Carter Lumber — Kitchen &amp; Bath Division · 868 Murray Rd, Dothan, AL 36303</div>
+      Prepared by ${esc(creditKsr() || "Carter Kitchen & Bath")} · Carter Lumber — Kitchen &amp; Bath Division · 868 Murray Rd, Dothan, AL 36303</div>
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
@@ -2794,7 +2794,7 @@ async function renderEverluxe() {
       multiplier_override: Number($("#evxMult").value),
       freight_pct_override: $("#evxMult").value === "0.21" ? 0.10 : 0.118,
       margin_pct: Number($("#evxMargin").value) || null,
-      install_mode: "with_knobs", ksr: currentKsr() || null,
+      install_mode: "with_knobs", ksr: creditKsr() || null,
     }});
     const detail = await api(`/jobs/${job.id}/rooms`, {method:"POST", body: {
       name: "Kitchen", door_style: $("#evxStyle").value || null,
@@ -2884,7 +2884,7 @@ function printEverluxeSheet(res, opts) {
     <table class="meta"><tr>
       <td><b>Plan</b> ${esc(opts.plan || "—")}<br><b>Door</b> ${esc(opts.door_style || "Base (Group 1)")}<br>
           <b>Supplier</b> Everluxe<br><b>Tier</b> ×${esc(String(opts.multiplier))} · ${Math.round(Number(t.freight_pct)*1000)/10}% freight</td>
-      <td><b>Priced On</b> ${dstr}<br><b>Prepared</b> ${esc(currentKsr() || "Carter Kitchen & Bath")}<br>
+      <td><b>Priced On</b> ${dstr}<br><b>Prepared</b> ${esc(creditKsr() || "Carter Kitchen & Bath")}<br>
           <b>Margin</b> ${Math.round(Number(t.margin_pct))}%${Number(t.fuel_pct) ? `<br><b>Fuel</b> ${t.fuel_pct}%` : ""}</td>
     </tr></table>
     <table>
@@ -3661,7 +3661,7 @@ async function renderSettings() {
           <label class="f">Default margin %<input id="s_margin" type="number" min="0" max="99" step="0.5" value="${s.default_margin_pct}"></label>
         </div>
         <p class="muted" style="margin-top:10px; font-size:12.5px">Cost = list × multiplier. Sell = cost ÷ (1 − margin%), rounded to whole dollars.</p>
-        <label class="f" style="margin-top:12px">Kitchen Sales Reps <span class="muted">(comma separated — shows in the header dropdown)</span>
+        <label class="f" style="margin-top:12px">Kitchen Sales Reps <span class="muted">(comma separated — shows in the header dropdown along with CabinetTron's KSR list)</span>
           <input id="s_ksrs" value="${esc(s.ksr_list)}"></label>
       </div>
       <div class="card" style="flex:1; min-width:300px">
@@ -3672,7 +3672,8 @@ async function renderSettings() {
           <label class="f">Password ${s.cabinettron_password_set ? '<span class="muted">(saved — enter to change)</span>' : ""}
             <input id="s_pw" type="password" placeholder="${s.cabinettron_password_set ? "••••••••" : "not set"}"></label>
         </div>
-        <p class="muted" style="margin-top:10px; font-size:12.5px">Used when a Sold job is pushed into CabinetTron. Same login as the Carter K&amp;B app.</p>
+        <p class="muted" style="margin-top:10px; font-size:12.5px">Optional — leave the login blank. Send to CabinetTron uses the login of
+        whoever presses it. Fill these in only to make every push go in under one shared account.</p>
       </div>
     </div>
     <div class="toolbar" style="margin-top:14px">
@@ -3725,27 +3726,54 @@ function openDialog(title, bodyHtml, onSave) {
   if (first) first.focus();
 }
 
-// ---------- KSR identity (header dropdown; persists per browser) ----------
+// ---------- KSR identity (header dropdown) ----------
+// Who you are comes from your CabinetTron login, so a new rep never has to set
+// anything up: until someone picks in the header dropdown (that pick persists
+// per browser), the list opens on the signed-in rep's own jobs.
+// The names are Sterling's Settings list plus CabinetTron's KSR roster, so a
+// rep added in CabinetTron shows up here without a second edit.
 function ksrNames() {
-  return (window._settings?.ksr_list || "").split(",").map(s => s.trim()).filter(Boolean);
+  const names = [...(window._settings?.ksr_list || "").split(","), ...(window._ksrRoster || [])]
+    .map(s => String(s).trim()).filter(Boolean);
+  const seen = new Set();
+  return names.filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
 }
-function currentKsr() { return localStorage.getItem("ckb_ksr") || ""; }
+function myKsr() {
+  const me = (window._me?.full_name || "").trim().toLowerCase();
+  return (me && ksrNames().find(n => n.toLowerCase() === me)) || "";
+}
+function savedKsr() {
+  try { return localStorage.getItem("ckb_ksr"); } catch { return null; }
+}
+function currentKsr() {
+  const saved = savedKsr();
+  return saved === null ? myKsr() : saved;
+}
+// The name a quote or new job is credited to: the dropdown's rep, else you.
+function creditKsr() { return currentKsr() || myKsr(); }
 function initKsr() {
   const sel = $("#ksrSel");
   sel.innerHTML = `<option value="">All jobs</option>` +
     ksrNames().map(n => `<option value="${esc(n)}" ${currentKsr()===n?"selected":""}>${esc(n)}</option>`).join("");
   sel.value = ksrNames().includes(currentKsr()) ? currentKsr() : "";
-  sel.onchange = () => { localStorage.setItem("ckb_ksr", sel.value); route(); };
+  sel.onchange = () => {
+    try { localStorage.setItem("ckb_ksr", sel.value); } catch {}
+    route();
+  };
 }
 
 // ⠿ opens the COAST suite launcher on CabinetTron — the Render app when
 // Sterling itself is on Render, otherwise same host on port 8000.
 $("#suiteBtn").href = "/#/suite";
 
-// boot: cache settings (default multiplier, KSR list), set identity, then route
-api("/settings").then(s => {
+// boot: cache settings (default multiplier, KSR list) and who is signed in,
+// set identity, then route
+const _cmsGet = path => fetch(path, {headers: authHeaders()}).then(r => r.ok ? r.json() : null).catch(() => null);
+Promise.all([api("/settings"), _cmsGet("/auth/me"), _cmsGet("/ksrs")]).then(([s, me, roster]) => {
   window._settings = s;
   window._defaultMult = Number(s.default_multiplier);
+  window._me = me;
+  window._ksrRoster = Array.isArray(roster) ? roster : [];
   initKsr();
 }).finally(route);
 

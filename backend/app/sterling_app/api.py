@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
@@ -1985,12 +1985,15 @@ def excel_reload():
 # --- Export to CabinetTron ---
 
 @router.post("/jobs/{job_id}/export")
-def export_to_cabinettron(job_id: int, db: Session = Depends(get_db)):
+def export_to_cabinettron(job_id: int, request: Request, db: Session = Depends(get_db)):
     job = _get_or_404(db, Job, job_id, "Job")
     if job.stage != Stage.sold:
         raise HTTPException(status_code=422, detail="Only Sold jobs export to CabinetTron")
     try:
-        result = export_job(db, job)
+        # Sent as whoever pressed the button, on their own CabinetTron login.
+        result = export_job(db, job, app=request.app,
+                            auth=request.headers.get("authorization"),
+                            public_url=str(request.base_url))
     except ExportError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     job.exported_job_id = result["job_id"]
