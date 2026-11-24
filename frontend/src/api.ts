@@ -1213,6 +1213,54 @@ export const getRevenueSalesperson = () => api<RevenueGroup[]>("/reports/revenue
 export const getInstallWeek = () => api<InstallWeekRow[]>("/reports/install-week");
 export const getNeedsOrdering = () => api<NeedsOrderRow[]>("/reports/unordered");
 
+// PO Line Items (DOMO drill-down, 11/24/26)
+export interface PoLine {
+  item_code: string | null;
+  qty_received: number;
+  received_cost: number;
+}
+export interface PoWithLines {
+  po_number: string;
+  transaction_date: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  vendor_alias: string | null;
+  carter_sku: string | null;
+  account: string | null;
+  account_name: string | null;
+  cab_job_code: string | null;
+  job_id: number | null;
+  salesperson: string | null;
+  ordered_cost: number | null;
+  items: PoLine[];
+  items_received: number;
+  feed_received: number | null;
+  in_feed: boolean;
+  placeholder: boolean;
+  received_ok: boolean;
+  pulled_at: string | null;
+}
+export interface PoLinesReport {
+  query: string;
+  job_id: number | null;
+  job_code: string | null;
+  pos: PoWithLines[];
+  po_count: number;
+  item_lines: number;
+  items_received: number;
+}
+export interface PoLinesChecks {
+  pos_checked: number;
+  received_mismatch: { po_number: string; supplier: string | null; vendor_alias: string | null; account: string | null;
+    cab_job_code: string | null; items_received: number; feed_received: number | null; issue: string }[];
+  placeholder_pos: { po_number: string; supplier: string | null; vendor_alias: string | null; account: string | null;
+    cab_job_code: string | null; items: number; items_received: number }[];
+  posted_at_cost: { i_account: string; g_account: string | null; name: string | null; lines: number; cost: number;
+    sales: number }[];
+}
+export const getPoLines = (q: string) => api<PoLinesReport>(`/reports/po-lines?q=${encodeURIComponent(q)}`);
+export const getPoLinesChecks = () => api<PoLinesChecks>("/reports/po-lines/checks");
+
 export interface NotBilledRow {
   job_id: number | null;
   job_code: string;

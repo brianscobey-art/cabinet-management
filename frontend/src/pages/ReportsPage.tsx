@@ -47,6 +47,7 @@ import { getFieldMeasures, printFieldMeasures, undoLastPrintRun, type FieldMeasu
 import ManagerReportView from "./ManagerReport";
 import { initials } from "./PhasesPage";
 import JobAccountsView from "./JobAccountsView";
+import PoLinesView from "./PoLinesView";
 import FieldMeasureNotesView from "./FieldMeasureNotesView";
 import PoReceiptsView from "./PoReceiptsView";
 
@@ -156,6 +157,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "manager" && <ManagerReportView />}
       {key === "po-receipts" && <PoReceiptsView />}
       {key === "job-accounts" && <JobAccountsView />}
+      {key === "po-lines" && <PoLinesView />}
       {key === "field-measure-notes" && <FieldMeasureNotesView />}
     </div>
   );

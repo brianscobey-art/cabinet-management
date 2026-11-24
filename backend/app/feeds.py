@@ -916,6 +916,8 @@ def poll_tracker(db: Session) -> dict:
             _pull(settings, "domo-accounts/", Path(settings.domo_accounts_folder), keep=2)
             _pull(settings, "domo-pos/", Path(settings.domo_pos_folder), keep=2)
             _pull(settings, "domo-billing/", Path(settings.domo_billing_folder), keep=2)
+            _pull(settings, "domo-po-lines/", Path(settings.domo_po_lines_folder), keep=2)
+            _pull(settings, "domo-iaccount/", Path(settings.domo_iaccount_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
 
@@ -971,6 +973,21 @@ def poll_tracker(db: Session) -> dict:
             _stamp(db, "fp_domo_pos", f)
     except Exception as exc:  # noqa: BLE001
         result["domo_pos"] = {"error": str(exc)}
+
+    # Item lines per PO (Chrome pull) and the I-Account Detail email (11/24/26).
+    try:
+        from app import po_lines
+
+        f = po_lines.newest_file(Path(settings.domo_iaccount_folder), po_lines.IACCOUNT_GLOB)
+        if f is not None and not _unchanged(db, "fp_domo_iaccount", f):
+            result["i_account_detail"] = po_lines.import_iaccount_file(db, f)
+            _stamp(db, "fp_domo_iaccount", f)
+        f = po_lines.newest_file(Path(settings.domo_po_lines_folder))
+        if f is not None and ("domo_pos" in result or not _unchanged(db, "fp_domo_po_lines", f)):
+            result["po_lines"] = po_lines.import_file(db, f)
+            _stamp(db, "fp_domo_po_lines", f)
+    except Exception as exc:  # noqa: BLE001
+        result["po_lines"] = {"error": str(exc)}
 
     db.commit()
     return result

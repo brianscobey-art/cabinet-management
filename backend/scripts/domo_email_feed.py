@@ -13,6 +13,7 @@ columns the uploader / cloud importers expect:
     Job Account.csv                             -> DOMO CAB Accounts MMDDYY.csv
     ALL Purchase Orders by Customer and ...csv  -> DOMO Job POs MMDDYY.csv
     ...G-Account Billed.csv                     -> DOMO Job Billing MMDDYY.csv
+    ...I-Account Detail.csv                     -> DOMO I-Account Detail MMDDYY.csv
 
 The fourth ("CabinetTron feed - G-Account Billed", added 11/21/26) is the
 "Townsend Installed Sales | G-Account Billed" card, report filter All Time:
@@ -41,6 +42,7 @@ sys.path.insert(0, str(BACKEND))
 from app.config import get_settings  # noqa: E402
 from app.domo_pos import COLS as PO_COLS  # noqa: E402
 from app.final_bill import COLS as BILL_COLS  # noqa: E402
+from app.po_lines import IACCOUNT_COLS  # noqa: E402
 from app.job_accounts import COLS as ACCT_COLS  # noqa: E402
 from app.po_receipts import COLS as RECEIPT_COLS  # noqa: E402
 
@@ -132,6 +134,12 @@ def billing(src: Path) -> list[list]:
     return out
 
 
+def iaccount(src: Path) -> list[list]:
+    """I-Account Detail card (11/24/26): one row per house I-account + SKU,
+    with the G-account it final-bills to. Columns kept as the card has them."""
+    return [[_pick(r, c) for c in IACCOUNT_COLS] for r in _read(src) if _pick(r, "Job") or _pick(r, "Job Final Bill")]
+
+
 def main() -> int:
     stamp = f"{dt.date.today():%m%d%y}"
     dest = Path(get_settings().po_receipt_dir)
@@ -140,6 +148,7 @@ def main() -> int:
         ("Job Account*.csv", f"DOMO CAB Accounts {stamp}.csv", ACCT_COLS, accounts),
         ("ALL Purchase Orders*.csv", f"DOMO Job POs {stamp}.csv", PO_COLS, job_pos),
         ("*G-Account Billed*.csv", f"DOMO Job Billing {stamp}.csv", BILL_COLS, billing),
+        ("*I-Account Detail*.csv", f"DOMO I-Account Detail {stamp}.csv", IACCOUNT_COLS, iaccount),
     ]
     today = dt.date.today()
     result = {}

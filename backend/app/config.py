@@ -229,6 +229,27 @@ class Settings(BaseSettings):
 
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-billing")
+
+    @property
+    def domo_po_lines_folder(self) -> str:
+        """Item lines per PO from DOMO's PO drill-down card (app.po_lines),
+        pulled through Brian's Chrome each morning."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-po-lines")
+
+    @property
+    def domo_iaccount_folder(self) -> str:
+        """DOMO I-Account Detail (the daily email), converted by domo_email_feed."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-iaccount")
+
+    # Key the PC sends with feed files posted straight to a service (the test
+    # copy cannot read R2). Empty = the ingest endpoint is off.
+    po_lines_ingest_token: str = ""
     new_orders_file: str = (
         r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File"
         r"\Sold Jobs\New Orders\New Orders Status.xlsx"

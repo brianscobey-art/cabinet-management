@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -67,3 +67,52 @@ class DomoPo(Base):
     salesperson: Mapped[str | None] = mapped_column(String(120), default=None)
     pos: Mapped[str | None] = mapped_column(String(80), default=None)
     lines: Mapped[int | None] = mapped_column(Integer, default=None)
+
+
+class PoLineItem(Base):
+    """One line of a PO as DOMO's PO drill-down card (584540536) has it (Brian
+    11/24/26): a "header" row per PO (Spec Description "-", the PO's ordered
+    cost) and an "item" row per item received (item code, qty, whole-dollar
+    received cost). DOMO gives no line number; the logical key is po_number +
+    item_code + qty_received + received_cost, and every pull replaces all rows
+    of the POs it brought back (app.po_lines)."""
+
+    __tablename__ = "po_line_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    po_number: Mapped[str] = mapped_column(String(40), index=True)  # = DomoPo.our_po / Order Number
+    line_type: Mapped[str] = mapped_column(String(10))  # header | item
+    transaction_date: Mapped[date | None] = mapped_column(Date, default=None)
+    supplier_id: Mapped[str | None] = mapped_column(String(20), default=None)
+    supplier_name: Mapped[str | None] = mapped_column(String(160), default=None)
+    vendor_alias: Mapped[str | None] = mapped_column(String(80), default=None)  # Hype Mill -> Hoodsly
+    carter_sku: Mapped[str | None] = mapped_column(String(200), default=None)  # "C2283: CABINETS KITCHEN CRAFT ..."
+    item_code: Mapped[str | None] = mapped_column(String(200), default=None)  # Spec Description; None on header
+    qty_ordered: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    ordered_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    qty_received: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    received_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    account: Mapped[str | None] = mapped_column(String(40), index=True, default=None)  # I7550228-004 (prefix kept)
+    account_name: Mapped[str | None] = mapped_column(String(200), default=None)
+    cab_job_code: Mapped[str | None] = mapped_column(String(60), index=True, default=None)  # text after "CAB "
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), index=True, default=None)
+    salesperson: Mapped[str | None] = mapped_column(String(120), default=None)
+    pulled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class IAccountLine(Base):
+    """One line of DOMO's "Installed Sales | I-Account Detail" card (the daily
+    "CabinetTron feed - I-Account Detail" email): what is posted to a house's
+    I-account by SKU, and the G-account it final-bills to. Replaced whole on
+    each import."""
+
+    __tablename__ = "i_account_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    g_account: Mapped[str | None] = mapped_column(String(40), index=True, default=None)  # G7510029-635
+    i_account: Mapped[str | None] = mapped_column(String(40), index=True, default=None)  # I7510029-176
+    i_account_name: Mapped[str | None] = mapped_column(String(200), default=None)
+    sku: Mapped[str | None] = mapped_column(String(200), default=None)
+    status: Mapped[str | None] = mapped_column(String(20), default=None)
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    sales: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)

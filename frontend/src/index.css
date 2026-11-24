@@ -2434,3 +2434,10 @@ th.sortable:hover { text-decoration: underline; }
 .sort-arrow { font-size: 10px; }
 /* a filter that is narrowing the list stands out */
 select.filter-on { border-color: #125952; box-shadow: 0 0 0 1px #125952; font-weight: 600; }
+
+/* Reports > PO Line Items: a PO the checks flagged */
+.badge-flag {
+  background: #fde8e8;
+  color: #a32d2d;
+  font-weight: 600;
+}

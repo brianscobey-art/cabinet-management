@@ -181,6 +181,10 @@ REPORTS = [
                description="Every house installed (tracker Actual Install Date, today or earlier) whose "
                            "G-code shows no sales in DOMO yet -- oldest install first. DOMO billing "
                            "refreshes with the nightly pull."),
+    ReportInfo(key="po-lines", name="PO Line Items (DOMO)", category="Accounting",
+               description="What was actually bought on each PO -- item code, qty and received cost from DOMO's "
+                           "PO drill-down, by job, account or PO number -- plus the daily checks: items that "
+                           "don't add up to the PO, $1 placeholder POs, and I-accounts posted at cost."),
     ReportInfo(key="po-status", name="PO Status Summary", category="Accounting",
                description="Count and dollar value of POs grouped by status (open, paid, voided)."),
     ReportInfo(key="phases", name="Phase Report", category="Operations",
