@@ -65,6 +65,7 @@ SETUP_COLS = ["Email Date", "Ashley's Code", "G-Account #", "I-Account #", "G-Ac
 _ACCOUNT = re.compile(r"^\s*(?P<acct>[GI][0-9A-Z]+(?:-[0-9A-Z]+)+)\s*:\s*(?P<rest>.*)$", re.I)
 _CAB = re.compile(r"\bCAB\s+(.+?)\s*$", re.I)
 _BLANK = {"", "NA", "N/A", "0", "NONE", "-"}
+_CASH = ("Z", "CASH")
 
 
 # ---------------------------------------------------------------- keys
@@ -348,6 +349,8 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
                 out.append(row(kind, FLAGS["wrong_prefix"], stored, fix,
                                f"{what} stored in the {kind}-code field.{tail}" + many))
                 continue
+            if stored.startswith(_CASH):
+                continue  # cash-sale customer (Z7510077, CASH752): no job account to check
             if stored[0] != kind:
                 out.append(row(kind, FLAGS["not_in_domo"], stored, fix, f"{stored} isn't an I- or G-account." + many))
                 continue
@@ -367,13 +370,18 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
                 if who and who != code:
                     out.append(row(kind, FLAGS["other_job"], stored, fix,
                                    f"DOMO names {stored} {a['name']}, which is job {who}." + many))
-                elif near_name(a["cab_code"], code) or (j.get("ashley") and near_name(a["cab_code"], j["ashley"])):
-                    out.append(row(kind, FLAGS["name"], stored, None,
-                                   f"DOMO names {stored} {a['name']}; the job is {code}. Review -- "
-                                   f"not auto-fixed (DOMO's name or our code may be the typo)." + many))
-                else:
+                elif expect[kind] and not near_name(a["cab_code"], code):
+                    # DOMO does have this job's account, and the stored one is named for something else
                     out.append(row(kind, FLAGS["other_job"], stored, fix,
-                                   f"DOMO names {stored} {a['name']} (no CabinetTron job by that name)." + many))
+                                   f"DOMO names {stored} {a['name']} (no CabinetTron job by that name); this job's "
+                                   f"{kind}-account is {', '.join(expect[kind])}."))
+                else:
+                    # No job owns the name -- DR Horton lot names drift (CAB IND60 135 vs the
+                    # tracker's Ashley's Code), and HOFL0300 vs HOFL0200 is a typo on one side.
+                    ash = f" (Ashley's Code {j['ashley']})" if j.get("ashley") else ""
+                    out.append(row(kind, FLAGS["name"], stored, None,
+                                   f"DOMO names {stored} {a['name']}; the job is {code}{ash}. Review -- "
+                                   f"not auto-fixed (DOMO's name or ours may be the typo)." + many))
                 continue
             close = [e for e in expect[kind] if near_code(stored, e)]
             if len(close) == 1:

@@ -16,7 +16,7 @@ import json
 from sqlalchemy.orm import Session
 
 from app.account_codes import ASHLEY_KEY
-from app.models import Account, AccountType, Job, JobType, set_setting
+from app.models import Account, AccountCodeFlag, AccountType, Job, JobType, set_setting
 
 
 def load_jobs(db: Session, text: str) -> dict:
@@ -45,10 +45,13 @@ def load_jobs(db: Session, text: str) -> dict:
             updated += 1
         job.i_code = (r.get("I-Code") or "").strip() or None
         job.g_code = (r.get("G-Code") or "").strip() or None
-        job.ksr = (r.get("KSR") or "").strip() or None
+        ksr = (r.get("KSR") or "").strip()
+        job.ksr = None if ksr in ("", "0") else ksr
         ash = (r.get("Ashley's Code") or "").strip()
         if ash:
             ashley[code] = ash
     set_setting(db, ASHLEY_KEY, json.dumps(ashley))
+    # a snapshot replaces the world: start the flags over so the run shows that day only
+    db.query(AccountCodeFlag).delete()
     db.commit()
     return {"jobs_created": created, "jobs_updated": updated, "ashley_codes": len(ashley)}
