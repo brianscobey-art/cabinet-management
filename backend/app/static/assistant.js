@@ -16,6 +16,25 @@
   if (window.__ctAssistant) return;           // survive a double include
   window.__ctAssistant = true;
 
+  // TEST banner. On the test copy of the app (APP_ENV=test) every page in the
+  // suite gets a red strip across the top so nobody mistakes it for the live
+  // site. Lives here because this file is the one script every shell loads.
+  // The live site answers "production" and nothing is drawn.
+  (function testBanner() {
+    fetch("/env").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || d.env === "production" || document.getElementById("ct-test-banner")) return;
+      var b = document.createElement("div");
+      b.id = "ct-test-banner";
+      b.textContent = "TEST ENVIRONMENT: changes here do not reach the live site";
+      b.setAttribute("role", "status");
+      b.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:2147483646;" +
+        "background:#DE2020;color:#FFFFFF;font:600 13px 'Segoe UI',system-ui,sans-serif;" +
+        "text-align:center;padding:4px 8px;letter-spacing:.3px";
+      document.body.insertBefore(b, document.body.firstChild);
+      if (document.title.indexOf("[TEST]") !== 0) document.title = "[TEST] " + document.title;
+    }).catch(function () { /* banner is a courtesy; never break the page */ });
+  })();
+
   var API = "/api";
   var token = function () {
     try { return localStorage.getItem("cms_token"); } catch (e) { return null; }
