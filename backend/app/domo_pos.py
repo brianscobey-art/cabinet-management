@@ -113,7 +113,29 @@ def load_rows(path: Path) -> list[dict]:
                 "pos": (str(r.get("POS") or "").strip()[:80]) or None,
                 "lines": int(_num(r.get("Lines")) or 0) or None,
             })
-    return out
+    return _merge_repeats(out)
+
+
+def _merge_repeats(rows: list[dict]) -> list[dict]:
+    """One row per PO. A PO can come back twice when its supplier number was
+    changed partway (750005398, CabinetWorks 915478-1 and 61589, 11/24/26) --
+    our_po is the key, so the halves are added together, and the PO stays
+    Open while any half is."""
+    merged: dict[str, dict] = {}
+    for r in rows:
+        m = merged.get(r["our_po"])
+        if m is None:
+            merged[r["our_po"]] = r
+            continue
+        for k in ("ordered_cost", "received_cost"):
+            if r[k] is not None:
+                m[k] = (m[k] or 0) + r[k]
+        if (r["status"] or "").lower() == "open":
+            m["status"] = r["status"]
+        for k, v in r.items():
+            if m.get(k) is None and v is not None:
+                m[k] = v
+    return list(merged.values())
 
 
 def _ash_index() -> dict[str, set[str]]:

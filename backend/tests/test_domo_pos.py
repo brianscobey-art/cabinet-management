@@ -56,3 +56,17 @@ def test_domo_pos_match_by_code_and_show_on_job(client, db, tmp_path, monkeypatc
     assert pos["750006100"]["days_overdue"] == 3
     assert pos["750006100"]["cost"] == 0  # $1 placeholder is not a cost
     assert pos["750001234"]["source"] == "tracker"
+
+
+def test_a_po_listed_twice_is_merged(tmp_path):
+    f = tmp_path / "DOMO Job POs 112426.csv"
+    with f.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(domo_pos.COLS)
+        w.writerow(["750005398", "2026-09-10", "", "Closed", "", "915478-1: CABINETWORKS GROUP", "",
+                    "I7510082-005: SUZANNE VICKERS - CAB VICK 5", "", "24679.96", "24679", "", "", "", "", ""])
+        w.writerow(["750005398", "2026-09-10", "", "Open", "", "61589: CABINETWORKS GROUP 534579", "",
+                    "I7510082-005: SUZANNE VICKERS - CAB VICK 5", "", "38000", "0", "", "", "", "", ""])
+    rows = domo_pos.load_rows(f)
+    assert len(rows) == 1
+    assert rows[0]["ordered_cost"] == 62679.96 and rows[0]["received_cost"] == 24679 and rows[0]["status"] == "Open"
