@@ -380,7 +380,7 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
                     # tracker's Ashley's Code), and HOFL0300 vs HOFL0200 is a typo on one side.
                     ash = f" (Ashley's Code {j['ashley']})" if j.get("ashley") else ""
                     out.append(row(kind, FLAGS["name"], stored, None,
-                                   f"DOMO names {stored} {a['name']}; the job is {code}{ash}. Review -- "
+                                   f"DOMO names {stored} {a['name']}; the job is {code}{ash}. Review it: "
                                    f"not auto-fixed (DOMO's name or ours may be the typo)." + many))
                 continue
             close = [e for e in expect[kind] if near_code(stored, e)]
@@ -396,7 +396,7 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
                     b = by_acct[close[0]]
                     out.append(row(kind, FLAGS["digit"], stored, close[0],
                                    f"{stored} isn't a DOMO account; {close[0]} is one digit off and DOMO names it "
-                                   f"{b['name']} -- check the name before fixing."))
+                                   f"{b['name']}. Check the name before fixing."))
                     continue
             out.append(row(kind, FLAGS["not_in_domo"], stored, fix, f"{stored} isn't a DOMO account." + many))
 
@@ -522,7 +522,7 @@ def apply_fix(db: Session, flag_id: int, user: str) -> dict:
     if job is None:
         raise LookupError("job not found")
     if not db.get(DomoAccount, f.domo_code):
-        raise ValueError(f"{f.domo_code} is no longer a DOMO account -- re-run the check")
+        raise ValueError(f"{f.domo_code} is no longer a DOMO account. Re-run the check")
     attr = FIELDS[f.field]
     before = getattr(job, attr)
     setattr(job, attr, f.domo_code)
