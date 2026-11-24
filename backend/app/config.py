@@ -247,6 +247,14 @@ class Settings(BaseSettings):
         p = _P(self.po_receipt_dir)
         return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "domo-iaccount")
 
+    @property
+    def job_setups_folder(self) -> str:
+        """Job Setup Requests log as CSV (domo_email_feed exports the xlsx)."""
+        from pathlib import Path as _P
+
+        p = _P(self.po_receipt_dir)
+        return str(p) if p.is_dir() else str(_P(self.tracker_dir).parent / "job-setups")
+
     # Key the PC sends with feed files posted straight to a service (the test
     # copy cannot read R2). Empty = the ingest endpoint is off.
     po_lines_ingest_token: str = ""

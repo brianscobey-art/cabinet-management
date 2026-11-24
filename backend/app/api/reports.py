@@ -185,6 +185,11 @@ REPORTS = [
                description="What was actually bought on each PO -- item code, qty and received cost from DOMO's "
                            "PO drill-down, by job, account or PO number -- plus the daily checks: items that "
                            "don't add up to the PO, $1 placeholder POs, and I-accounts posted at cost."),
+    ReportInfo(key="code-check", name="Code Check (I/G vs DOMO)", category="Accounting",
+               description="Every job whose I-code or G-code doesn't match DOMO -- missing, no I/G prefix, wrong "
+                           "prefix, a digit off, another job's account, a name that's close but not equal, not in "
+                           "DOMO, or no job setup request. DOMO is the source of truth; each fix is one click and "
+                           "nothing changes on its own. Re-checked every morning after the DOMO emails."),
     ReportInfo(key="po-status", name="PO Status Summary", category="Accounting",
                description="Count and dollar value of POs grouped by status (open, paid, voided)."),
     ReportInfo(key="phases", name="Phase Report", category="Operations",

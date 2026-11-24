@@ -1261,6 +1261,47 @@ export interface PoLinesChecks {
 export const getPoLines = (q: string) => api<PoLinesReport>(`/reports/po-lines?q=${encodeURIComponent(q)}`);
 export const getPoLinesChecks = () => api<PoLinesChecks>("/reports/po-lines/checks");
 
+// Account Code Match: I-/G-codes vs DOMO (Brian 11/24/26)
+export interface CodeFlag {
+  id: number;
+  job_id: number | null;
+  job_code: string;
+  ksr: string | null;
+  builder: string | null;
+  field: "I" | "G" | "-";
+  stored_code: string | null;
+  domo_code: string | null;
+  flag: string;
+  domo_name: string | null;
+  detail: string | null;
+  first_seen: string;
+  last_seen: string;
+  status: "open" | "fixed" | "ignored";
+  resolved_at: string | null;
+  resolved_by: string | null;
+  can_fix: boolean;
+}
+export interface CodeCheckDaily {
+  open: number;
+  open_by_ksr: Record<string, number>;
+  open_by_flag: Record<string, number>;
+  new_since_yesterday: number;
+}
+export interface CodeCheckReport {
+  summary: (CodeCheckDaily & { at: string; date: string; jobs: number; domo_accounts: number;
+    setup_requests: number; new: number; fixed: number; error?: string }) | null;
+  today: CodeCheckDaily;
+  flags: CodeFlag[];
+}
+export const getCodeCheck = (status = "open") =>
+  api<CodeCheckReport>(`/reports/code-check?status=${encodeURIComponent(status)}`);
+export const runCodeCheck = () => api<unknown>("/reports/code-check/run", { method: "POST" });
+export const fixCodeFlag = (id: number) =>
+  api<{ job_code: string; field: string; before: string | null; after: string }>(
+    `/reports/code-check/${id}/fix`, { method: "POST" });
+export const setCodeFlagStatus = (id: number, status: "open" | "ignored") =>
+  api<unknown>(`/reports/code-check/${id}/status`, { method: "POST", body: JSON.stringify({ status }) });
+
 export interface NotBilledRow {
   job_id: number | null;
   job_code: string;

@@ -26,6 +26,7 @@ from app.api.quotes import router as quotes_router
 from app.api.reports import router as reports_router
 from app.api.wallpaper import router as wallpaper_router
 from app.api.po_lines import router as po_lines_router
+from app.api.account_codes import router as account_codes_router
 from app.api.schedule import router as schedule_router
 from app.api.selections import router as selections_router
 from app.api.service import router as service_router
@@ -380,6 +381,7 @@ app.include_router(schedule_router)
 app.include_router(phases_router)
 app.include_router(reports_router)
 app.include_router(po_lines_router)
+app.include_router(account_codes_router)
 app.include_router(wallpaper_router)
 app.include_router(notes_router)
 app.include_router(job_notes_router)

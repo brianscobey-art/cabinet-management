@@ -17,6 +17,7 @@ from app.models.phase import PhaseUpdate
 from app.models.layout_print import LayoutPrint
 from app.models.quote import Quote, QuoteLineItem, QuoteStatus
 from app.models.receipt import DomoPo, IAccountLine, JobPo, PoLineItem, PoReceipt
+from app.models.code_check import AccountCodeFlag, DomoAccount, JobSetupRequest
 from app.models.selections import HardwareSelection, RoomSelection
 from app.models.smartsheet import SmartsheetHistory, SmartsheetRow
 from app.models.service import ServiceLine, ServicePart, ServiceRequest
@@ -25,6 +26,9 @@ from app.models.visit import RETURN_RESULTS, VISIT_RESULTS, VISIT_STATUSES, VISI
 from app.models.worker import DutyAssignment, RouteStart, Worker, WorkerTimeOff
 
 __all__ = [
+    "AccountCodeFlag",
+    "DomoAccount",
+    "JobSetupRequest",
     "Account",
     "AccountType",
     "ActivityLog",

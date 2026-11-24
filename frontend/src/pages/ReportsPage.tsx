@@ -48,6 +48,7 @@ import ManagerReportView from "./ManagerReport";
 import { initials } from "./PhasesPage";
 import JobAccountsView from "./JobAccountsView";
 import PoLinesView from "./PoLinesView";
+import CodeCheckView from "./CodeCheckView";
 import FieldMeasureNotesView from "./FieldMeasureNotesView";
 import PoReceiptsView from "./PoReceiptsView";
 
@@ -158,6 +159,7 @@ export default function ReportsPage({ hash }: { hash: string }) {
       {key === "po-receipts" && <PoReceiptsView />}
       {key === "job-accounts" && <JobAccountsView />}
       {key === "po-lines" && <PoLinesView />}
+      {key === "code-check" && <CodeCheckView />}
       {key === "field-measure-notes" && <FieldMeasureNotesView />}
     </div>
   );

@@ -918,6 +918,7 @@ def poll_tracker(db: Session) -> dict:
             _pull(settings, "domo-billing/", Path(settings.domo_billing_folder), keep=2)
             _pull(settings, "domo-po-lines/", Path(settings.domo_po_lines_folder), keep=2)
             _pull(settings, "domo-iaccount/", Path(settings.domo_iaccount_folder), keep=2)
+            _pull(settings, "job-setups/", Path(settings.job_setups_folder), keep=2)
         except Exception as exc:  # noqa: BLE001 — fall through to whatever is on disk
             result["pulled"] = f"error: {exc}"
 
@@ -989,5 +990,34 @@ def poll_tracker(db: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         result["po_lines"] = {"error": str(exc)}
 
+    # Account Code check (11/24/26): reload DOMO's job accounts + the setup log
+    # and re-check every job's I/G codes when any of them (or the tracker) moved.
+    try:
+        result.update(_code_check(db, settings, tracker_changed or "job_accounts" in result
+                                  or "i_account_detail" in result))
+    except Exception as exc:  # noqa: BLE001
+        result["code_check"] = {"error": str(exc)}
+
     db.commit()
     return result
+
+
+def _code_check(db: Session, settings, force: bool) -> dict:
+    from app import account_codes, job_accounts
+
+    out = {}
+    acc = job_accounts.newest_file(Path(settings.domo_accounts_folder))
+    setup = account_codes.newest_file(Path(settings.job_setups_folder))
+    if acc is None:
+        return out
+    if force or not _unchanged(db, "fp_code_check_accounts", acc):
+        out["code_check_accounts"] = account_codes.replace_accounts(
+            db, account_codes.parse_accounts(acc.read_text(encoding="utf-8-sig"), "Job Account feed"))
+        _stamp(db, "fp_code_check_accounts", acc)
+    if setup is not None and not _unchanged(db, "fp_code_check_setups", setup):
+        out["code_check_setups"] = account_codes.replace_setups(
+            db, account_codes.parse_setups(setup.read_text(encoding="utf-8-sig")))
+        _stamp(db, "fp_code_check_setups", setup)
+    if out:
+        out["code_check"] = account_codes.run(db)
+    return out

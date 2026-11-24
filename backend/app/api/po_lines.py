@@ -18,7 +18,7 @@ from app.database import get_db
 
 router = APIRouter(tags=["po-lines"])
 
-FEEDS = ("po-lines", "job-pos", "i-account-detail")
+FEEDS = ("po-lines", "job-pos", "i-account-detail", "job-accounts", "setup-requests", "jobs-snapshot")
 
 
 def _token_ok(token: str | None) -> None:
@@ -43,12 +43,37 @@ async def ingest(feed: str, request: Request, x_ingest_token: str | None = Heade
         return {**result, "checks": po_lines.checks(db, {r["po_number"] for r in rows})}
     if feed == "i-account-detail":
         return po_lines.replace_iaccount(db, po_lines.parse_iaccount(text))
+    if feed == "job-accounts":
+        from app import account_codes
+
+        return account_codes.replace_accounts(db, account_codes.parse_accounts(text, "Job Account feed"))
+    if feed == "setup-requests":
+        from app import account_codes
+
+        return account_codes.replace_setups(db, account_codes.parse_setups(text))
+    if feed == "jobs-snapshot":
+        # Test copy only: load job codes + I/G codes from a tracker snapshot so
+        # the Account Code check can be tried on real data without live's DB.
+        if not get_settings().is_test:
+            raise HTTPException(status_code=403, detail="jobs-snapshot is for the test copy only")
+        from app import account_codes_test_data
+
+        return account_codes_test_data.load_jobs(db, text)
     from app import domo_pos
 
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "DOMO Job POs ingest.csv"
         path.write_text(text, encoding="utf-8")
         return domo_pos.apply(db, path)
+
+
+@router.post("/feeds/code-check/run")
+def code_check_run(x_ingest_token: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Run the Account Code check now and return the summary + open flags."""
+    _token_ok(x_ingest_token)
+    from app import account_codes
+
+    return {"summary": account_codes.run(db), "flags": account_codes.flags(db, "all")}
 
 
 @router.get("/feeds/po-lines/report")

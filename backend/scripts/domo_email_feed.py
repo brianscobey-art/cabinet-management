@@ -92,11 +92,14 @@ def receipts(src: Path) -> list[list]:
 
 def accounts(src: Path) -> list[list]:
     """The Job Account card is one column ("I7550042-238: DR HORTON ... - CAB GL
-    34A"); app.job_accounts pairs I with G by name when Linked G is blank."""
+    34A"); app.job_accounts pairs I with G by name when Linked G is blank (and
+    skips anything not named CAB). Every I/G account is kept, CAB or not: the
+    Account Code check needs the full list to tell "not in DOMO" from "not a
+    CAB account" (11/24/26)."""
     out = []
     for r in _read(src):
         job = _pick(r, "Job", "Job Account")
-        if "- CAB " in job.upper():
+        if re.match(r"^[GI][0-9A-Z]+(-[0-9A-Z]+)+\s*:", job.strip(), re.I):
             out.append([job, "", "", "", ""])
     return out
 
@@ -140,6 +143,41 @@ def iaccount(src: Path) -> list[list]:
     return [[_pick(r, c) for c in IACCOUNT_COLS] for r in _read(src) if _pick(r, "Job") or _pick(r, "Job Final Bill")]
 
 
+SETUPS_XLSX = Path(r"C:\Users\Brian SE6\OneDrive - carterlumber.com\Carter Shared File\Sold Jobs"
+                   r"\Job Setup Requests\Received Job Setup Requests.xlsx")
+
+
+def setups(dest: Path, stamp: str) -> str:
+    """Account Code check (11/24/26): the Job Setup Requests log travels as
+    "Job Setup Requests MMDDYY.csv" -- rewritten when the workbook changed."""
+    from app.account_codes import SETUP_COLS
+
+    if not SETUPS_XLSX.exists():
+        return "no setup log workbook"
+    out = dest / f"Job Setup Requests {stamp}.csv"
+    if out.exists() and out.stat().st_mtime >= SETUPS_XLSX.stat().st_mtime:
+        return "unchanged - kept"
+    import openpyxl
+
+    wb = openpyxl.load_workbook(SETUPS_XLSX, read_only=True, data_only=True)
+    rows = list(wb["Job Setups"].iter_rows(values_only=True))
+    wb.close()
+    head = next(i for i, r in enumerate(rows) if r and "Ashley's Code" in [str(c or "").strip() for c in r])
+    names = [str(c or "").strip() for c in rows[head]]
+    body = []
+    for r in rows[head + 1:]:
+        rec = dict(zip(names, r))
+        if not any(rec.get(c) for c in ("Ashley's Code", "G-Account #", "I-Account #")):
+            continue
+        vals = []
+        for c in SETUP_COLS:
+            v = rec.get(c)
+            vals.append(v.date().isoformat() if isinstance(v, dt.datetime) else ("" if v is None else str(v).strip()))
+        body.append(vals)
+    _write(out, SETUP_COLS, body)
+    return f"{len(body)} rows from {SETUPS_XLSX.name}"
+
+
 def main() -> int:
     stamp = f"{dt.date.today():%m%d%y}"
     dest = Path(get_settings().po_receipt_dir)
@@ -162,6 +200,10 @@ def main() -> int:
             rows = convert(src)
             _write(out, header, rows)
             result[name] = f"{len(rows)} rows from {src.name}"
+    try:
+        result[f"Job Setup Requests {stamp}.csv"] = setups(dest, stamp)
+    except Exception as exc:  # noqa: BLE001 -- one source failing never stops the others
+        result[f"Job Setup Requests {stamp}.csv"] = f"error: {exc}"
     print(json.dumps(result, indent=2))
     STATUS.parent.mkdir(parents=True, exist_ok=True)
     STATUS.write_text(json.dumps({"at": dt.datetime.now().isoformat(timespec="seconds"), **result}, indent=2),
