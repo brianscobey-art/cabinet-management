@@ -167,3 +167,9 @@ def test_fixed_in_the_record_closes_itself(client, db, monkeypatch):
     ac.run(db, today=date(2026, 11, 26))
     db.refresh(f)
     assert f.status == "ignored"
+
+
+def test_drh_code_without_dr_and_padding_matches():
+    accts = ac.parse_accounts('Job Account\n"I7510029-198: DR HORTON PC - CAB CESF 04"\n"G7510029-715: DR HORTON PC - CAB CESF 04"\n', "t")
+    jobs = [{"job_id": None, "job_code": "DRCESF-0004", "i_code": "I7510029-198", "g_code": "G7510029-715", "ashley": None}]
+    assert ac.find_problems(jobs, accts, []) == []

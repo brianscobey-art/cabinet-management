@@ -115,6 +115,23 @@ def near_code(stored: str, domo: str) -> bool:
     return stored != domo and (_loose(stored) == _loose(domo) or _one_edit(stored, domo))
 
 
+_DRH = re.compile(r"^DR([A-Z0-9]+)-0*(\d+[A-Z]?)$")
+
+
+def _alias_keys(j: dict) -> set[str]:
+    """Other names DOMO may use for a job: the tracker's Ashley's Code, and for
+    DR Horton the job code without "DR" and the lot's zero padding
+    (DRCESF-0004 -> "CAB CESF 04", DROHFE-0012 -> "CAB OHFE 12") -- most DRH
+    houses have no Ashley's Code in the tracker."""
+    keys = set()
+    if j.get("ashley"):
+        keys.add(ash_key(j["ashley"]))
+    m = _DRH.match(str(j.get("job_code") or "").upper())
+    if m:
+        keys.add(ash_key(f"{m.group(1)} {m.group(2)}"))
+    return keys
+
+
 def _master_seq(code: str) -> tuple[str, int] | None:
     """'G7510082-016' -> ('G7510082', 16); 'G750-000-023' -> ('G750-000', 23)."""
     head, _, tail = str(code or "").upper().rpartition("-")
@@ -263,8 +280,8 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
     job_by_key = {job_key(j["job_code"]): j["job_code"] for j in jobs}
     job_by_ash: dict[str, set] = defaultdict(set)
     for j in jobs:
-        if j.get("ashley"):
-            job_by_ash[ash_key(j["ashley"])].add(j["job_code"])
+        for k in _alias_keys(j):
+            job_by_ash[k].add(j["job_code"])
 
     def owner(a: dict) -> str | None:
         if not a.get("cab_code"):
@@ -302,8 +319,8 @@ def find_problems(jobs: list[dict], accounts: list[dict], setups: list[dict]) ->
     for j in jobs:
         code = j["job_code"]
         mine = {a["account"]: a for a in by_cab.get(job_key(code), [])}
-        if j.get("ashley"):
-            for a in by_ash.get(ash_key(j["ashley"]), []):
+        for k in _alias_keys(j):
+            for a in by_ash.get(k, []):
                 mine.setdefault(a["account"], a)
         expect = {k: sorted(a for a, v in mine.items() if v["kind"] == k) for k in FIELDS}
 
