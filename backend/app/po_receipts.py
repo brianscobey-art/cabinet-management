@@ -258,9 +258,9 @@ def ingest_potracker(db, tracker_path: Path) -> int:
         if po is None:
             continue
         db.add(JobPo(
-            our_po=str(po).strip(),
-            job_code=(str(r[ji]).strip() if ji >= 0 and r[ji] is not None else None),
-            vendor=(str(r[vi]).strip() if vi >= 0 and r[vi] is not None else None),
+            our_po=str(po).strip()[:40],
+            job_code=(str(r[ji]).strip()[:50] if ji >= 0 and r[ji] is not None else None),
+            vendor=(str(r[vi]).strip()[:120] if vi >= 0 and r[vi] is not None else None),
             product=(str(r[pi]).strip()[:200] if pi >= 0 and r[pi] is not None else None),
             order_date=_as_date(r[odi]) if odi >= 0 else None,
             tent_due_date=_as_date(r[tdi]) if tdi >= 0 else None,

@@ -239,8 +239,14 @@ def is_real_job_code(code: str | None) -> bool:
     it. That is the row this keeps out. Do NOT tighten this into a pattern
     like <prefix>-<digits>: checked against the live sheet 8/24/26, that would
     have thrown away 104 genuine jobs.
+
+    Also out: anything that can't be a code at all -- longer than the 50-char
+    job_code column, or a pasted file path (11/25/26: a .kit path landed in
+    DRCESF-0028's Job Code cell and every 5-minute sync failed on it).
     """
-    return bool(code and any(ch.isalpha() for ch in code))
+    if not code or len(code) > 50 or any(ch in code for ch in "\\/:"):
+        return False
+    return any(ch.isalpha() for ch in code)
 
 
 def import_row(db, row: dict, caches: dict) -> str:

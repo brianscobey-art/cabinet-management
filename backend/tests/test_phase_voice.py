@@ -43,3 +43,11 @@ def test_house_number_fallback_and_repeat():
     assert got("123 paint") == [("123", 4, "10", True)]
     out = pv.parse("lot 12 trim lot 12 paint", ROWS)["items"]
     assert [i["ok"] for i in out] == [False, True] and out[1]["phase"] == "10"
+
+
+def test_pasted_path_is_not_a_job_code():
+    from scripts.import_tracker import is_real_job_code
+
+    assert is_real_job_code("DRCESF-0028") and is_real_job_code("SHLAM") and is_real_job_code("BURN-0104.2")
+    assert not is_real_job_code(r"C:\Users\talle\Desktop\KC_e4_corner.kit")
+    assert not is_real_job_code("X" * 51) and not is_real_job_code("-0000")
