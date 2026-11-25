@@ -2434,3 +2434,94 @@ th.sortable:hover { text-decoration: underline; }
 .sort-arrow { font-size: 10px; }
 /* a filter that is narrowing the list stands out */
 select.filter-on { border-color: #125952; box-shadow: 0 0 0 1px #125952; font-weight: 600; }
+
+/* Phases page: Alex Talley's asks (11/25/26) */
+.phase-pick {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.same-btn {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+td.updated-stale {
+  background: #fff3bf;
+}
+td.updated-old {
+  background: #fde8e8;
+  color: #a32d2d;
+  font-weight: 600;
+}
+.pick-col {
+  width: 2rem;
+  text-align: center;
+}
+.phases-table tr.picked td {
+  background: #e7f1ef;
+}
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.4rem 0 0.6rem;
+}
+.voice-panel {
+  margin-bottom: 0.8rem;
+}
+.voice-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.voice-hint {
+  margin: 0.2rem 0 0.5rem;
+  font-size: 0.88rem;
+}
+.voice-input {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.voice-input textarea {
+  flex: 1;
+  min-width: 0;
+}
+.mic-btn {
+  min-width: 5.5rem;
+  font-size: 1rem;
+}
+.mic-btn.on {
+  background: #de2020;
+  border-color: #de2020;
+  color: #fff;
+}
+.voice-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.voice-table tr.voice-bad td {
+  color: #8a8f94;
+}
+.voice-problem {
+  color: #a32d2d;
+}
+.voice-addr {
+  font-size: 0.8rem;
+}
+.lot-note-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.8rem;
+}
+.lot-note-form input {
+  flex: 1;
+  min-width: 0;
+}
+.lot-note button {
+  margin-left: auto;
+}
