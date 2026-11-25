@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import read_access
 from app.auth.deps import require_roles
 from app.database import get_db
-from app.models import FieldMeasure, FieldMeasureNote, Job, Role, User
+from app.models import FieldMeasure, FieldMeasureNote, Job, PhaseUpdate, Role, User
 
 router = APIRouter(tags=["field-measure"])
 
@@ -124,6 +124,15 @@ def update_field_measure(
             stamp("correct", False)
     if data.get("super_notified") is not None:
         stamp("super_notified", data["super_notified"])
+
+    # Checking Correct or Incorrect means someone just looked at the house:
+    # re-confirm its current phase so the board's Updated date is today
+    # (Alex Talley 10/14/26).
+    if data.get("correct") or data.get("incorrect"):
+        last = (db.query(PhaseUpdate).filter(PhaseUpdate.job_id == job_id)
+                .order_by(PhaseUpdate.id.desc()).first())
+        if last is not None:
+            db.add(PhaseUpdate(job_id=job_id, phase=last.phase, source="manual", noted_by=user.full_name))
 
     db.commit()
     db.refresh(fm)

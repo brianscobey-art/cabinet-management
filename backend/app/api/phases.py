@@ -187,3 +187,114 @@ def phase_history(job_id: int, db: Session = Depends(get_db)):
         .order_by(PhaseUpdate.id.desc())
         .all()
     )
+
+
+# ---- Alex Talley's asks (11/25/26): several lots at once, voice, unknown lots ----
+
+class BulkItem(BaseModel):
+    job_id: int
+    phase: str
+
+
+class BulkSet(BaseModel):
+    items: list[BulkItem]
+    source: str = "manual"  # manual | voice
+
+
+@router.post("/phase-board/bulk", response_model=list[PhaseOut], status_code=status.HTTP_201_CREATED)
+def set_phases_bulk(payload: BulkSet, db: Session = Depends(get_db), user: User = Depends(phase_write)):
+    """Set (or re-confirm) the phase of several houses in one save -- the
+    checked lots on the board, or a confirmed voice update."""
+    if not payload.items:
+        return []
+    bad = [i.phase for i in payload.items if i.phase not in PHASE_CODES]
+    if bad:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unknown phase '{bad[0]}'")
+    ids = {i.job_id for i in payload.items}
+    found = {j for (j,) in db.query(Job.id).filter(Job.id.in_(ids))}
+    if found != ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    source = "voice" if payload.source == "voice" else "manual"
+    out = []
+    for i in payload.items:
+        u = PhaseUpdate(job_id=i.job_id, phase=i.phase, source=source, noted_by=user.full_name)
+        db.add(u)
+        out.append(u)
+    db.commit()
+    for u in out:
+        db.refresh(u)
+    return out
+
+
+class VoiceIn(BaseModel):
+    community_id: int
+    text: str
+
+
+@router.post("/phase-board/voice", dependencies=[Depends(phase_write)])
+def parse_voice(payload: VoiceIn, db: Session = Depends(get_db)):
+    """What was said -> one item per lot for the confirm list. Saves nothing."""
+    from app import phase_voice
+
+    rows = [r.model_dump() for r in phase_board(payload.community_id, False, db)]
+    return phase_voice.parse(payload.text, rows)
+
+
+# Lots seen in the field that CabinetTron doesn't have yet (a house started
+# before it's set up, or one we never got a PO for). Small per-community list,
+# kept in app_settings -- no table needed.
+def _lot_notes_key(community_id: int) -> str:
+    return f"lot_notes:{community_id}"
+
+
+class LotNoteIn(BaseModel):
+    body: str
+
+
+def _read_lot_notes(db: Session, community_id: int) -> list[dict]:
+    import json
+
+    from app.models import get_setting
+
+    raw = get_setting(db, _lot_notes_key(community_id))
+    return json.loads(raw) if raw else []
+
+
+def _write_lot_notes(db: Session, community_id: int, notes: list[dict]) -> None:
+    import json
+
+    from app.models import set_setting
+
+    set_setting(db, _lot_notes_key(community_id), json.dumps(notes))
+    db.commit()
+
+
+@router.get("/communities/{community_id}/lot-notes", dependencies=[Depends(read_access)])
+def lot_notes(community_id: int, db: Session = Depends(get_db)):
+    return [n for n in _read_lot_notes(db, community_id) if not n.get("done_at")]
+
+
+@router.post("/communities/{community_id}/lot-notes", status_code=status.HTTP_201_CREATED)
+def add_lot_note(community_id: int, payload: LotNoteIn, db: Session = Depends(get_db),
+                 user: User = Depends(phase_write)):
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Note is empty")
+    notes = _read_lot_notes(db, community_id)
+    note = {"id": max((n["id"] for n in notes), default=0) + 1, "body": body[:500], "author": user.full_name,
+            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"), "done_at": None}
+    _write_lot_notes(db, community_id, notes + [note])
+    return note
+
+
+@router.post("/communities/{community_id}/lot-notes/{note_id}/done")
+def finish_lot_note(community_id: int, note_id: int, db: Session = Depends(get_db),
+                    user: User = Depends(phase_write)):
+    notes = _read_lot_notes(db, community_id)
+    hit = next((n for n in notes if n["id"] == note_id), None)
+    if hit is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    hit["done_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    hit["done_by"] = user.full_name
+    _write_lot_notes(db, community_id, notes)
+    return hit

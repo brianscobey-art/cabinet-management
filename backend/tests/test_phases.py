@@ -67,3 +67,39 @@ def test_field_role_can_set_phase(client, db):
     make_user(db, email="inspector@example.com", role=Role.inspector)
     inspector = login(client, "inspector@example.com")
     assert client.post(f"/jobs/{job['id']}/phase", headers=inspector, json={"phase": "3"}).status_code == 403
+
+
+def test_bulk_voice_lot_notes_and_measure_bump(client, db):
+    headers, account_id, community_id = setup(client, db)
+    a = make_job(client, headers, account_id, community_id, job_code="DR-5", lot_number="5")
+    b = make_job(client, headers, account_id, community_id, job_code="DR-12", lot_number="12",
+                 address="12 Other St")
+
+    # several lots at once, and a voice save is marked as voice
+    r = client.post("/phase-board/bulk", headers=headers, json={
+        "items": [{"job_id": a["id"], "phase": "6"}, {"job_id": b["id"], "phase": "6"}], "source": "voice"})
+    assert r.status_code == 201, r.text
+    assert [u["source"] for u in r.json()] == ["voice", "voice"]
+    assert client.post("/phase-board/bulk", headers=headers,
+                       json={"items": [{"job_id": a["id"], "phase": "99"}]}).status_code == 422
+
+    # voice text -> confirm items (nothing saved)
+    v = client.post("/phase-board/voice", headers=headers,
+                    json={"community_id": community_id, "text": "lot 5 trim, lot 12 same, lot 40 paint"}).json()
+    assert [(i["job_id"], i["phase"], i["ok"]) for i in v["items"]] == [
+        (a["id"], "9", True), (b["id"], "6", True), (None, None, False)]
+    assert client.get(f"/jobs/{a['id']}/phases", headers=headers).json()[0]["phase"] == "6"
+
+    # checking Correct re-confirms the current phase (Updated = today)
+    before = len(client.get(f"/jobs/{a['id']}/phases", headers=headers).json())
+    client.patch(f"/jobs/{a['id']}/field-measure", headers=headers, json={"correct": True})
+    hist = client.get(f"/jobs/{a['id']}/phases", headers=headers).json()
+    assert len(hist) == before + 1 and hist[0]["phase"] == "6"
+
+    # lots seen in the field that aren't in CabinetTron
+    n = client.post(f"/communities/{community_id}/lot-notes", headers=headers, json={"body": "Lot 23 slab poured, no PO"})
+    assert n.status_code == 201
+    assert [x["body"] for x in client.get(f"/communities/{community_id}/lot-notes", headers=headers).json()] == [
+        "Lot 23 slab poured, no PO"]
+    client.post(f"/communities/{community_id}/lot-notes/{n.json()['id']}/done", headers=headers)
+    assert client.get(f"/communities/{community_id}/lot-notes", headers=headers).json() == []

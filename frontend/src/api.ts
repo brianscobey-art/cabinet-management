@@ -672,6 +672,43 @@ export const setJobPhase = (jobId: number, phase: string) =>
     body: JSON.stringify({ phase }),
   });
 
+// Alex Talley's asks (11/25/26): several lots at once, voice, unknown lots
+export const setPhasesBulk = (items: { job_id: number; phase: string }[], source: "manual" | "voice" = "manual") =>
+  api<{ job_id: number; phase: string; noted_at: string }[]>("/phase-board/bulk", {
+    method: "POST",
+    body: JSON.stringify({ items, source }),
+  });
+export interface VoiceItem {
+  lot: string;
+  heard: string;
+  job_id: number | null;
+  job_code: string | null;
+  address: string | null;
+  current_phase: string | null;
+  current_label: string | null;
+  phase: string | null;
+  phase_label: string | null;
+  ok: boolean;
+  same?: boolean;
+  problem: string | null;
+}
+export const parseVoicePhases = (communityId: number, text: string) =>
+  api<{ heard: string; items: VoiceItem[] }>("/phase-board/voice", {
+    method: "POST",
+    body: JSON.stringify({ community_id: communityId, text }),
+  });
+export interface LotNote {
+  id: number;
+  body: string;
+  author: string | null;
+  created_at: string;
+}
+export const getLotNotes = (communityId: number) => api<LotNote[]>(`/communities/${communityId}/lot-notes`);
+export const addLotNote = (communityId: number, body: string) =>
+  api<LotNote>(`/communities/${communityId}/lot-notes`, { method: "POST", body: JSON.stringify({ body }) });
+export const finishLotNote = (communityId: number, id: number) =>
+  api<unknown>(`/communities/${communityId}/lot-notes/${id}/done`, { method: "POST" });
+
 export interface FieldMeasureNoteFull extends FieldMeasureNote {
   id: number;
   job_id: number;
